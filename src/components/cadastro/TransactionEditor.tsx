@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { Person, Category, TransactionType } from "@/types/db";
 import { Transaction } from "@/types/domain";
-import { createTransaction, updateTransaction, TransactionInput } from "@/lib/data/transactions";
+import { createTransaction, updateTransaction, deleteTransaction, TransactionInput } from "@/lib/data/transactions";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { FieldGroup, Input, Select } from "@/components/ui/Field";
@@ -34,6 +34,8 @@ export function TransactionEditor({
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [isDeleting, startDeleteTransition] = useTransition();
 
   function update<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -72,6 +74,18 @@ export function TransactionEditor({
       setSaveState("saved");
       onSaved?.(result.data);
       setTimeout(onClose, 500);
+    });
+  }
+
+  function handleDelete() {
+    if (!transaction) return;
+    startDeleteTransition(async () => {
+      const result = await deleteTransaction(transaction.id);
+      if (!result.ok) {
+        setErrorMessage(result.error);
+        return;
+      }
+      onClose();
     });
   }
 
@@ -187,7 +201,7 @@ export function TransactionEditor({
         </div>
       </div>
 
-      <div className="mt-6 flex items-center justify-between">
+      <div className="mt-6 flex items-center justify-between gap-3">
         <div className="text-xs">
           {saveState === "saving" && <span className="text-(--color-text-tertiary)">Salvando...</span>}
           {saveState === "saved" && <span className="text-(--color-positive)">Salvo</span>}
@@ -197,13 +211,40 @@ export function TransactionEditor({
             </span>
           )}
         </div>
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={onClose} type="button">
-            Cancelar
-          </Button>
-          <Button onClick={handleSave} disabled={!canSave || isPending} type="button">
-            Salvar
-          </Button>
+
+        <div className="flex items-center gap-2">
+          {transaction && !confirmingDelete && (
+            <Button
+              variant="ghost"
+              onClick={() => setConfirmingDelete(true)}
+              disabled={isDeleting}
+              type="button"
+              className="text-(--color-negative) hover:bg-(--color-negative-soft)"
+            >
+              Excluir
+            </Button>
+          )}
+          {transaction && confirmingDelete && (
+            <>
+              <span className="text-xs text-(--color-text-secondary)">Excluir mesmo?</span>
+              <Button variant="ghost" onClick={() => setConfirmingDelete(false)} disabled={isDeleting} type="button">
+                Não
+              </Button>
+              <Button variant="danger" onClick={handleDelete} disabled={isDeleting} type="button">
+                Sim, excluir
+              </Button>
+            </>
+          )}
+          {!confirmingDelete && (
+            <>
+              <Button variant="secondary" onClick={onClose} type="button">
+                Cancelar
+              </Button>
+              <Button onClick={handleSave} disabled={!canSave || isPending} type="button">
+                Salvar
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </Modal>

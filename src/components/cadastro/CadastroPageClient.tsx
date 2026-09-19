@@ -88,6 +88,7 @@ export function CadastroPageClient({
       )}
 
       <TransactionEditor
+        key={editingTransaction?.id ?? "new"}
         open={editorOpen}
         onClose={() => setEditorOpen(false)}
         people={people}

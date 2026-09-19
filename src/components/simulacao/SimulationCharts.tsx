@@ -14,6 +14,48 @@ import {
 import { ScenarioComparisonMonth } from "@/lib/domain/simulation";
 import { formatCurrencyBRL, formatMonthShort, formatMonthLabel } from "@/lib/utils/format";
 
+export interface AccumulatedPoint {
+  referenceMonth: string;
+  accumulatedCents: number;
+}
+
+/** Saldo acumulado projetado, sem nenhuma simulação — só com o que já está cadastrado. */
+export function BaseAccumulatedChart({ points }: { points: AccumulatedPoint[] }) {
+  const data = points.map((p) => ({ ...p, label: formatMonthShort(p.referenceMonth) }));
+
+  return (
+    <div className="h-56 w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "var(--color-text-tertiary)" }} />
+          <YAxis hide />
+          <Tooltip
+            content={({ active, payload }) => {
+              if (!active || !payload?.length) return null;
+              const d = payload[0].payload as AccumulatedPoint & { label: string };
+              return (
+                <div className="rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-3 py-2 text-xs shadow-(--shadow-md)">
+                  <p className="mb-1 font-medium">{formatMonthLabel(d.referenceMonth)}</p>
+                  <p style={{ color: "var(--chart-1)" }}>Saldo acumulado: {formatCurrencyBRL(d.accumulatedCents)}</p>
+                </div>
+              );
+            }}
+          />
+          <Area
+            type="monotone"
+            dataKey="accumulatedCents"
+            name="Saldo acumulado"
+            stroke="var(--chart-1)"
+            fill="var(--chart-1)"
+            fillOpacity={0.15}
+            strokeWidth={2}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 export function LeftoverComparisonChart({ comparison }: { comparison: ScenarioComparisonMonth[] }) {
   const data = comparison.map((c) => ({
     ...c,

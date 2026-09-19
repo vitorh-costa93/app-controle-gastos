@@ -4,12 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import { Sparkles } from "lucide-react";
 import { Simulation, MonthSummary } from "@/types/domain";
 import { buildScenarioComparison, summarizeScenarioImpact } from "@/lib/domain/simulation";
+import { accumulateBalance } from "@/lib/domain/finance";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
-import { EmptyState } from "@/components/ui/EmptyState";
 import { NewSimulationForm } from "./NewSimulationForm";
 import { ScenarioList } from "./ScenarioList";
-import { LeftoverComparisonChart, AccumulatedBalanceChart } from "./SimulationCharts";
+import { LeftoverComparisonChart, AccumulatedBalanceChart, BaseAccumulatedChart } from "./SimulationCharts";
 import { ImpactSummaryCard } from "./ImpactSummaryCard";
 import { generateScenarioAiSummary } from "@/lib/data/simulation-analysis";
 import { formatMonthLabel } from "@/lib/utils/format";
@@ -30,6 +30,7 @@ export function SimulacaoPageClient({
   const [aiState, setAiState] = useState<{ key: string; summary: string } | null>(null);
 
   const baseMap = useMemo(() => new Map(baseSummaries.map((s) => [s.referenceMonth, s])), [baseSummaries]);
+  const baseAccumulated = useMemo(() => accumulateBalance(baseSummaries), [baseSummaries]);
   const primary = simulations.find((s) => s.id === primaryId) ?? null;
   const others = useMemo(
     () =>
@@ -77,8 +78,21 @@ export function SimulacaoPageClient({
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="flex flex-col gap-6">
+          <Card className="p-5">
+            <h3 className="mb-1 text-[15px] font-semibold">Saldo acumulado projetado</h3>
+            <p className="mb-4 text-xs text-(--color-text-tertiary)">
+              Com base só no que já está cadastrado (sem nenhuma simulação de compra). Horizonte:{" "}
+              {formatMonthLabel(horizon.from)} → {formatMonthLabel(horizon.to)}.
+            </p>
+            <BaseAccumulatedChart points={baseAccumulated} />
+          </Card>
+
           {!primary ? (
-            <EmptyState title="Crie uma simulação para descobrir como uma nova compra afetaria seu orçamento." />
+            <Card className="p-5 text-center">
+              <p className="text-sm text-(--color-text-secondary)">
+                Crie uma simulação para descobrir como uma nova compra afetaria esse saldo.
+              </p>
+            </Card>
           ) : (
             <>
               <Card className="p-5">

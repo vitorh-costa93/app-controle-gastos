@@ -75,6 +75,7 @@ export async function createPerson(
   const { error } = await supabase.from("people").insert({ name, initials });
   if (error) {
     console.error("createPerson failed:", error);
+    if (error.code === "23505") return { ok: false, error: "Já existe uma pessoa com esse nome." };
     return { ok: false, error: "Não foi possível adicionar esta pessoa." };
   }
   revalidateTag("people");

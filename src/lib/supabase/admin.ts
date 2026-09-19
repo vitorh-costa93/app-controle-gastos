@@ -18,5 +18,8 @@ export function createAdminClient() {
 
   return createClient(url, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
+    // Isolado no schema "meudinheiro" para conviver no mesmo projeto Supabase
+    // com outras tabelas/dados sem colidir (ver supabase/migrations/0001_init.sql).
+    db: { schema: "meudinheiro" },
   });
 }

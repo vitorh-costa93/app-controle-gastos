@@ -2,6 +2,12 @@
 -- Conta única compartilhada (Vitor & Jaqueline), sem autenticação individual.
 -- Todo acesso ao banco acontece via camada server-side (service role); RLS fica
 -- habilitado e sem policies para bloquear qualquer acesso direto do navegador.
+--
+-- Tudo isolado no schema "meudinheiro" (não "public"), para poder conviver no
+-- mesmo projeto Supabase com outras tabelas/dados já existentes sem colidir.
+
+create schema if not exists meudinheiro;
+set search_path = meudinheiro, public;
 
 create extension if not exists "pgcrypto";
 
@@ -235,3 +241,14 @@ alter table ai_processing_jobs enable row level security;
 alter table ai_extracted_transactions enable row level security;
 alter table simulations enable row level security;
 alter table user_settings enable row level security;
+
+-- ---------------------------------------------------------------------------
+-- Grants — necessário para o PostgREST (usado pelo supabase-js) enxergar o
+-- schema "meudinheiro". Depois de rodar esta migration, adicione "meudinheiro"
+-- em Settings → API → Data API → Exposed schemas no painel do Supabase.
+-- ---------------------------------------------------------------------------
+grant usage on schema meudinheiro to service_role, authenticated, anon;
+grant all on all tables in schema meudinheiro to service_role;
+grant all on all sequences in schema meudinheiro to service_role;
+alter default privileges in schema meudinheiro grant all on tables to service_role;
+alter default privileges in schema meudinheiro grant all on sequences to service_role;

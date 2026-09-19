@@ -1,7 +1,7 @@
 import "server-only";
 import { createAdminClient } from "./admin";
 
-const BUCKET = "uploads";
+const BUCKET = "meudinheiro-uploads";
 
 export async function uploadToStorage(file: File): Promise<string> {
   const supabase = createAdminClient();

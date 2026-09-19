@@ -9,15 +9,23 @@ Stack: **Next.js (App Router) + TypeScript + Tailwind CSS + Supabase
 
 ## 1. Configurar o Supabase
 
-1. Crie um projeto em [supabase.com](https://supabase.com/dashboard) (região
-   South America — São Paulo).
+Todo o schema do app vive isolado dentro do schema Postgres `meudinheiro`
+(não `public`) — assim ele pode conviver no **mesmo projeto Supabase** que
+você já usa para outra coisa, sem colidir com tabelas/dados existentes.
+
+1. Use um projeto Supabase existente (ou crie um novo, se tiver vaga no seu
+   plano — free permite 2 projetos por organização).
 2. No **SQL Editor**, rode os arquivos de `supabase/migrations/` **na ordem**:
-   - `0001_init.sql` — tabelas, índices, triggers, RLS.
-   - `0002_storage.sql` — bucket privado `uploads` para áudio/foto/PDF.
+   - `0001_init.sql` — cria o schema `meudinheiro`, tabelas, índices,
+     triggers, RLS e os grants necessários.
+   - `0002_storage.sql` — bucket privado `meudinheiro-uploads` para áudio/foto/PDF.
 
    (Se preferir, instale o [Supabase CLI](https://supabase.com/docs/guides/cli)
    e rode `supabase db push` apontando para o projeto.)
-3. Em **Settings → API**, copie `Project URL` e a chave `service_role`.
+3. **Importante:** vá em **Settings → API → Data API → Exposed schemas** e
+   adicione `meudinheiro` à lista (por padrão só `public` fica exposto à API).
+   Sem esse passo, o app recebe erro de "schema not found" nas consultas.
+4. Em **Settings → API**, copie `Project URL` e a chave `service_role`.
 
 ## 2. Variáveis de ambiente
 

@@ -53,7 +53,7 @@ export default async function AnalisePage({
       {!hasData ? (
         <EmptyState title="Ainda não existem dados suficientes neste mês para uma análise confiável. Cadastre alguns lançamentos em Cadastro." />
       ) : (
-        <div className="flex flex-col gap-6">
+        <div className="flex min-w-0 flex-col gap-6">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <KpiCard
               label="Entradas"

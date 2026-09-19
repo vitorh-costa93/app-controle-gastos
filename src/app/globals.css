@@ -80,6 +80,9 @@ body {
   color: var(--color-text-primary);
   font-family: var(--font-app-sans);
   -webkit-font-smoothing: antialiased;
+  /* Trava de segurança: um filho largo (ex.: tabela) nunca deve conseguir esticar
+     a página inteira e forçar o mobile a exibir tudo "zoomado pra fora". */
+  overflow-x: hidden;
 }
 
 .tabular-nums {

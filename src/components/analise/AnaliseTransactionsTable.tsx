@@ -76,7 +76,7 @@ export function AnaliseTransactionsTable({
   const inputClass = selectClass;
 
   return (
-    <Card className="p-5">
+    <Card className="min-w-0 p-5">
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-[15px] font-semibold">Todas as movimentações do mês</h3>
         <span className="text-xs text-(--color-text-tertiary)">
@@ -84,7 +84,7 @@ export function AnaliseTransactionsTable({
         </span>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="min-w-0 overflow-x-auto">
         <table className="w-full min-w-[900px] text-sm">
           <thead>
             <tr className="border-b border-(--color-border) text-left text-xs text-(--color-text-tertiary)">

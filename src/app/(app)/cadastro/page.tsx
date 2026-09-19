@@ -1,4 +1,7 @@
 export const dynamic = "force-dynamic";
+// Envio de várias fotos processa cada lote em paralelo na IA, mas ainda pode passar
+// do timeout padrão da função serverless com muitas imagens de uma vez.
+export const maxDuration = 60;
 
 import { listTransactions } from "@/lib/data/transactions";
 import { listPeople, listCategories, listTransactionTypes } from "@/lib/data/reference";

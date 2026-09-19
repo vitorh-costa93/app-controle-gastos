@@ -17,6 +17,8 @@ import { toISODate, toReferenceMonth, formatDateBR, addMonths } from "@/lib/util
 
 export type IngestMethod = "audio" | "photo" | "text" | "pdf" | "csv";
 
+const IMAGE_BATCH_SIZE = 3;
+
 export interface IngestResultRow {
   id: string;
   data: ExtractedTransactionData;
@@ -89,7 +91,16 @@ export async function submitIngest(
       uploadedFileId = uploadedFileIds[0] ?? null;
 
       const dataUrls = await Promise.all(files.map((file) => fileToDataUrl(file)));
-      rawItems = await extractTransactionsFromImage(dataUrls, context);
+
+      // Manda no máximo IMAGE_BATCH_SIZE imagens por chamada à IA, em paralelo — uma
+      // única chamada com muitas imagens (ex.: 11 prints de uma vez) fica bem mais
+      // lenta e arrisca truncar a resposta; em lotes paralelos o tempo total cai bastante.
+      const batches: string[][] = [];
+      for (let i = 0; i < dataUrls.length; i += IMAGE_BATCH_SIZE) {
+        batches.push(dataUrls.slice(i, i + IMAGE_BATCH_SIZE));
+      }
+      const batchResults = await Promise.all(batches.map((batch) => extractTransactionsFromImage(batch, context)));
+      rawItems = batchResults.flat();
     } else {
       const file = formData.get("file") as File | null;
       if (!file || file.size === 0) return { ok: false, error: "Selecione um arquivo." };

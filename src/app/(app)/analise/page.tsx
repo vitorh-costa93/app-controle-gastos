@@ -6,6 +6,7 @@ import { listTransactionsForMonth } from "@/lib/data/transactions";
 import { toReferenceMonth } from "@/lib/utils/format";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { MonthSelector } from "@/components/analise/MonthSelector";
+import { PersonFilter } from "@/components/analise/PersonFilter";
 import { KpiCard } from "@/components/analise/KpiCard";
 import { CategoryDonutChart } from "@/components/analise/CategoryDonutChart";
 import { MonthlyEvolutionChart } from "@/components/analise/MonthlyEvolutionChart";
@@ -23,10 +24,11 @@ export default async function AnalisePage({
 }) {
   const sp = await searchParams;
   const month = typeof sp.month === "string" ? sp.month : toReferenceMonth(new Date());
+  const personId = typeof sp.personId === "string" ? sp.personId : "";
 
   const [data, monthTransactions] = await Promise.all([
-    getAnalysisData(month),
-    listTransactionsForMonth(month),
+    getAnalysisData(month, personId || undefined),
+    listTransactionsForMonth(month, personId || undefined),
   ]);
   const hasData =
     data.currentSummary.incomeCents > 0 ||
@@ -43,6 +45,10 @@ export default async function AnalisePage({
         subtitle="Veja como está sua vida financeira e acompanhe a evolução dos seus gastos e resultados."
         action={<MonthSelector month={month} />}
       />
+
+      <div className="mb-6">
+        <PersonFilter people={data.people} personId={personId} />
+      </div>
 
       {!hasData ? (
         <EmptyState title="Ainda não existem dados suficientes neste mês para uma análise confiável. Cadastre alguns lançamentos em Cadastro." />
@@ -113,8 +119,8 @@ export default async function AnalisePage({
             </Card>
           </div>
 
-          <Suspense fallback={<AIInsightCardSkeleton />}>
-            <AIInsightCard month={month} />
+          <Suspense fallback={<AIInsightCardSkeleton />} key={`${month}-${personId}`}>
+            <AIInsightCard month={month} personId={personId || undefined} />
           </Suspense>
 
           <AnaliseTransactionsTable

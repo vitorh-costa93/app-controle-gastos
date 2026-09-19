@@ -2,8 +2,8 @@ import { Sparkles } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { getMonthInsight } from "@/lib/data/analysis";
 
-export async function AIInsightCard({ month }: { month: string }) {
-  const insight = await getMonthInsight(month);
+export async function AIInsightCard({ month, personId }: { month: string; personId?: string }) {
+  const insight = await getMonthInsight(month, personId);
 
   return (
     <Card className="flex gap-3 bg-(--color-primary-soft)/40 p-4">

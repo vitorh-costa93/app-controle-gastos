@@ -27,26 +27,29 @@ export interface AnalysisData {
 
 /**
  * Trocar de mês em Análise refazia sempre 12 meses de consultas do zero — cacheado
- * por mês (300s ou até uma mutação relevante invalidar a tag "analysis") pra deixar
- * a navegação entre meses instantânea na maioria das vezes.
+ * por mês+pessoa (300s ou até uma mutação relevante invalidar a tag "analysis") pra
+ * deixar a navegação entre meses instantânea na maioria das vezes.
  */
 export const getAnalysisData = unstable_cache(
-  async (month: string): Promise<AnalysisData> => {
-    return computeAnalysisData(month);
+  async (month: string, personId?: string): Promise<AnalysisData> => {
+    return computeAnalysisData(month, personId);
   },
   ["analysis-data"],
   { tags: ["analysis"], revalidate: 300 }
 );
 
-async function computeAnalysisData(month: string): Promise<AnalysisData> {
+/** `personId` restringe tudo (KPIs, gráficos, breakdowns) a uma única pessoa — "ver o todo" quando omitido. */
+async function computeAnalysisData(month: string, personId?: string): Promise<AnalysisData> {
   const from12 = addMonths(month, -11);
-  const [rules, people, categories, types] = await Promise.all([
+  const [allRules, people, categories, types] = await Promise.all([
     listActiveRecurrenceRules(),
     listPeople(),
     listCategories(),
     listTransactionTypes(),
   ]);
-  const transactions = await listConsideredTransactionsInRange(from12, month);
+  const rules = personId ? allRules.filter((r) => r.personId === personId) : allRules;
+  const allTransactions = await listConsideredTransactionsInRange(from12, month);
+  const transactions = personId ? allTransactions.filter((t) => t.personId === personId) : allTransactions;
   const months = monthRange(from12, month);
 
   const summaries = months.map((m) => summarizeMonth(m, buildMonthOccurrences(m, transactions, rules)));
@@ -75,8 +78,8 @@ async function computeAnalysisData(month: string): Promise<AnalysisData> {
   };
 }
 
-export async function getMonthInsight(month: string): Promise<string> {
-  const data = await getAnalysisData(month);
+export async function getMonthInsight(month: string, personId?: string): Promise<string> {
+  const data = await getAnalysisData(month, personId);
 
   if (!data.hasEnoughHistory) {
     return "Ainda não há dados suficientes para gerar um insight confiável. Cadastre lançamentos em pelo menos dois meses para comparações.";
@@ -92,7 +95,9 @@ export async function getMonthInsight(month: string): Promise<string> {
     .map((c) => `${c.categoryId ? categoriesById.get(c.categoryId) ?? "Outros" : "Sem categoria"}: R$ ${(c.amountCents / 100).toFixed(2)} (${c.percent.toFixed(1)}%)`)
     .join("; ");
 
-  const prompt = `Dados do mês ${data.month}:
+  const personName = personId ? data.people.find((p) => p.id === personId)?.name : null;
+
+  const prompt = `Dados do mês ${data.month}${personName ? ` — apenas lançamentos de ${personName}` : ""}:
 Entradas: R$ ${(data.currentSummary.incomeCents / 100).toFixed(2)}
 Saídas: R$ ${(data.currentSummary.expenseCents / 100).toFixed(2)}
 Sobra: R$ ${(data.currentSummary.leftoverCents / 100).toFixed(2)}

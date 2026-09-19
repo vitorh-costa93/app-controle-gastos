@@ -195,14 +195,17 @@ export async function listConsideredTransactionsInRange(
 
 /** Todos os lançamentos de um mês (considerados ou não) — usado pela tabela detalhada de Análise. */
 export const listTransactionsForMonth = unstable_cache(
-  async (referenceMonth: string): Promise<Transaction[]> => {
+  async (referenceMonth: string, personId?: string): Promise<Transaction[]> => {
     const supabase = createAdminClient();
-    const { data, error } = await supabase
+    let query = supabase
       .from("transactions")
       .select("*")
       .is("deleted_at", null)
       .eq("reference_month", referenceMonth)
       .order("registration_date", { ascending: false });
+    if (personId) query = query.eq("person_id", personId);
+
+    const { data, error } = await query;
 
     if (error) {
       console.error("listTransactionsForMonth failed:", error);

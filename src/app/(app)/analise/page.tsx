@@ -55,6 +55,7 @@ export default async function AnalisePage({
               currentCents={data.currentSummary.expenseCents}
               previousCents={data.previousSummary?.expenseCents ?? null}
               tone="negative"
+              lowerIsBetter
             />
             <KpiCard
               label="Sobrou"

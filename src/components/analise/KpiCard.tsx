@@ -8,13 +8,17 @@ export function KpiCard({
   currentCents,
   previousCents,
   tone,
+  lowerIsBetter = false,
 }: {
   label: string;
   currentCents: number;
   previousCents: number | null;
   tone: "positive" | "negative" | "info";
+  /** Ex.: Saídas — cair em relação ao mês anterior é bom (verde), subir é ruim (vermelho). */
+  lowerIsBetter?: boolean;
 }) {
   const change = previousCents !== null ? percentChange(currentCents, previousCents) : null;
+  const isGoodChange = change !== null && (lowerIsBetter ? change <= 0 : change >= 0);
 
   const toneClass = {
     positive: "text-(--color-positive)",
@@ -32,7 +36,7 @@ export function KpiCard({
         <p
           className={cn(
             "mt-1 text-xs font-medium tabular-nums",
-            change >= 0 ? "text-(--color-positive)" : "text-(--color-negative)"
+            isGoodChange ? "text-(--color-positive)" : "text-(--color-negative)"
           )}
         >
           {change >= 0 ? "↑" : "↓"} {formatCompactPercent(Math.abs(change))} vs. mês anterior

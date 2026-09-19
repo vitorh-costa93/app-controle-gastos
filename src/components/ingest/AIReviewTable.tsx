@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Select, Input } from "@/components/ui/Field";
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
+import { AlertTriangle } from "lucide-react";
 
 const CONFIDENCE_TONE: Record<FieldConfidence, "positive" | "warning" | "negative"> = {
   alta: "positive",
@@ -52,6 +53,7 @@ export function AIReviewTable({
   }
 
   const includedCount = rows.filter((r) => r.included).length;
+  const duplicateCount = rows.filter((r) => r.duplicateWarning).length;
 
   function handleConfirm() {
     setError(null);
@@ -85,6 +87,15 @@ export function AIReviewTable({
     <div>
       <p className="mb-3 text-xs text-(--color-text-secondary)">
         Revise cada lançamento antes de confirmar. Desligue, edite ou remova o que não estiver certo.
+        {duplicateCount > 0 && (
+          <>
+            {" "}
+            <span className="font-medium text-(--color-warning)">
+              {duplicateCount} {duplicateCount === 1 ? "linha parece" : "linhas parecem"} duplicata de algo já cadastrado e{" "}
+              {duplicateCount === 1 ? "foi desmarcada" : "foram desmarcadas"} automaticamente.
+            </span>
+          </>
+        )}
       </p>
 
       <div className="flex flex-col gap-3">
@@ -141,7 +152,12 @@ function ReviewRow({
   const { data, confidence } = row;
 
   return (
-    <div className="rounded-(--radius-lg) border border-(--color-border) p-3">
+    <div
+      className={
+        "rounded-(--radius-lg) border p-3 " +
+        (row.duplicateWarning ? "border-(--color-warning)/40 bg-(--color-warning-soft)/40" : "border-(--color-border)")
+      }
+    >
       <div className="mb-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Toggle checked={row.included} onChange={onToggle} ariaLabel="Considerar" />
@@ -151,6 +167,13 @@ function ReviewRow({
           Remover
         </button>
       </div>
+
+      {row.duplicateWarning && (
+        <div className="mb-2 flex items-start gap-1.5 text-xs text-(--color-warning)">
+          <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+          <span>{row.duplicateWarning}</span>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <LabeledField label="Data" confidence={confidence.date}>

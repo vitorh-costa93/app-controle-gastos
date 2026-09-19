@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { TransactionRow } from "@/types/db";
 import { Transaction } from "@/types/domain";
-import { mapTransactionRow, centsToReaisString } from "./mappers";
+import { mapTransactionRow, centsToReaisString, reaisStringToCents } from "./mappers";
 
 export interface TransactionFilters {
   referenceMonth?: string;
@@ -235,4 +235,74 @@ export async function deleteTransaction(
   revalidatePath("/cadastro");
   revalidatePath("/analise");
   return { ok: true };
+}
+
+export interface DuplicateCandidate {
+  personId: string | null;
+  amountCents: number;
+  registrationDate: string | null;
+  description: string | null;
+}
+
+export interface DuplicateMatch {
+  transactionId: string;
+  registrationDate: string;
+  description: string | null;
+}
+
+const DUPLICATE_WINDOW_DAYS = 10;
+
+/**
+ * Para cada candidato (ex.: linhas extraídas de uma fatura), procura um lançamento
+ * já existente (mesma pessoa, valor igual e data próxima) — usado para avisar sobre
+ * possível duplicata quando a mesma compra é enviada duas vezes (print parcial +
+ * fatura fechada). Nunca bloqueia: só sinaliza para revisão humana.
+ */
+export async function findPotentialDuplicates(
+  candidates: DuplicateCandidate[]
+): Promise<(DuplicateMatch | null)[]> {
+  const datedCandidates = candidates.filter((c) => c.personId && c.registrationDate);
+  if (datedCandidates.length === 0) return candidates.map(() => null);
+
+  const times = datedCandidates.map((c) => new Date(c.registrationDate as string).getTime());
+  const windowMs = DUPLICATE_WINDOW_DAYS * 86_400_000;
+  const minDate = new Date(Math.min(...times) - windowMs).toISOString().slice(0, 10);
+  const maxDate = new Date(Math.max(...times) + windowMs).toISOString().slice(0, 10);
+
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("id, person_id, amount, registration_date, description")
+    .is("deleted_at", null)
+    .gte("registration_date", minDate)
+    .lte("registration_date", maxDate);
+
+  if (error) {
+    console.error("findPotentialDuplicates failed:", error);
+    return candidates.map(() => null);
+  }
+
+  const existing = data as {
+    id: string;
+    person_id: string;
+    amount: string;
+    registration_date: string;
+    description: string | null;
+  }[];
+
+  return candidates.map((candidate) => {
+    if (!candidate.personId || !candidate.registrationDate) return null;
+    const candidateTime = new Date(candidate.registrationDate).getTime();
+
+    const match = existing.find((e) => {
+      if (e.person_id !== candidate.personId) return false;
+      if (Math.abs(reaisStringToCents(e.amount) - candidate.amountCents) > 1) return false;
+      const dayDiff = Math.abs(new Date(e.registration_date).getTime() - candidateTime) / 86_400_000;
+      return dayDiff <= DUPLICATE_WINDOW_DAYS;
+    });
+
+    return match
+      ? { transactionId: match.id, registrationDate: match.registration_date, description: match.description }
+      : null;
+  });
 }

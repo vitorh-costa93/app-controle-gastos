@@ -11,9 +11,9 @@ import {
 } from "@/lib/ai/openai";
 import { resolveExtractedTransaction } from "@/lib/ai/resolve";
 import { listPeople, listCategories, listTransactionTypes } from "@/lib/data/reference";
-import { createTransactionsBatch, TransactionInput } from "@/lib/data/transactions";
+import { createTransactionsBatch, findPotentialDuplicates, TransactionInput } from "@/lib/data/transactions";
 import { AiExtractedTransactionRow, ExtractedTransactionData, FieldConfidence } from "@/types/db";
-import { toISODate, toReferenceMonth } from "@/lib/utils/format";
+import { toISODate, toReferenceMonth, formatDateBR } from "@/lib/utils/format";
 
 export type IngestMethod = "audio" | "photo" | "text" | "pdf";
 
@@ -22,6 +22,7 @@ export interface IngestResultRow {
   data: ExtractedTransactionData;
   confidence: Record<string, FieldConfidence>;
   included: boolean;
+  duplicateWarning: string | null;
 }
 
 export async function submitIngest(
@@ -110,11 +111,23 @@ export async function submitIngest(
 
     const resolved = rawItems.map((raw) => resolveExtractedTransaction(raw, { people, categories, types }));
 
-    const rowsToInsert = resolved.map(({ data, confidence }) => ({
+    // Compara com lançamentos já existentes (mesma pessoa, valor e data próxima) para
+    // avisar sobre possível duplicata — ex.: print parcial da fatura + fatura fechada
+    // depois, cobrindo as mesmas compras. Nunca bloqueia, só desmarca por segurança.
+    const duplicates = await findPotentialDuplicates(
+      resolved.map(({ data }) => ({
+        personId: data.person_id,
+        amountCents: data.amount !== null ? Math.round(data.amount * 100) : 0,
+        registrationDate: data.registration_date,
+        description: data.description,
+      }))
+    );
+
+    const rowsToInsert = resolved.map(({ data, confidence }, i) => ({
       ai_processing_job_id: job.id,
       extracted_data: data,
       confidence,
-      included: true,
+      included: !duplicates[i],
       reviewed: false,
     }));
 
@@ -138,12 +151,18 @@ export async function submitIngest(
     return {
       ok: true,
       jobId: job.id,
-      rows: insertedRows.map((r) => ({
-        id: r.id,
-        data: r.extracted_data,
-        confidence: r.confidence ?? {},
-        included: r.included,
-      })),
+      rows: insertedRows.map((r, i) => {
+        const duplicate = duplicates[i];
+        return {
+          id: r.id,
+          data: r.extracted_data,
+          confidence: r.confidence ?? {},
+          included: r.included,
+          duplicateWarning: duplicate
+            ? `Possível duplicata — já existe um lançamento parecido em ${formatDateBR(duplicate.registrationDate)}${duplicate.description ? ` (${duplicate.description})` : ""}.`
+            : null,
+        };
+      }),
     };
   } catch (err) {
     if (uploadedFileId) {

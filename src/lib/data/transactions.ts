@@ -376,6 +376,13 @@ export async function deleteTransaction(
   id: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const supabase = createAdminClient();
+
+  const { data: before } = await supabase
+    .from("transactions")
+    .select("recurrence_rule_id")
+    .eq("id", id)
+    .single();
+
   const { error } = await supabase
     .from("transactions")
     .update({ deleted_at: new Date().toISOString() })
@@ -383,8 +390,15 @@ export async function deleteTransaction(
 
   if (error) return { ok: false, error: "Não foi possível excluir este lançamento." };
 
+  // Se era um lançamento fixo, desativa a recorrência também — senão o valor
+  // continuaria sendo projetado todo mês nas Análises/Simulação mesmo excluído.
+  if (before?.recurrence_rule_id) {
+    await deactivateFixedRecurrence(supabase, before.recurrence_rule_id);
+  }
+
   revalidatePath("/cadastro");
   revalidatePath("/analise");
+  revalidatePath("/simulacao");
   return { ok: true };
 }
 

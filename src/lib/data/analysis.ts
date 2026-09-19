@@ -1,14 +1,14 @@
 "use server";
 
 import { unstable_cache } from "next/cache";
-import { listConsideredTransactionsInRange } from "./transactions";
+import { listConsideredTransactionsInRange, listTransactionsForMonth } from "./transactions";
 import { listActiveRecurrenceRules } from "./recurrence";
 import { listPeople, listCategories, listTransactionTypes } from "./reference";
 import { buildMonthOccurrences, monthRange } from "@/lib/domain/recurrence";
 import { summarizeMonth, breakdownByCategory, breakdownByKey } from "@/lib/domain/finance";
 import { addMonths } from "@/lib/utils/format";
 import { isAiConfigured, generateMonthInsight } from "@/lib/ai/openai";
-import { MonthSummary } from "@/types/domain";
+import { MonthSummary, Transaction } from "@/types/domain";
 import { Person, Category, TransactionType } from "@/types/db";
 
 export interface AnalysisData {
@@ -76,6 +76,24 @@ async function computeAnalysisData(month: string, personId?: string): Promise<An
     types,
     hasEnoughHistory: monthsWithData >= 2,
   };
+}
+
+/**
+ * Combina os dois fetches do "caminho rápido" (KPIs/gráficos + tabela detalhada) numa
+ * única ida ao servidor — usada pela troca de mês/pessoa client-side em Análise, pra
+ * não pagar 3 round-trips (um por chamada) numa navegação que precisa parecer instantânea.
+ * Função async simples (não embrulhada em unstable_cache) de propósito: é o alvo direto
+ * de uma Server Action chamada do client, e precisa ter essa forma pro Next reconhecer.
+ */
+export async function fetchAnalysisPageData(
+  month: string,
+  personId?: string
+): Promise<{ data: AnalysisData; transactions: Transaction[] }> {
+  const [data, transactions] = await Promise.all([
+    getAnalysisData(month, personId),
+    listTransactionsForMonth(month, personId),
+  ]);
+  return { data, transactions };
 }
 
 export async function getMonthInsight(month: string, personId?: string): Promise<string> {

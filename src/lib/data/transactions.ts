@@ -1,10 +1,91 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { TransactionRow } from "@/types/db";
 import { Transaction } from "@/types/domain";
 import { mapTransactionRow, centsToReaisString, reaisStringToCents } from "./mappers";
+
+type AdminClient = ReturnType<typeof createAdminClient>;
+
+interface RecurrenceFields {
+  personId: string;
+  direction: "income" | "expense";
+  typeId: string | null;
+  categoryId: string | null;
+  amountCents: number;
+  registrationDate: string;
+  description: string | null;
+}
+
+/**
+ * Cria a regra de recorrência por trás de um lançamento marcado como "Fixo" e
+ * vincula o lançamento a ela — sem isso, "Fixo" era só um rótulo e nunca
+ * projetava o valor para os meses seguintes (saldo acumulado ficava parado).
+ */
+async function linkFixedRecurrence(
+  supabase: AdminClient,
+  transactionId: string,
+  fields: RecurrenceFields
+): Promise<string | null> {
+  const { data: rule, error } = await supabase
+    .from("recurrence_rules")
+    .insert({
+      description: fields.description || "Lançamento fixo",
+      person_id: fields.personId,
+      direction: fields.direction,
+      type_id: fields.typeId,
+      category_id: fields.categoryId,
+      amount: centsToReaisString(fields.amountCents),
+      start_date: fields.registrationDate,
+    })
+    .select("id")
+    .single();
+
+  if (error || !rule) {
+    console.error("linkFixedRecurrence failed:", error);
+    return null;
+  }
+
+  await supabase.from("transactions").update({ recurrence_rule_id: rule.id }).eq("id", transactionId);
+  revalidateTag("recurrence-rules");
+  return rule.id as string;
+}
+
+/** Mantém a regra de recorrência já vinculada em sincronia com edições no lançamento fixo. */
+async function syncFixedRecurrence(
+  supabase: AdminClient,
+  recurrenceRuleId: string,
+  fields: RecurrenceFields
+): Promise<void> {
+  const { error } = await supabase
+    .from("recurrence_rules")
+    .update({
+      description: fields.description || "Lançamento fixo",
+      person_id: fields.personId,
+      direction: fields.direction,
+      type_id: fields.typeId,
+      category_id: fields.categoryId,
+      amount: centsToReaisString(fields.amountCents),
+    })
+    .eq("id", recurrenceRuleId);
+
+  if (error) {
+    console.error("syncFixedRecurrence failed:", error);
+    return;
+  }
+  revalidateTag("recurrence-rules");
+}
+
+/** Desativa a recorrência quando um lançamento deixa de ser fixo. */
+async function deactivateFixedRecurrence(supabase: AdminClient, recurrenceRuleId: string): Promise<void> {
+  const { error } = await supabase.from("recurrence_rules").update({ active: false }).eq("id", recurrenceRuleId);
+  if (error) {
+    console.error("deactivateFixedRecurrence failed:", error);
+    return;
+  }
+  revalidateTag("recurrence-rules");
+}
 
 export interface TransactionFilters {
   referenceMonth?: string;
@@ -138,9 +219,24 @@ export async function createTransaction(
 
   if (error) return { ok: false, error: "Não foi possível salvar este lançamento." };
 
+  const row = data as TransactionRow;
+  if (input.fixedVariable === "fixed") {
+    const ruleId = await linkFixedRecurrence(supabase, row.id, {
+      personId: input.personId,
+      direction: input.direction,
+      typeId: input.typeId,
+      categoryId: input.categoryId,
+      amountCents: input.amountCents,
+      registrationDate: input.registrationDate,
+      description: input.description,
+    });
+    if (ruleId) row.recurrence_rule_id = ruleId;
+  }
+
   revalidatePath("/cadastro");
   revalidatePath("/analise");
-  return { ok: true, data: mapTransactionRow(data as TransactionRow) };
+  revalidatePath("/simulacao");
+  return { ok: true, data: mapTransactionRow(row) };
 }
 
 export async function createTransactionsBatch(
@@ -148,30 +244,50 @@ export async function createTransactionsBatch(
 ): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
   if (inputs.length === 0) return { ok: true, count: 0 };
   const supabase = createAdminClient();
-  const { error, count } = await supabase.from("transactions").insert(
-    inputs.map((input) => ({
-      registration_date: input.registrationDate,
-      reference_month: input.referenceMonth,
-      person_id: input.personId,
-      direction: input.direction,
-      fixed_variable: input.fixedVariable,
-      type_id: input.typeId,
-      category_id: input.categoryId,
-      installment_current: input.installmentCurrent,
-      installment_total: input.installmentTotal,
-      amount: centsToReaisString(input.amountCents),
-      description: input.description,
-      considered: input.considered,
-      source: input.source ?? "manual",
-    })),
-    { count: "exact" }
-  );
+  const { data, error } = await supabase
+    .from("transactions")
+    .insert(
+      inputs.map((input) => ({
+        registration_date: input.registrationDate,
+        reference_month: input.referenceMonth,
+        person_id: input.personId,
+        direction: input.direction,
+        fixed_variable: input.fixedVariable,
+        type_id: input.typeId,
+        category_id: input.categoryId,
+        installment_current: input.installmentCurrent,
+        installment_total: input.installmentTotal,
+        amount: centsToReaisString(input.amountCents),
+        description: input.description,
+        considered: input.considered,
+        source: input.source ?? "manual",
+      }))
+    )
+    .select("id, fixed_variable");
 
   if (error) return { ok: false, error: "Não foi possível confirmar os lançamentos." };
 
+  const inserted = data as { id: string; fixed_variable: string }[];
+  await Promise.all(
+    inserted.map((row, i) => {
+      const input = inputs[i];
+      if (row.fixed_variable !== "fixed") return null;
+      return linkFixedRecurrence(supabase, row.id, {
+        personId: input.personId,
+        direction: input.direction,
+        typeId: input.typeId,
+        categoryId: input.categoryId,
+        amountCents: input.amountCents,
+        registrationDate: input.registrationDate,
+        description: input.description,
+      });
+    })
+  );
+
   revalidatePath("/cadastro");
   revalidatePath("/analise");
-  return { ok: true, count: count ?? inputs.length };
+  revalidatePath("/simulacao");
+  return { ok: true, count: inserted.length };
 }
 
 export async function updateTransaction(
@@ -179,6 +295,12 @@ export async function updateTransaction(
   input: Partial<TransactionInput>
 ): Promise<{ ok: true; data: Transaction } | { ok: false; error: string }> {
   const supabase = createAdminClient();
+
+  const { data: before } = await supabase
+    .from("transactions")
+    .select("fixed_variable, recurrence_rule_id, person_id, direction, type_id, category_id, amount, registration_date, description")
+    .eq("id", id)
+    .single();
 
   const patch: Record<string, unknown> = {};
   if (input.registrationDate !== undefined) patch.registration_date = input.registrationDate;
@@ -203,9 +325,38 @@ export async function updateTransaction(
 
   if (error) return { ok: false, error: "Não foi possível salvar as alterações." };
 
+  const row = data as TransactionRow;
+
+  // Mantém a regra de recorrência em sincronia: cria quando passa a ser fixo,
+  // atualiza os campos quando já era fixo e algo mudou, desativa quando deixa de ser fixo.
+  if (before) {
+    const finalFixedVariable = input.fixedVariable ?? before.fixed_variable;
+    const recurrenceFields: RecurrenceFields = {
+      personId: input.personId ?? before.person_id,
+      direction: input.direction ?? before.direction,
+      typeId: input.typeId !== undefined ? input.typeId : before.type_id,
+      categoryId: input.categoryId !== undefined ? input.categoryId : before.category_id,
+      amountCents: input.amountCents ?? reaisStringToCents(before.amount),
+      registrationDate: input.registrationDate ?? before.registration_date,
+      description: input.description !== undefined ? input.description : before.description,
+    };
+
+    if (finalFixedVariable === "fixed") {
+      if (!before.recurrence_rule_id) {
+        const ruleId = await linkFixedRecurrence(supabase, id, recurrenceFields);
+        if (ruleId) row.recurrence_rule_id = ruleId;
+      } else {
+        await syncFixedRecurrence(supabase, before.recurrence_rule_id, recurrenceFields);
+      }
+    } else if (before.recurrence_rule_id) {
+      await deactivateFixedRecurrence(supabase, before.recurrence_rule_id);
+    }
+  }
+
   revalidatePath("/cadastro");
+  revalidatePath("/simulacao");
   revalidatePath("/analise");
-  return { ok: true, data: mapTransactionRow(data as TransactionRow) };
+  return { ok: true, data: mapTransactionRow(row) };
 }
 
 export async function setTransactionConsidered(

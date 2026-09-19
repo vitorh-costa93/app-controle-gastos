@@ -294,6 +294,16 @@ function ReviewRow({
             <option value="income">Entrada</option>
           </Select>
         </LabeledField>
+
+        <div className="col-span-2 sm:col-span-4">
+          <LabeledField label="Descrição">
+            <Input
+              value={data.description ?? ""}
+              onChange={(e) => onUpdate({ description: e.target.value || null })}
+              placeholder="Ex.: Compras supermercado Carrefour"
+            />
+          </LabeledField>
+        </div>
       </div>
     </div>
   );

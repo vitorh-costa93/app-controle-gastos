@@ -14,7 +14,7 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
     "lucide-react": "^1.47.0",
-    "next": "16.3.5",
+    "next": "^15.5.25",
     "openai": "^7.19.0",
     "pdf-parse": "^2.4.5",
     "react": "19.2.8",
@@ -31,7 +31,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.3.5",
+    "eslint-config-next": "^15.5.25",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

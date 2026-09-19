@@ -61,7 +61,10 @@ export async function listTransactions(
   if (filters.search) query = query.ilike("description", `%${filters.search}%`);
 
   const { data, error, count } = await query;
-  if (error) throw new Error("Não foi possível carregar os lançamentos.");
+  if (error) {
+    console.error("listTransactions failed:", error);
+    throw new Error("Não foi possível carregar os lançamentos.");
+  }
 
   return {
     data: (data as TransactionRow[]).map(mapTransactionRow),
@@ -81,7 +84,10 @@ export async function listConsideredTransactionsForMonth(
     .eq("reference_month", referenceMonth)
     .eq("considered", true);
 
-  if (error) throw new Error("Não foi possível carregar os lançamentos do mês.");
+  if (error) {
+    console.error("listConsideredTransactionsForMonth failed:", error);
+    throw new Error("Não foi possível carregar os lançamentos do mês.");
+  }
   return (data as TransactionRow[]).map(mapTransactionRow);
 }
 
@@ -99,7 +105,10 @@ export async function listConsideredTransactionsInRange(
     .gte("reference_month", fromMonth)
     .lte("reference_month", toMonth);
 
-  if (error) throw new Error("Não foi possível carregar os lançamentos do período.");
+  if (error) {
+    console.error("listConsideredTransactionsInRange failed:", error);
+    throw new Error("Não foi possível carregar os lançamentos do período.");
+  }
   return (data as TransactionRow[]).map(mapTransactionRow);
 }
 

@@ -11,7 +11,10 @@ export async function listPeople(): Promise<Person[]> {
     .select("*")
     .eq("active", true)
     .order("created_at");
-  if (error) throw new Error("Não foi possível carregar as pessoas.");
+  if (error) {
+    console.error("listPeople failed:", error);
+    throw new Error("Não foi possível carregar as pessoas.");
+  }
   return data as Person[];
 }
 
@@ -22,7 +25,10 @@ export async function listCategories(): Promise<Category[]> {
     .select("*")
     .eq("active", true)
     .order("name");
-  if (error) throw new Error("Não foi possível carregar as categorias.");
+  if (error) {
+    console.error("listCategories failed:", error);
+    throw new Error("Não foi possível carregar as categorias.");
+  }
   return data as Category[];
 }
 
@@ -33,7 +39,10 @@ export async function listTransactionTypes(): Promise<TransactionType[]> {
     .select("*")
     .eq("active", true)
     .order("name");
-  if (error) throw new Error("Não foi possível carregar os tipos.");
+  if (error) {
+    console.error("listTransactionTypes failed:", error);
+    throw new Error("Não foi possível carregar os tipos.");
+  }
   return data as TransactionType[];
 }
 
@@ -48,7 +57,10 @@ export async function createPerson(
     .map((w) => w[0]?.toUpperCase())
     .join("");
   const { error } = await supabase.from("people").insert({ name, initials });
-  if (error) return { ok: false, error: "Não foi possível adicionar esta pessoa." };
+  if (error) {
+    console.error("createPerson failed:", error);
+    return { ok: false, error: "Não foi possível adicionar esta pessoa." };
+  }
   revalidatePath("/configuracoes");
   return { ok: true };
 }
@@ -58,7 +70,10 @@ export async function createCategory(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const supabase = createAdminClient();
   const { error } = await supabase.from("categories").insert({ name });
-  if (error) return { ok: false, error: "Não foi possível adicionar esta categoria." };
+  if (error) {
+    console.error("createCategory failed:", error);
+    return { ok: false, error: "Não foi possível adicionar esta categoria." };
+  }
   revalidatePath("/configuracoes");
   return { ok: true };
 }
@@ -68,7 +83,10 @@ export async function createTransactionType(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const supabase = createAdminClient();
   const { error } = await supabase.from("transaction_types").insert({ name });
-  if (error) return { ok: false, error: "Não foi possível adicionar este tipo." };
+  if (error) {
+    console.error("createTransactionType failed:", error);
+    return { ok: false, error: "Não foi possível adicionar este tipo." };
+  }
   revalidatePath("/configuracoes");
   return { ok: true };
 }
@@ -79,7 +97,10 @@ export async function deactivateReferenceItem(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const supabase = createAdminClient();
   const { error } = await supabase.from(table).update({ active: false }).eq("id", id);
-  if (error) return { ok: false, error: "Não foi possível remover este item." };
+  if (error) {
+    console.error("deactivateReferenceItem failed:", error);
+    return { ok: false, error: "Não foi possível remover este item." };
+  }
   revalidatePath("/configuracoes");
   return { ok: true };
 }

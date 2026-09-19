@@ -14,6 +14,7 @@ const METHOD_TITLES: Record<InputMethod, string> = {
   photo: "Novo lançamento por foto",
   text: "Novo lançamento por texto",
   pdf: "Novo lançamento por PDF",
+  csv: "Novo lançamento por CSV",
 };
 
 type Stage = "capture" | "processing" | "review" | "error";
@@ -160,7 +161,7 @@ function FileCapture({
 }) {
   const [file, setFile] = useState<File | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const accept = method === "pdf" ? "application/pdf" : "image/*";
+  const accept = method === "pdf" ? "application/pdf" : method === "csv" ? ".csv,text/csv" : "image/*";
 
   return (
     <div className="flex flex-col gap-4">

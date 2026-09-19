@@ -1,6 +1,6 @@
 export type Direction = "income" | "expense";
 export type FixedVariable = "fixed" | "variable";
-export type TransactionSource = "manual" | "audio" | "photo" | "text" | "pdf";
+export type TransactionSource = "manual" | "audio" | "photo" | "text" | "pdf" | "csv";
 export type UploadedFileStatus =
   | "received"
   | "processing"
@@ -76,7 +76,7 @@ export interface TransactionRow {
 export interface UploadedFileRow {
   id: string;
   storage_path: string | null;
-  source_type: "audio" | "photo" | "text" | "pdf";
+  source_type: "audio" | "photo" | "text" | "pdf" | "csv";
   status: UploadedFileStatus;
   raw_text: string | null;
   created_at: string;

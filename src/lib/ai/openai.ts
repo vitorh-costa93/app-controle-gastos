@@ -115,7 +115,8 @@ Regras obrigatórias:
 - installment_current/installment_total: se não houver parcelamento mencionado, use 1 e 1.
 - amount é sempre em reais (BRL), nunca em centavos.
 - direction: "expense" para gastos/saídas, "income" para receitas/entradas.
-- Use as pessoas, categorias e tipos existentes informados quando fizerem sentido; caso contrário, sugira o nome mais apropriado em texto livre.`;
+- Use as pessoas, categorias e tipos existentes informados quando fizerem sentido; caso contrário, sugira o nome mais apropriado em texto livre.
+- Se o texto vier em formato de tabela/CSV (colunas separadas por vírgula ou ponto e vírgula, com cabeçalho), use os nomes das colunas para identificar data, descrição, valor etc., e gere um lançamento por linha de dados (ignorando a linha de cabeçalho).`;
 
 function buildContextBlock(context: ExtractionContext): string {
   return `Data de referência para resolver datas relativas: ${context.today}.

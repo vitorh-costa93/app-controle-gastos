@@ -15,7 +15,7 @@ import { createTransactionsBatch, findPotentialDuplicates, TransactionInput } fr
 import { AiExtractedTransactionRow, ExtractedTransactionData, FieldConfidence } from "@/types/db";
 import { toISODate, toReferenceMonth, formatDateBR } from "@/lib/utils/format";
 
-export type IngestMethod = "audio" | "photo" | "text" | "pdf";
+export type IngestMethod = "audio" | "photo" | "text" | "pdf" | "csv";
 
 export interface IngestResultRow {
   id: string;
@@ -90,7 +90,7 @@ export async function submitIngest(
           await supabase.from("uploaded_files").update({ raw_text: transcript }).eq("id", uploadedFileId);
         }
         rawItems = await extractTransactionsFromText(transcript, context);
-      } else {
+      } else if (method === "pdf") {
         const { PDFParse } = await import("pdf-parse");
         const buffer = Buffer.from(await file.arrayBuffer());
         const parser = new PDFParse({ data: buffer });
@@ -99,6 +99,13 @@ export async function submitIngest(
           await supabase.from("uploaded_files").update({ raw_text: parsed.text }).eq("id", uploadedFileId);
         }
         rawItems = await extractTransactionsFromText(parsed.text, context);
+      } else {
+        // csv — texto puro, sem parsing: a IA lê as colunas e extrai um lançamento por linha.
+        const csvText = await file.text();
+        if (uploadedFileId) {
+          await supabase.from("uploaded_files").update({ raw_text: csvText }).eq("id", uploadedFileId);
+        }
+        rawItems = await extractTransactionsFromText(csvText, context);
       }
     }
 

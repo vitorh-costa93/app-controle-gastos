@@ -32,7 +32,7 @@ export interface TransactionInput {
   amountCents: number;
   description: string | null;
   considered: boolean;
-  source?: "manual" | "audio" | "photo" | "text" | "pdf";
+  source?: "manual" | "audio" | "photo" | "text" | "pdf" | "csv";
 }
 
 export async function listTransactions(

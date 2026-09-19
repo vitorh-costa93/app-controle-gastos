@@ -1,6 +1,6 @@
 "use client";
 
-import { Mic, Camera, Type, FileText } from "lucide-react";
+import { Mic, Camera, Type, FileText, Table } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
 const METHODS = [
@@ -8,13 +8,14 @@ const METHODS = [
   { id: "photo", label: "Foto", icon: Camera },
   { id: "text", label: "Texto", icon: Type },
   { id: "pdf", label: "PDF", icon: FileText },
+  { id: "csv", label: "CSV", icon: Table },
 ] as const;
 
 export type InputMethod = (typeof METHODS)[number]["id"];
 
 export function InputMethodCards({ onSelect }: { onSelect: (method: InputMethod) => void }) {
   return (
-    <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div className="mb-6 grid grid-cols-3 gap-3 sm:grid-cols-5">
       {METHODS.map((method) => {
         const Icon = method.icon;
         return (

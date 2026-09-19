@@ -1,0 +1,217 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { uploadToStorage, fileToDataUrl } from "@/lib/supabase/storage";
+import {
+  isAiConfigured,
+  extractTransactionsFromText,
+  extractTransactionsFromImage,
+  transcribeAudio,
+} from "@/lib/ai/openai";
+import { resolveExtractedTransaction } from "@/lib/ai/resolve";
+import { listPeople, listCategories, listTransactionTypes } from "@/lib/data/reference";
+import { createTransactionsBatch, TransactionInput } from "@/lib/data/transactions";
+import { AiExtractedTransactionRow, ExtractedTransactionData, FieldConfidence } from "@/types/db";
+import { toISODate, toReferenceMonth } from "@/lib/utils/format";
+
+export type IngestMethod = "audio" | "photo" | "text" | "pdf";
+
+export interface IngestResultRow {
+  id: string;
+  data: ExtractedTransactionData;
+  confidence: Record<string, FieldConfidence>;
+  included: boolean;
+}
+
+export async function submitIngest(
+  formData: FormData
+): Promise<{ ok: true; jobId: string; rows: IngestResultRow[] } | { ok: false; error: string }> {
+  if (!isAiConfigured()) {
+    return {
+      ok: false,
+      error:
+        "A extração por IA ainda não está configurada. Adicione uma chave de API para habilitar esse recurso.",
+    };
+  }
+
+  const method = formData.get("method") as IngestMethod | null;
+  if (!method) return { ok: false, error: "Método de entrada inválido." };
+
+  const supabase = createAdminClient();
+  const [people, categories, types] = await Promise.all([
+    listPeople(),
+    listCategories(),
+    listTransactionTypes(),
+  ]);
+  const context = {
+    today: toISODate(new Date()),
+    people: people.map((p) => p.name),
+    categories: categories.map((c) => c.name),
+    types: types.map((t) => t.name),
+  };
+
+  let uploadedFileId: string | null = null;
+
+  try {
+    let rawItems;
+
+    if (method === "text") {
+      const text = String(formData.get("text") ?? "");
+      if (!text.trim()) return { ok: false, error: "Digite um texto para extrair os lançamentos." };
+
+      const { data: uploadedFile } = await supabase
+        .from("uploaded_files")
+        .insert({ source_type: "text", raw_text: text, status: "processing" })
+        .select("id")
+        .single();
+      uploadedFileId = uploadedFile?.id ?? null;
+
+      rawItems = await extractTransactionsFromText(text, context);
+    } else {
+      const file = formData.get("file") as File | null;
+      if (!file || file.size === 0) return { ok: false, error: "Selecione um arquivo." };
+
+      const storagePath = await uploadToStorage(file);
+      const { data: uploadedFile } = await supabase
+        .from("uploaded_files")
+        .insert({ source_type: method, storage_path: storagePath, status: "processing" })
+        .select("id")
+        .single();
+      uploadedFileId = uploadedFile?.id ?? null;
+
+      if (method === "photo") {
+        const dataUrl = await fileToDataUrl(file);
+        rawItems = await extractTransactionsFromImage(dataUrl, context);
+      } else if (method === "audio") {
+        const transcript = await transcribeAudio(file);
+        if (uploadedFileId) {
+          await supabase.from("uploaded_files").update({ raw_text: transcript }).eq("id", uploadedFileId);
+        }
+        rawItems = await extractTransactionsFromText(transcript, context);
+      } else {
+        const { PDFParse } = await import("pdf-parse");
+        const buffer = Buffer.from(await file.arrayBuffer());
+        const parser = new PDFParse({ data: buffer });
+        const parsed = await parser.getText();
+        if (uploadedFileId) {
+          await supabase.from("uploaded_files").update({ raw_text: parsed.text }).eq("id", uploadedFileId);
+        }
+        rawItems = await extractTransactionsFromText(parsed.text, context);
+      }
+    }
+
+    const { data: job, error: jobError } = await supabase
+      .from("ai_processing_jobs")
+      .insert({ uploaded_file_id: uploadedFileId, status: "completed", processed_at: new Date().toISOString() })
+      .select("id")
+      .single();
+    if (jobError || !job) throw new Error(jobError?.message ?? "Falha ao criar job de processamento.");
+
+    const resolved = rawItems.map((raw) => resolveExtractedTransaction(raw, { people, categories, types }));
+
+    const rowsToInsert = resolved.map(({ data, confidence }) => ({
+      ai_processing_job_id: job.id,
+      extracted_data: data,
+      confidence,
+      included: true,
+      reviewed: false,
+    }));
+
+    let insertedRows: AiExtractedTransactionRow[] = [];
+    if (rowsToInsert.length > 0) {
+      const { data: inserted, error: insertError } = await supabase
+        .from("ai_extracted_transactions")
+        .insert(rowsToInsert)
+        .select("*");
+      if (insertError) throw new Error(insertError.message);
+      insertedRows = inserted as AiExtractedTransactionRow[];
+    }
+
+    if (uploadedFileId) {
+      await supabase
+        .from("uploaded_files")
+        .update({ status: insertedRows.length > 0 ? "review_needed" : "processed" })
+        .eq("id", uploadedFileId);
+    }
+
+    return {
+      ok: true,
+      jobId: job.id,
+      rows: insertedRows.map((r) => ({
+        id: r.id,
+        data: r.extracted_data,
+        confidence: r.confidence ?? {},
+        included: r.included,
+      })),
+    };
+  } catch (err) {
+    if (uploadedFileId) {
+      await supabase.from("uploaded_files").update({ status: "error" }).eq("id", uploadedFileId);
+    }
+    const message = err instanceof Error ? err.message : "Erro desconhecido.";
+    return { ok: false, error: `Não foi possível processar este envio. ${message}` };
+  }
+}
+
+export interface ConfirmRowInput {
+  id: string;
+  included: boolean;
+  data: ExtractedTransactionData;
+}
+
+export async function confirmExtractedRows(
+  jobId: string,
+  rows: ConfirmRowInput[],
+  defaultPersonId: string,
+  source: IngestMethod
+): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+  const supabase = createAdminClient();
+  const included = rows.filter((r) => r.included);
+
+  const inputs: TransactionInput[] = included
+    .filter((r) => r.data.amount !== null && r.data.amount !== undefined)
+    .map((r) => {
+      const registrationDate = r.data.registration_date ?? toISODate(new Date());
+      return {
+        registrationDate,
+        referenceMonth: r.data.reference_month ?? toReferenceMonth(new Date(registrationDate)),
+        personId: r.data.person_id ?? defaultPersonId,
+        direction: r.data.direction ?? "expense",
+        fixedVariable: r.data.fixed_variable ?? "variable",
+        typeId: r.data.type_id,
+        categoryId: r.data.category_id,
+        installmentCurrent: r.data.installment_current || 1,
+        installmentTotal: r.data.installment_total || 1,
+        amountCents: Math.round((r.data.amount ?? 0) * 100),
+        description: r.data.description,
+        considered: true,
+        source,
+      };
+    });
+
+  const result = await createTransactionsBatch(inputs);
+  if (!result.ok) return result;
+
+  await Promise.all(
+    rows.map((r) =>
+      supabase
+        .from("ai_extracted_transactions")
+        .update({ included: r.included, reviewed: true, extracted_data: r.data })
+        .eq("id", r.id)
+    )
+  );
+
+  const { data: job } = await supabase
+    .from("ai_processing_jobs")
+    .select("uploaded_file_id")
+    .eq("id", jobId)
+    .single();
+  if (job?.uploaded_file_id) {
+    await supabase.from("uploaded_files").update({ status: "confirmed" }).eq("id", job.uploaded_file_id);
+  }
+
+  revalidatePath("/cadastro");
+  revalidatePath("/analise");
+  return { ok: true, count: result.count };
+}

@@ -1,0 +1,106 @@
+@import "tailwindcss";
+
+:root {
+  --font-app-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+    var(--font-inter), "Helvetica Neue", Arial, sans-serif;
+
+  /* Base */
+  --color-bg: #f5f5f7;
+  --color-surface: #ffffff;
+  --color-border: #e5e5ea;
+  --color-text-primary: #1d1d1f;
+  --color-text-secondary: #6e6e73;
+  --color-text-tertiary: #a1a1a6;
+
+  /* Brand */
+  --color-primary: #0a6cff;
+  --color-primary-soft: #eaf2ff;
+
+  /* Semantic */
+  --color-positive: #16a34a;
+  --color-positive-soft: #eafbf0;
+  --color-negative: #e0483e;
+  --color-negative-soft: #fdecea;
+  --color-info: #0a6cff;
+  --color-warning: #d98b0b;
+  --color-warning-soft: #fdf3e2;
+
+  /* Chart categorical palette (validated: scripts/validate_palette.js, light mode) */
+  --chart-1: #2a78d6; /* blue */
+  --chart-2: #eb6834; /* orange */
+  --chart-3: #1baf7a; /* aqua */
+  --chart-4: #eda100; /* yellow */
+  --chart-5: #e87ba4; /* magenta */
+  --chart-6: #008300; /* green */
+  --chart-7: #4a3aa7; /* violet */
+  --chart-8: #e34948; /* red */
+  --chart-other: #a1a1a6; /* "Outros" — fora da paleta categórica */
+
+  /* Radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+
+  /* Shadow */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 2px 10px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.08);
+}
+
+@theme inline {
+  --color-bg: var(--color-bg);
+  --color-surface: var(--color-surface);
+  --color-border: var(--color-border);
+  --color-text-primary: var(--color-text-primary);
+  --color-text-secondary: var(--color-text-secondary);
+  --color-text-tertiary: var(--color-text-tertiary);
+  --color-primary: var(--color-primary);
+  --color-primary-soft: var(--color-primary-soft);
+  --color-positive: var(--color-positive);
+  --color-positive-soft: var(--color-positive-soft);
+  --color-negative: var(--color-negative);
+  --color-negative-soft: var(--color-negative-soft);
+  --color-info: var(--color-info);
+  --color-warning: var(--color-warning);
+  --color-warning-soft: var(--color-warning-soft);
+  --font-sans: var(--font-app-sans);
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+  font-family: var(--font-app-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background: var(--color-primary-soft);
+}
+
+/* scrollbar - subtle */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #d1d1d6;
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}

@@ -11,6 +11,19 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "MeuDinheiro — Controle financeiro",
   description: "Controle financeiro pessoal de Vitor e Jaqueline.",
+  manifest: "/site.webmanifest",
+  icons: {
+    icon: [
+      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "MeuDinheiro",
+  },
 };
 
 export const viewport: Viewport = {

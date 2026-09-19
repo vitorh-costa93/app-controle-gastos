@@ -16,6 +16,7 @@ import { PivotTable } from "./PivotTable";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { addMonths, formatCurrencyBRL } from "@/lib/utils/format";
+import { cn } from "@/lib/utils/cn";
 
 export function AnalisePageClient({
   initialMonth,
@@ -37,6 +38,7 @@ export function AnalisePageClient({
   const [insight, setInsight] = useState(initialInsight);
   const [isPending, startTransition] = useTransition();
   const [insightPending, startInsightTransition] = useTransition();
+  const [tableView, setTableView] = useState<"pivot" | "flat">("pivot");
 
   // Guarda contra corrida: se o usuário clicar em "próximo mês" várias vezes rápido,
   // só o resultado da navegação mais recente pode atualizar a tela.
@@ -188,19 +190,46 @@ export function AnalisePageClient({
             </div>
           </Card>
 
-          <PivotTable
-            transactions={monthTransactions}
-            people={data.people}
-            categories={data.categories}
-            types={data.types}
-          />
+          <div className="inline-flex w-fit rounded-(--radius-md) bg-black/5 p-1">
+            <button
+              onClick={() => setTableView("pivot")}
+              className={cn(
+                "rounded-(--radius-sm) px-3.5 py-1.5 text-sm font-medium transition-colors",
+                tableView === "pivot"
+                  ? "bg-(--color-surface) text-(--color-text-primary) shadow-(--shadow-sm)"
+                  : "text-(--color-text-secondary)"
+              )}
+            >
+              Tabela dinâmica
+            </button>
+            <button
+              onClick={() => setTableView("flat")}
+              className={cn(
+                "rounded-(--radius-sm) px-3.5 py-1.5 text-sm font-medium transition-colors",
+                tableView === "flat"
+                  ? "bg-(--color-surface) text-(--color-text-primary) shadow-(--shadow-sm)"
+                  : "text-(--color-text-secondary)"
+              )}
+            >
+              Todas as movimentações
+            </button>
+          </div>
 
-          <AnaliseTransactionsTable
-            transactions={monthTransactions}
-            people={data.people}
-            categories={data.categories}
-            types={data.types}
-          />
+          {tableView === "pivot" ? (
+            <PivotTable
+              transactions={monthTransactions}
+              people={data.people}
+              categories={data.categories}
+              types={data.types}
+            />
+          ) : (
+            <AnaliseTransactionsTable
+              transactions={monthTransactions}
+              people={data.people}
+              categories={data.categories}
+              types={data.types}
+            />
+          )}
         </div>
       )}
     </div>

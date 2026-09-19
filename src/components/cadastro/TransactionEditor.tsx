@@ -89,7 +89,8 @@ export function TransactionEditor({
     });
   }
 
-  const canSave = form.amountCents > 0 && form.personId && form.registrationDate;
+  const canSave =
+    form.amountCents > 0 && form.personId && form.registrationDate && form.description.trim().length > 0;
 
   return (
     <Modal open={open} onClose={onClose} title={transaction ? "Editar lançamento" : "Novo lançamento"}>
@@ -191,7 +192,7 @@ export function TransactionEditor({
         </FieldGroup>
 
         <div className="sm:col-span-2">
-          <FieldGroup label="Descrição (opcional)">
+          <FieldGroup label="Descrição">
             <Input
               value={form.description}
               onChange={(e) => update("description", e.target.value)}

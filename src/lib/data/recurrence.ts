@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { RecurrenceRule as RecurrenceRuleRow } from "@/types/db";
 import { RecurrenceRule } from "@/types/domain";
@@ -17,15 +17,22 @@ export interface RecurrenceRuleInput {
   endDate: string | null;
 }
 
-export async function listActiveRecurrenceRules(): Promise<RecurrenceRule[]> {
-  const supabase = createAdminClient();
-  const { data, error } = await supabase
-    .from("recurrence_rules")
-    .select("*")
-    .eq("active", true);
-  if (error) throw new Error("Não foi possível carregar as recorrências.");
-  return (data as RecurrenceRuleRow[]).map(mapRecurrenceRuleRow);
-}
+export const listActiveRecurrenceRules = unstable_cache(
+  async (): Promise<RecurrenceRule[]> => {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("recurrence_rules")
+      .select("*")
+      .eq("active", true);
+    if (error) {
+      console.error("listActiveRecurrenceRules failed:", error);
+      throw new Error("Não foi possível carregar as recorrências.");
+    }
+    return (data as RecurrenceRuleRow[]).map(mapRecurrenceRuleRow);
+  },
+  ["recurrence-rules"],
+  { tags: ["recurrence-rules"], revalidate: 300 }
+);
 
 export async function createRecurrenceRule(
   input: RecurrenceRuleInput
@@ -42,8 +49,10 @@ export async function createRecurrenceRule(
     end_date: input.endDate,
   });
   if (error) return { ok: false, error: "Não foi possível criar a recorrência." };
+  revalidateTag("recurrence-rules");
   revalidatePath("/configuracoes");
   revalidatePath("/analise");
+  revalidatePath("/simulacao");
   return { ok: true };
 }
 
@@ -53,7 +62,9 @@ export async function deactivateRecurrenceRule(
   const supabase = createAdminClient();
   const { error } = await supabase.from("recurrence_rules").update({ active: false }).eq("id", id);
   if (error) return { ok: false, error: "Não foi possível desativar a recorrência." };
+  revalidateTag("recurrence-rules");
   revalidatePath("/configuracoes");
   revalidatePath("/analise");
+  revalidatePath("/simulacao");
   return { ok: true };
 }

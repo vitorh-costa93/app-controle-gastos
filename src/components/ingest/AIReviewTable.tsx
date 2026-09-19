@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Select, Input } from "@/components/ui/Field";
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import { AlertTriangle } from "lucide-react";
+import { toReferenceMonth } from "@/lib/utils/format";
 
 const CONFIDENCE_TONE: Record<FieldConfidence, "positive" | "warning" | "negative"> = {
   alta: "positive",
@@ -37,11 +38,19 @@ export function AIReviewTable({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [confirmedCount, setConfirmedCount] = useState<number | null>(null);
+  const [batchMonth, setBatchMonth] = useState(
+    () => initialRows.find((r) => r.data.reference_month)?.data.reference_month ?? toReferenceMonth(new Date())
+  );
 
   function updateRow(id: string, patch: Partial<ExtractedTransactionData>) {
     setRows((prev) =>
       prev.map((r) => (r.id === id ? { ...r, data: { ...r.data, ...patch } } : r))
     );
+  }
+
+  function applyBatchMonth(month: string) {
+    setBatchMonth(month);
+    setRows((prev) => prev.map((r) => ({ ...r, data: { ...r.data, reference_month: month } })));
   }
 
   function toggleIncluded(id: string, included: boolean) {
@@ -97,6 +106,19 @@ export function AIReviewTable({
           </>
         )}
       </p>
+
+      <div className="mb-4 flex items-center gap-2 rounded-(--radius-lg) border border-(--color-border) bg-(--color-surface-secondary) p-3">
+        <label htmlFor="batch-month" className="text-xs font-medium text-(--color-text-secondary)">
+          Mês de referência para todos os lançamentos
+        </label>
+        <input
+          id="batch-month"
+          type="month"
+          value={batchMonth}
+          onChange={(e) => e.target.value && applyBatchMonth(e.target.value)}
+          className="rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-2 py-1 text-sm"
+        />
+      </div>
 
       <div className="flex flex-col gap-3">
         {rows.map((row) => (

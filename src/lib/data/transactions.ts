@@ -217,7 +217,10 @@ export async function createTransaction(
     .select("*")
     .single();
 
-  if (error) return { ok: false, error: "Não foi possível salvar este lançamento." };
+  if (error) {
+    console.error("createTransaction failed:", error);
+    return { ok: false, error: "Não foi possível salvar este lançamento." };
+  }
 
   const row = data as TransactionRow;
   if (input.fixedVariable === "fixed") {
@@ -265,7 +268,10 @@ export async function createTransactionsBatch(
     )
     .select("id, fixed_variable");
 
-  if (error) return { ok: false, error: "Não foi possível confirmar os lançamentos." };
+  if (error) {
+    console.error("createTransactionsBatch failed:", error);
+    return { ok: false, error: "Não foi possível confirmar os lançamentos." };
+  }
 
   const inserted = data as { id: string; fixed_variable: string }[];
   await Promise.all(
@@ -323,7 +329,10 @@ export async function updateTransaction(
     .select("*")
     .single();
 
-  if (error) return { ok: false, error: "Não foi possível salvar as alterações." };
+  if (error) {
+    console.error("updateTransaction failed:", error);
+    return { ok: false, error: "Não foi possível salvar as alterações." };
+  }
 
   const row = data as TransactionRow;
 
@@ -365,7 +374,10 @@ export async function setTransactionConsidered(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const supabase = createAdminClient();
   const { error } = await supabase.from("transactions").update({ considered }).eq("id", id);
-  if (error) return { ok: false, error: "Não foi possível atualizar este lançamento." };
+  if (error) {
+    console.error("setTransactionConsidered failed:", error);
+    return { ok: false, error: "Não foi possível atualizar este lançamento." };
+  }
 
   revalidatePath("/cadastro");
   revalidatePath("/analise");
@@ -388,7 +400,10 @@ export async function deleteTransaction(
     .update({ deleted_at: new Date().toISOString() })
     .eq("id", id);
 
-  if (error) return { ok: false, error: "Não foi possível excluir este lançamento." };
+  if (error) {
+    console.error("deleteTransaction failed:", error);
+    return { ok: false, error: "Não foi possível excluir este lançamento." };
+  }
 
   // Se era um lançamento fixo, desativa a recorrência também — senão o valor
   // continuaria sendo projetado todo mês nas Análises/Simulação mesmo excluído.

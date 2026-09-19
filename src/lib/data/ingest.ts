@@ -13,7 +13,7 @@ import { resolveExtractedTransaction } from "@/lib/ai/resolve";
 import { listPeople, listCategories, listTransactionTypes } from "@/lib/data/reference";
 import { createTransactionsBatch, findPotentialDuplicates, TransactionInput } from "@/lib/data/transactions";
 import { AiExtractedTransactionRow, ExtractedTransactionData, FieldConfidence } from "@/types/db";
-import { toISODate, toReferenceMonth, formatDateBR } from "@/lib/utils/format";
+import { toISODate, toReferenceMonth, formatDateBR, addMonths } from "@/lib/utils/format";
 
 export type IngestMethod = "audio" | "photo" | "text" | "pdf" | "csv";
 
@@ -197,23 +197,45 @@ export async function confirmExtractedRows(
 
   const inputs: TransactionInput[] = included
     .filter((r) => r.data.amount !== null && r.data.amount !== undefined)
-    .map((r) => {
+    .flatMap((r) => {
       const registrationDate = r.data.registration_date ?? toISODate(new Date());
-      return {
-        registrationDate,
-        referenceMonth: r.data.reference_month ?? toReferenceMonth(new Date(registrationDate)),
+      const referenceMonth = r.data.reference_month ?? toReferenceMonth(new Date(registrationDate));
+      const installmentCurrent = r.data.installment_current || 1;
+      const installmentTotal = r.data.installment_total || 1;
+      const base = {
         personId: r.data.person_id ?? defaultPersonId,
         direction: r.data.direction ?? "expense",
         fixedVariable: r.data.fixed_variable ?? "variable",
         typeId: r.data.type_id,
         categoryId: r.data.category_id,
-        installmentCurrent: r.data.installment_current || 1,
-        installmentTotal: r.data.installment_total || 1,
         amountCents: Math.round((r.data.amount ?? 0) * 100),
         description: r.data.description,
         considered: true,
         source,
-      };
+      } as const;
+
+      // Lançamento da parcela extraída, mais uma linha para cada parcela restante
+      // (mesmo valor, mês de referência avançando), já que a IA só reporta a parcela atual.
+      const rowsForInstallments: TransactionInput[] = [
+        {
+          ...base,
+          registrationDate,
+          referenceMonth,
+          installmentCurrent,
+          installmentTotal,
+        },
+      ];
+      for (let n = installmentCurrent + 1; n <= installmentTotal; n++) {
+        const monthsAhead = n - installmentCurrent;
+        rowsForInstallments.push({
+          ...base,
+          registrationDate: toISODate(new Date()),
+          referenceMonth: addMonths(referenceMonth, monthsAhead),
+          installmentCurrent: n,
+          installmentTotal,
+        });
+      }
+      return rowsForInstallments;
     });
 
   const result = await createTransactionsBatch(inputs);

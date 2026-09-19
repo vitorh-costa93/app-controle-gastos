@@ -21,14 +21,24 @@ export function summarizeMonth(
   };
 }
 
-/** Saldo acumulado mês a mês: saldo anterior + entradas do mês - saídas do mês. */
+/**
+ * Saldo acumulado mês a mês: saldo anterior + entradas do mês - saídas do mês.
+ * Quando `baselineMonth` é informado, o saldo acumulado NESSE mês é travado em
+ * `startingBalanceCents` (o saldo real já fechado), ignorando a sobra calculada
+ * para ele — e só a partir do mês seguinte volta a somar a sobra normalmente.
+ */
 export function accumulateBalance(
   monthSummaries: MonthSummary[],
-  startingBalanceCents = 0
+  startingBalanceCents = 0,
+  baselineMonth?: string
 ): { referenceMonth: string; accumulatedCents: number }[] {
-  let running = startingBalanceCents;
+  let running = baselineMonth ? 0 : startingBalanceCents;
   return monthSummaries.map((summary) => {
-    running += summary.leftoverCents;
+    if (summary.referenceMonth === baselineMonth) {
+      running = startingBalanceCents;
+    } else {
+      running += summary.leftoverCents;
+    }
     return { referenceMonth: summary.referenceMonth, accumulatedCents: running };
   });
 }

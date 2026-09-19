@@ -10,18 +10,21 @@ import {
 } from "@/lib/data/reference";
 import { listActiveRecurrenceRules } from "@/lib/data/recurrence";
 import { listSalaryEntries } from "@/lib/data/salary";
+import { getStartingBalance } from "@/lib/data/settings";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { ReferenceListEditor } from "@/components/configuracoes/ReferenceListEditor";
 import { RecurrenceRulesEditor } from "@/components/configuracoes/RecurrenceRulesEditor";
 import { SalaryProjectionEditor } from "@/components/configuracoes/SalaryProjectionEditor";
+import { StartingBalanceEditor } from "@/components/configuracoes/StartingBalanceEditor";
 
 export default async function ConfiguracoesPage() {
-  const [people, categories, types, recurrenceRules] = await Promise.all([
+  const [people, categories, types, recurrenceRules, startingBalance] = await Promise.all([
     listPeople(),
     listCategories(),
     listTransactionTypes(),
     listActiveRecurrenceRules(),
+    getStartingBalance(),
   ]);
 
   // Pessoa com salário variável — identificada pelo nome cadastrado em "Pessoas".
@@ -47,6 +50,8 @@ export default async function ConfiguracoesPage() {
         {variableSalaryPerson && (
           <SalaryProjectionEditor entries={salaryEntries} person={variableSalaryPerson} />
         )}
+
+        <StartingBalanceEditor startingBalance={startingBalance} />
 
         <Card className="p-5">
           <h3 className="mb-3 text-[15px] font-semibold">Preferências</h3>

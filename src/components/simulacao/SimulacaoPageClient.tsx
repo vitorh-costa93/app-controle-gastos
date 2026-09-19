@@ -5,6 +5,7 @@ import { Sparkles } from "lucide-react";
 import { Simulation, MonthSummary } from "@/types/domain";
 import { buildScenarioComparison, summarizeScenarioImpact } from "@/lib/domain/simulation";
 import { accumulateBalance } from "@/lib/domain/finance";
+import { StartingBalance } from "@/lib/data/settings";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { NewSimulationForm } from "./NewSimulationForm";
@@ -18,10 +19,12 @@ export function SimulacaoPageClient({
   initialSimulations,
   baseSummaries,
   horizon,
+  startingBalance,
 }: {
   initialSimulations: Simulation[];
   baseSummaries: MonthSummary[];
   horizon: { from: string; to: string };
+  startingBalance: StartingBalance | null;
 }) {
   const [simulations, setSimulations] = useState(initialSimulations);
   const [primaryId, setPrimaryId] = useState<string | null>(initialSimulations[0]?.id ?? null);
@@ -30,7 +33,10 @@ export function SimulacaoPageClient({
   const [aiState, setAiState] = useState<{ key: string; summary: string } | null>(null);
 
   const baseMap = useMemo(() => new Map(baseSummaries.map((s) => [s.referenceMonth, s])), [baseSummaries]);
-  const baseAccumulated = useMemo(() => accumulateBalance(baseSummaries), [baseSummaries]);
+  const baseAccumulated = useMemo(
+    () => accumulateBalance(baseSummaries, startingBalance?.amountCents ?? 0, startingBalance?.month),
+    [baseSummaries, startingBalance]
+  );
   const primary = simulations.find((s) => s.id === primaryId) ?? null;
   const others = useMemo(
     () =>
@@ -42,8 +48,14 @@ export function SimulacaoPageClient({
 
   const comparison = useMemo(() => {
     if (!primary) return [];
-    return buildScenarioComparison(baseMap, [primary, ...others], horizon);
-  }, [baseMap, primary, others, horizon]);
+    return buildScenarioComparison(
+      baseMap,
+      [primary, ...others],
+      horizon,
+      startingBalance?.amountCents ?? 0,
+      startingBalance?.month
+    );
+  }, [baseMap, primary, others, horizon, startingBalance]);
 
   const impact = useMemo(() => {
     if (!primary) return null;

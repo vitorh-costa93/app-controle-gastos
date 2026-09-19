@@ -61,13 +61,14 @@ export function buildScenarioComparison(
   baseSummaries: Map<string, MonthSummary>,
   simulations: Simulation[],
   horizon: { from: string; to: string },
-  startingBalanceCents = 0
+  startingBalanceCents = 0,
+  baselineMonth?: string
 ): ScenarioComparisonMonth[] {
   const impactByMonth = combineSimulationImpacts(simulations);
   const months = monthRange(horizon.from, horizon.to);
 
-  let accWithout = startingBalanceCents;
-  let accWith = startingBalanceCents;
+  let accWithout = baselineMonth ? 0 : startingBalanceCents;
+  let accWith = baselineMonth ? 0 : startingBalanceCents;
 
   return months.map((month) => {
     const base = baseSummaries.get(month) ?? {
@@ -81,8 +82,13 @@ export function buildScenarioComparison(
     const leftoverWithoutCents = base.leftoverCents;
     const leftoverWithCents = base.leftoverCents - impactCents;
 
-    accWithout += leftoverWithoutCents;
-    accWith += leftoverWithCents;
+    if (month === baselineMonth) {
+      accWithout = startingBalanceCents;
+      accWith = startingBalanceCents;
+    } else {
+      accWithout += leftoverWithoutCents;
+      accWith += leftoverWithCents;
+    }
 
     return {
       referenceMonth: month,

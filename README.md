@@ -10,11 +10,12 @@ Stack: **Next.js (App Router) + TypeScript + Tailwind CSS + Supabase
 ## 1. Configurar o Supabase
 
 Todo o schema do app vive isolado dentro do schema Postgres `meudinheiro`
-(não `public`) — assim ele pode conviver no **mesmo projeto Supabase** que
-você já usa para outra coisa, sem colidir com tabelas/dados existentes.
+(não `public`) — assim ele pode conviver no **mesmo projeto Supabase do
+iRacing Analytics** sem colidir com as tabelas dele (que ficam em `public`
+ou em outro schema próprio — nenhuma tabela é compartilhada entre os dois).
 
-1. Use um projeto Supabase existente (ou crie um novo, se tiver vaga no seu
-   plano — free permite 2 projetos por organização).
+1. Use o projeto Supabase do **iRacing Analytics** (reaproveitado — sem
+   contar como um 3º projeto no plano free).
 2. No **SQL Editor**, rode os arquivos de `supabase/migrations/` **na ordem**:
    - `0001_init.sql` — cria o schema `meudinheiro`, tabelas, índices,
      triggers, RLS e os grants necessários.
@@ -54,8 +55,15 @@ Abra http://localhost:3000 — a rota `/` redireciona para `/cadastro`.
 
 ## 4. Deploy na Vercel
 
-1. Importe o repositório em [vercel.com/new](https://vercel.com/new).
-2. Em **Environment Variables**, adicione as mesmas três variáveis do passo 2.
+**Este app precisa de um projeto Vercel próprio, separado do projeto do
+iRacing Analytics** (mesmo reaproveitando o projeto Supabase, o deploy na
+Vercel é independente — importar este repositório como um novo projeto,
+nunca dentro/por cima do projeto existente do iRacing Analytics).
+
+1. Em [vercel.com/new](https://vercel.com/new), importe este repositório
+   (`app-controle-gastos`) como um **novo projeto**.
+2. Em **Environment Variables**, adicione as mesmas três variáveis do passo 2
+   (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`).
 3. Deploy automático a cada push no branch principal.
 
 ## Arquitetura

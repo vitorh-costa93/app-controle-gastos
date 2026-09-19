@@ -27,6 +27,7 @@ export function FiltersBar({ people, types }: { people: Person[]; types: Transac
   const month = searchParams.get("month") ?? "";
   const personId = searchParams.get("personId") ?? "";
   const typeId = searchParams.get("typeId") ?? "";
+  const fixedVariable = searchParams.get("fixedVariable") ?? "";
 
   return (
     <div className="mb-4 flex flex-col gap-3">
@@ -77,6 +78,15 @@ export function FiltersBar({ people, types }: { people: Person[]; types: Transac
               {t.name}
             </option>
           ))}
+        </select>
+        <select
+          value={fixedVariable}
+          onChange={(e) => setParam("fixedVariable", e.target.value)}
+          className="h-9 rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-3 text-sm"
+        >
+          <option value="">Fixo e variável</option>
+          <option value="fixed">Fixo</option>
+          <option value="variable">Variável</option>
         </select>
       </div>
     </div>

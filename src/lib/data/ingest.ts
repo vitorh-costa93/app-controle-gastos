@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { uploadToStorage, fileToDataUrl } from "@/lib/supabase/storage";
 import {
@@ -288,6 +288,7 @@ export async function confirmExtractedRows(
     await supabase.from("uploaded_files").update({ status: "confirmed" }).eq("id", job.uploaded_file_id);
   }
 
+  revalidateTag("analysis");
   revalidatePath("/cadastro");
   revalidatePath("/analise");
   return { ok: true, count: result.count };

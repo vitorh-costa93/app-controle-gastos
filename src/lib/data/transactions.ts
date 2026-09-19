@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath, revalidateTag } from "next/cache";
+import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { TransactionRow } from "@/types/db";
 import { Transaction } from "@/types/domain";
@@ -193,6 +193,27 @@ export async function listConsideredTransactionsInRange(
   return (data as TransactionRow[]).map(mapTransactionRow);
 }
 
+/** Todos os lançamentos de um mês (considerados ou não) — usado pela tabela detalhada de Análise. */
+export const listTransactionsForMonth = unstable_cache(
+  async (referenceMonth: string): Promise<Transaction[]> => {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("transactions")
+      .select("*")
+      .is("deleted_at", null)
+      .eq("reference_month", referenceMonth)
+      .order("registration_date", { ascending: false });
+
+    if (error) {
+      console.error("listTransactionsForMonth failed:", error);
+      throw new Error("Não foi possível carregar os lançamentos do mês.");
+    }
+    return (data as TransactionRow[]).map(mapTransactionRow);
+  },
+  ["transactions-for-month"],
+  { tags: ["analysis"], revalidate: 120 }
+);
+
 export async function createTransaction(
   input: TransactionInput
 ): Promise<{ ok: true; data: Transaction } | { ok: false; error: string }> {
@@ -237,6 +258,7 @@ export async function createTransaction(
   }
 
   revalidatePath("/cadastro");
+  revalidateTag("analysis");
   revalidatePath("/analise");
   revalidatePath("/simulacao");
   return { ok: true, data: mapTransactionRow(row) };
@@ -291,6 +313,7 @@ export async function createTransactionsBatch(
   );
 
   revalidatePath("/cadastro");
+  revalidateTag("analysis");
   revalidatePath("/analise");
   revalidatePath("/simulacao");
   return { ok: true, count: inserted.length };
@@ -364,6 +387,7 @@ export async function updateTransaction(
 
   revalidatePath("/cadastro");
   revalidatePath("/simulacao");
+  revalidateTag("analysis");
   revalidatePath("/analise");
   return { ok: true, data: mapTransactionRow(row) };
 }
@@ -380,6 +404,7 @@ export async function setTransactionConsidered(
   }
 
   revalidatePath("/cadastro");
+  revalidateTag("analysis");
   revalidatePath("/analise");
   return { ok: true };
 }
@@ -412,6 +437,7 @@ export async function deleteTransaction(
   }
 
   revalidatePath("/cadastro");
+  revalidateTag("analysis");
   revalidatePath("/analise");
   revalidatePath("/simulacao");
   return { ok: true };

@@ -50,6 +50,7 @@ export async function createRecurrenceRule(
   });
   if (error) return { ok: false, error: "Não foi possível criar a recorrência." };
   revalidateTag("recurrence-rules");
+  revalidateTag("analysis");
   revalidatePath("/configuracoes");
   revalidatePath("/analise");
   revalidatePath("/simulacao");
@@ -63,6 +64,7 @@ export async function deactivateRecurrenceRule(
   const { error } = await supabase.from("recurrence_rules").update({ active: false }).eq("id", id);
   if (error) return { ok: false, error: "Não foi possível desativar a recorrência." };
   revalidateTag("recurrence-rules");
+  revalidateTag("analysis");
   revalidatePath("/configuracoes");
   revalidatePath("/analise");
   revalidatePath("/simulacao");

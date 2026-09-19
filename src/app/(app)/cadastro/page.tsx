@@ -27,6 +27,8 @@ export default async function CadastroPage({
     direction:
       sp.direction === "income" || sp.direction === "expense" ? sp.direction : undefined,
     typeId: typeof sp.typeId === "string" ? sp.typeId : undefined,
+    fixedVariable:
+      sp.fixedVariable === "fixed" || sp.fixedVariable === "variable" ? sp.fixedVariable : undefined,
     page,
     pageSize: 12,
   });

@@ -1,5 +1,6 @@
 "use server";
 
+import { unstable_cache } from "next/cache";
 import { listConsideredTransactionsInRange } from "./transactions";
 import { listActiveRecurrenceRules } from "./recurrence";
 import { listPeople, listCategories, listTransactionTypes } from "./reference";
@@ -24,7 +25,20 @@ export interface AnalysisData {
   hasEnoughHistory: boolean;
 }
 
-export async function getAnalysisData(month: string): Promise<AnalysisData> {
+/**
+ * Trocar de mês em Análise refazia sempre 12 meses de consultas do zero — cacheado
+ * por mês (300s ou até uma mutação relevante invalidar a tag "analysis") pra deixar
+ * a navegação entre meses instantânea na maioria das vezes.
+ */
+export const getAnalysisData = unstable_cache(
+  async (month: string): Promise<AnalysisData> => {
+    return computeAnalysisData(month);
+  },
+  ["analysis-data"],
+  { tags: ["analysis"], revalidate: 300 }
+);
+
+async function computeAnalysisData(month: string): Promise<AnalysisData> {
   const from12 = addMonths(month, -11);
   const [rules, people, categories, types] = await Promise.all([
     listActiveRecurrenceRules(),

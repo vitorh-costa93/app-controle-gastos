@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { Suspense } from "react";
 import { getAnalysisData } from "@/lib/data/analysis";
+import { listTransactionsForMonth } from "@/lib/data/transactions";
 import { toReferenceMonth } from "@/lib/utils/format";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { MonthSelector } from "@/components/analise/MonthSelector";
@@ -10,6 +11,7 @@ import { CategoryDonutChart } from "@/components/analise/CategoryDonutChart";
 import { MonthlyEvolutionChart } from "@/components/analise/MonthlyEvolutionChart";
 import { ComparativeBars } from "@/components/analise/ComparativeBars";
 import { AIInsightCard, AIInsightCardSkeleton } from "@/components/analise/AIInsightCard";
+import { AnaliseTransactionsTable } from "@/components/analise/AnaliseTransactionsTable";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { formatCurrencyBRL } from "@/lib/utils/format";
@@ -22,7 +24,10 @@ export default async function AnalisePage({
   const sp = await searchParams;
   const month = typeof sp.month === "string" ? sp.month : toReferenceMonth(new Date());
 
-  const data = await getAnalysisData(month);
+  const [data, monthTransactions] = await Promise.all([
+    getAnalysisData(month),
+    listTransactionsForMonth(month),
+  ]);
   const hasData =
     data.currentSummary.incomeCents > 0 ||
     data.currentSummary.expenseCents > 0 ||
@@ -111,6 +116,13 @@ export default async function AnalisePage({
           <Suspense fallback={<AIInsightCardSkeleton />}>
             <AIInsightCard month={month} />
           </Suspense>
+
+          <AnaliseTransactionsTable
+            transactions={monthTransactions}
+            people={data.people}
+            categories={data.categories}
+            types={data.types}
+          />
         </div>
       )}
     </div>

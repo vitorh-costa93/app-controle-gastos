@@ -53,6 +53,7 @@ export async function submitIngest(
   };
 
   let uploadedFileId: string | null = null;
+  let uploadedFileIds: string[] = [];
 
   try {
     let rawItems;
@@ -69,6 +70,26 @@ export async function submitIngest(
       uploadedFileId = uploadedFile?.id ?? null;
 
       rawItems = await extractTransactionsFromText(text, context);
+    } else if (method === "photo") {
+      const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
+      if (files.length === 0) return { ok: false, error: "Selecione ao menos uma imagem." };
+
+      const uploadedFiles = await Promise.all(
+        files.map(async (file) => {
+          const storagePath = await uploadToStorage(file);
+          const { data } = await supabase
+            .from("uploaded_files")
+            .insert({ source_type: "photo", storage_path: storagePath, status: "processing" })
+            .select("id")
+            .single();
+          return data?.id as string | undefined;
+        })
+      );
+      uploadedFileIds = uploadedFiles.filter((id): id is string => Boolean(id));
+      uploadedFileId = uploadedFileIds[0] ?? null;
+
+      const dataUrls = await Promise.all(files.map((file) => fileToDataUrl(file)));
+      rawItems = await extractTransactionsFromImage(dataUrls, context);
     } else {
       const file = formData.get("file") as File | null;
       if (!file || file.size === 0) return { ok: false, error: "Selecione um arquivo." };
@@ -81,10 +102,7 @@ export async function submitIngest(
         .single();
       uploadedFileId = uploadedFile?.id ?? null;
 
-      if (method === "photo") {
-        const dataUrl = await fileToDataUrl(file);
-        rawItems = await extractTransactionsFromImage(dataUrl, context);
-      } else if (method === "audio") {
+      if (method === "audio") {
         const transcript = await transcribeAudio(file);
         if (uploadedFileId) {
           await supabase.from("uploaded_files").update({ raw_text: transcript }).eq("id", uploadedFileId);
@@ -148,11 +166,10 @@ export async function submitIngest(
       insertedRows = inserted as AiExtractedTransactionRow[];
     }
 
-    if (uploadedFileId) {
-      await supabase
-        .from("uploaded_files")
-        .update({ status: insertedRows.length > 0 ? "review_needed" : "processed" })
-        .eq("id", uploadedFileId);
+    const finalStatus = insertedRows.length > 0 ? "review_needed" : "processed";
+    const idsToUpdate = uploadedFileIds.length > 0 ? uploadedFileIds : uploadedFileId ? [uploadedFileId] : [];
+    if (idsToUpdate.length > 0) {
+      await supabase.from("uploaded_files").update({ status: finalStatus }).in("id", idsToUpdate);
     }
 
     return {
@@ -172,8 +189,9 @@ export async function submitIngest(
       }),
     };
   } catch (err) {
-    if (uploadedFileId) {
-      await supabase.from("uploaded_files").update({ status: "error" }).eq("id", uploadedFileId);
+    const idsToMarkError = uploadedFileIds.length > 0 ? uploadedFileIds : uploadedFileId ? [uploadedFileId] : [];
+    if (idsToMarkError.length > 0) {
+      await supabase.from("uploaded_files").update({ status: "error" }).in("id", idsToMarkError);
     }
     const message = err instanceof Error ? err.message : "Erro desconhecido.";
     return { ok: false, error: `Não foi possível processar este envio. ${message}` };

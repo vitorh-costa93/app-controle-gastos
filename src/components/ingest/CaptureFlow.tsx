@@ -160,8 +160,18 @@ function FileCapture({
   onCancel: () => void;
 }) {
   const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  const isPhoto = method === "photo";
   const accept = method === "pdf" ? "application/pdf" : method === "csv" ? ".csv,text/csv" : "image/*";
+
+  const label = isPhoto
+    ? files.length > 0
+      ? `${files.length} imagem${files.length === 1 ? "" : "ns"} selecionada${files.length === 1 ? "" : "s"}`
+      : "Toque para escolher fotos ou prints (câmera ou galeria)"
+    : file
+      ? file.name
+      : "Toque para selecionar um arquivo";
 
   return (
     <div className="flex flex-col gap-4">
@@ -169,27 +179,44 @@ function FileCapture({
         onClick={() => inputRef.current?.click()}
         className="flex flex-col items-center gap-2 rounded-(--radius-lg) border border-dashed border-(--color-border) py-12 text-(--color-text-secondary) hover:border-(--color-primary)/40"
       >
-        {method === "photo" ? <Camera size={24} /> : <Upload size={24} />}
-        <span className="text-sm">{file ? file.name : "Toque para selecionar um arquivo"}</span>
+        {isPhoto ? <Camera size={24} /> : <Upload size={24} />}
+        <span className="text-sm">{label}</span>
       </button>
       <input
         ref={inputRef}
         type="file"
         accept={accept}
-        capture={method === "photo" ? "environment" : undefined}
+        multiple={isPhoto}
         className="hidden"
-        onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+        onChange={(e) => {
+          const selected = Array.from(e.target.files ?? []);
+          if (isPhoto) setFiles(selected);
+          else setFile(selected[0] ?? null);
+        }}
       />
+      {isPhoto && files.length > 0 && (
+        <ul className="max-h-32 space-y-1 overflow-y-auto text-xs text-(--color-text-tertiary)">
+          {files.map((f, i) => (
+            <li key={`${f.name}-${i}`} className="truncate">
+              {f.name}
+            </li>
+          ))}
+        </ul>
+      )}
       <div className="flex justify-end gap-2">
         <Button variant="secondary" onClick={onCancel}>
           Cancelar
         </Button>
         <Button
-          disabled={!file}
+          disabled={isPhoto ? files.length === 0 : !file}
           onClick={() => {
-            if (!file) return;
             const fd = new FormData();
-            fd.set("file", file);
+            if (isPhoto) {
+              files.forEach((f) => fd.append("files", f));
+            } else {
+              if (!file) return;
+              fd.set("file", file);
+            }
             onSubmit(fd);
           }}
         >

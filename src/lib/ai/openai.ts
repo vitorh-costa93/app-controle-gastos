@@ -153,7 +153,7 @@ export async function extractTransactionsFromText(
 }
 
 export async function extractTransactionsFromImage(
-  imageDataUrl: string,
+  imageDataUrls: string[],
   context: ExtractionContext
 ): Promise<RawExtractedTransaction[]> {
   const openai = getOpenAIClient();
@@ -166,9 +166,9 @@ export async function extractTransactionsFromImage(
         content: [
           {
             type: "text",
-            text: `${buildContextBlock(context)}\n\nExtraia os lançamentos financeiros visíveis nesta imagem (nota fiscal, cupom, recibo, comprovante ou anotação).`,
+            text: `${buildContextBlock(context)}\n\nExtraia os lançamentos financeiros visíveis ${imageDataUrls.length > 1 ? `nestas ${imageDataUrls.length} imagens (várias páginas/prints de uma mesma fatura ou extrato)` : "nesta imagem"} (nota fiscal, cupom, recibo, comprovante ou anotação). Se as imagens forem páginas seguidas de uma mesma fatura, não repita o mesmo lançamento que aparecer em mais de uma página.`,
           },
-          { type: "image_url", image_url: { url: imageDataUrl } },
+          ...imageDataUrls.map((url) => ({ type: "image_url" as const, image_url: { url } })),
         ],
       },
     ],

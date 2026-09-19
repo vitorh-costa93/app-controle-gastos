@@ -71,5 +71,6 @@ export interface Simulation {
   startDate: string;
   active: boolean;
   aiSummary: string | null;
+  imageUrl: string | null;
   createdAt: string;
 }

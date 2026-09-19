@@ -68,9 +68,18 @@ export function ScenarioList({
                   />
                 )}
                 <button className="flex flex-1 items-center gap-3 text-left" onClick={() => onSelectPrimary(sim.id)}>
-                  <div className="flex h-9 w-9 items-center justify-center rounded-(--radius-md) bg-(--color-primary-soft) text-(--color-primary)">
-                    <Luggage size={16} />
-                  </div>
+                  {sim.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={sim.imageUrl}
+                      alt=""
+                      className="h-9 w-9 shrink-0 rounded-(--radius-md) object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-(--radius-md) bg-(--color-primary-soft) text-(--color-primary)">
+                      <Luggage size={16} />
+                    </div>
+                  )}
                   <div>
                     <p className="text-sm font-medium">{sim.description}</p>
                     <p className="text-xs text-(--color-text-tertiary)">

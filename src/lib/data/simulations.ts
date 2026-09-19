@@ -5,6 +5,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { SimulationRow } from "@/types/db";
 import { Simulation } from "@/types/domain";
 import { mapSimulationRow, centsToReaisString } from "./mappers";
+import { generateSimulationImage } from "@/lib/ai/openai";
+import { persistExternalImage } from "@/lib/supabase/storage";
 
 export interface SimulationInput {
   description: string;
@@ -28,6 +30,10 @@ export async function createSimulation(
   input: SimulationInput
 ): Promise<{ ok: true; data: Simulation } | { ok: false; error: string }> {
   const supabase = createAdminClient();
+  // Gera a foto ilustrativa antes de salvar — se falhar, a simulação é criada sem imagem mesmo assim.
+  // A URL do DALL-E expira em ~1h, então baixamos e persistimos no Storage antes de gravar.
+  const temporaryImageUrl = await generateSimulationImage(input.description);
+  const imageUrl = temporaryImageUrl ? await persistExternalImage(temporaryImageUrl) : null;
   const { data, error } = await supabase
     .from("simulations")
     .insert({
@@ -35,6 +41,7 @@ export async function createSimulation(
       total_amount: centsToReaisString(input.totalAmountCents),
       installments: input.installments,
       start_date: input.startDate,
+      image_url: imageUrl,
     })
     .select("*")
     .single();

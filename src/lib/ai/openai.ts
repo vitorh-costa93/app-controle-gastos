@@ -19,6 +19,27 @@ export const EXTRACTION_MODEL = "gpt-4o-mini";
 export const VISION_MODEL = "gpt-4o-mini";
 export const TRANSCRIPTION_MODEL = "whisper-1";
 export const INSIGHT_MODEL = "gpt-4o-mini";
+export const IMAGE_MODEL = "dall-e-3";
+
+/**
+ * Gera uma imagem ilustrativa para uma simulação (ex.: "Viagem para Gramado").
+ * Retorna null em qualquer falha — a simulação nunca deve ficar bloqueada por causa da imagem.
+ */
+export async function generateSimulationImage(description: string): Promise<string | null> {
+  if (!isAiConfigured()) return null;
+  try {
+    const openai = getOpenAIClient();
+    const response = await openai.images.generate({
+      model: IMAGE_MODEL,
+      prompt: `Ilustração digital simples, elegante e minimalista representando: "${description}". Cores suaves, sem texto, sem letras, sem números.`,
+      size: "1024x1024",
+      n: 1,
+    });
+    return response.data?.[0]?.url ?? null;
+  } catch {
+    return null;
+  }
+}
 
 export const RAW_EXTRACTION_SCHEMA = {
   type: "object",

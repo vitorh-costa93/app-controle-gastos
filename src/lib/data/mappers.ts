@@ -65,6 +65,7 @@ export function mapSimulationRow(row: SimulationRow): Simulation {
     startDate: row.start_date,
     active: row.active,
     aiSummary: row.ai_summary,
+    imageUrl: row.image_url,
     createdAt: row.created_at,
   };
 }

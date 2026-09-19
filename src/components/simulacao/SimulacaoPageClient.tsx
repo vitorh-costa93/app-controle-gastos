@@ -82,6 +82,14 @@ export function SimulacaoPageClient({
           ) : (
             <>
               <Card className="p-5">
+                {primary.imageUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={primary.imageUrl}
+                    alt=""
+                    className="mb-4 h-40 w-full rounded-(--radius-lg) object-cover"
+                  />
+                )}
                 <div className="mb-1 flex items-center justify-between">
                   <h3 className="text-[15px] font-semibold">{primary.description}</h3>
                   {others.length > 0 && (

@@ -20,6 +20,9 @@ ou em outro schema próprio — nenhuma tabela é compartilhada entre os dois).
    - `0001_init.sql` — cria o schema `meudinheiro`, tabelas, índices,
      triggers, RLS e os grants necessários.
    - `0002_storage.sql` — bucket privado `meudinheiro-uploads` para áudio/foto/PDF.
+   - `0003_salary_and_simulation_image.sql` — salário variável (tabela
+     `salary_entries`) + foto de IA nas simulações (coluna `simulations.image_url`
+     e bucket público `meudinheiro-simulation-images`).
 
    (Se preferir, instale o [Supabase CLI](https://supabase.com/docs/guides/cli)
    e rode `supabase db push` apontando para o projeto.)

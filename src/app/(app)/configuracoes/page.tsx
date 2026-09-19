@@ -9,10 +9,12 @@ import {
   createTransactionType,
 } from "@/lib/data/reference";
 import { listActiveRecurrenceRules } from "@/lib/data/recurrence";
+import { listSalaryEntries } from "@/lib/data/salary";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { ReferenceListEditor } from "@/components/configuracoes/ReferenceListEditor";
 import { RecurrenceRulesEditor } from "@/components/configuracoes/RecurrenceRulesEditor";
+import { SalaryProjectionEditor } from "@/components/configuracoes/SalaryProjectionEditor";
 
 export default async function ConfiguracoesPage() {
   const [people, categories, types, recurrenceRules] = await Promise.all([
@@ -21,6 +23,10 @@ export default async function ConfiguracoesPage() {
     listTransactionTypes(),
     listActiveRecurrenceRules(),
   ]);
+
+  // Pessoa com salário variável — identificada pelo nome cadastrado em "Pessoas".
+  const variableSalaryPerson = people.find((p) => p.name.toLowerCase().includes("jaqueline"));
+  const salaryEntries = variableSalaryPerson ? await listSalaryEntries(variableSalaryPerson.id) : [];
 
   return (
     <div>
@@ -37,6 +43,10 @@ export default async function ConfiguracoesPage() {
         </div>
 
         <RecurrenceRulesEditor rules={recurrenceRules} people={people} categories={categories} types={types} />
+
+        {variableSalaryPerson && (
+          <SalaryProjectionEditor entries={salaryEntries} person={variableSalaryPerson} />
+        )}
 
         <Card className="p-5">
           <h3 className="mb-3 text-[15px] font-semibold">Preferências</h3>

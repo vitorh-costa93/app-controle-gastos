@@ -5,6 +5,7 @@ export const maxDuration = 60;
 
 import { listTransactions } from "@/lib/data/transactions";
 import { listPeople, listCategories, listTransactionTypes } from "@/lib/data/reference";
+import { listActiveRecurrenceRules } from "@/lib/data/recurrence";
 import { CadastroPageClient } from "@/components/cadastro/CadastroPageClient";
 
 export default async function CadastroPage({
@@ -15,10 +16,11 @@ export default async function CadastroPage({
   const sp = await searchParams;
   const page = Number(sp.page) || 1;
 
-  const [people, categories, types] = await Promise.all([
+  const [people, categories, types, recurrenceRules] = await Promise.all([
     listPeople(),
     listCategories(),
     listTransactionTypes(),
+    listActiveRecurrenceRules(),
   ]);
 
   const { data: transactions, total } = await listTransactions({
@@ -42,6 +44,7 @@ export default async function CadastroPage({
       people={people}
       categories={categories}
       types={types}
+      recurrenceRules={recurrenceRules}
     />
   );
 }

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Plus } from "lucide-react";
-import { Transaction } from "@/types/domain";
+import { Transaction, RecurrenceRule } from "@/types/domain";
 import { Person, Category, TransactionType } from "@/types/db";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
@@ -22,6 +22,7 @@ export function CadastroPageClient({
   people,
   categories,
   types,
+  recurrenceRules,
 }: {
   transactions: Transaction[];
   total: number;
@@ -30,6 +31,7 @@ export function CadastroPageClient({
   people: Person[];
   categories: Category[];
   types: TransactionType[];
+  recurrenceRules: RecurrenceRule[];
 }) {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
@@ -95,6 +97,7 @@ export function CadastroPageClient({
         categories={categories}
         types={types}
         transaction={editingTransaction}
+        recurrenceRules={recurrenceRules}
       />
 
       {captureMethod && (

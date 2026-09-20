@@ -16,6 +16,7 @@ interface RecurrenceFields {
   amountCents: number;
   registrationDate: string;
   description: string | null;
+  endDate: string | null;
 }
 
 /**
@@ -38,6 +39,7 @@ async function linkFixedRecurrence(
       category_id: fields.categoryId,
       amount: centsToReaisString(fields.amountCents),
       start_date: fields.registrationDate,
+      end_date: fields.endDate,
     })
     .select("id")
     .single();
@@ -67,6 +69,7 @@ async function syncFixedRecurrence(
       type_id: fields.typeId,
       category_id: fields.categoryId,
       amount: centsToReaisString(fields.amountCents),
+      end_date: fields.endDate,
     })
     .eq("id", recurrenceRuleId);
 
@@ -114,6 +117,8 @@ export interface TransactionInput {
   description: string | null;
   considered: boolean;
   source?: "manual" | "audio" | "photo" | "text" | "pdf" | "csv";
+  /** Só usado quando fixedVariable === "fixed". null/undefined = reproduz indefinidamente. */
+  fixedEndDate?: string | null;
 }
 
 export async function listTransactions(
@@ -256,6 +261,7 @@ export async function createTransaction(
       amountCents: input.amountCents,
       registrationDate: input.registrationDate,
       description: input.description,
+      endDate: input.fixedEndDate ?? null,
     });
     if (ruleId) row.recurrence_rule_id = ruleId;
   }
@@ -311,6 +317,7 @@ export async function createTransactionsBatch(
         amountCents: input.amountCents,
         registrationDate: input.registrationDate,
         description: input.description,
+        endDate: input.fixedEndDate ?? null,
       });
     })
   );
@@ -366,6 +373,20 @@ export async function updateTransaction(
   // atualiza os campos quando já era fixo e algo mudou, desativa quando deixa de ser fixo.
   if (before) {
     const finalFixedVariable = input.fixedVariable ?? before.fixed_variable;
+
+    // Se o chamador não mexeu na data de fim, preserva a que já estava salva na regra
+    // — sem isso, qualquer edição em outro campo (valor, descrição etc.) apagaria
+    // silenciosamente a data de fim já configurada.
+    let currentEndDate: string | null = null;
+    if (input.fixedEndDate === undefined && before.recurrence_rule_id) {
+      const { data: existingRule } = await supabase
+        .from("recurrence_rules")
+        .select("end_date")
+        .eq("id", before.recurrence_rule_id)
+        .single();
+      currentEndDate = existingRule?.end_date ?? null;
+    }
+
     const recurrenceFields: RecurrenceFields = {
       personId: input.personId ?? before.person_id,
       direction: input.direction ?? before.direction,
@@ -374,6 +395,7 @@ export async function updateTransaction(
       amountCents: input.amountCents ?? reaisStringToCents(before.amount),
       registrationDate: input.registrationDate ?? before.registration_date,
       description: input.description !== undefined ? input.description : before.description,
+      endDate: input.fixedEndDate !== undefined ? input.fixedEndDate : currentEndDate,
     };
 
     if (finalFixedVariable === "fixed") {

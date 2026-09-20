@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Person, Category, TransactionType } from "@/types/db";
-import { Transaction } from "@/types/domain";
+import { Transaction, RecurrenceRule } from "@/types/domain";
 import { createTransaction, updateTransaction, deleteTransaction, TransactionInput } from "@/lib/data/transactions";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -19,6 +19,7 @@ export function TransactionEditor({
   categories,
   types,
   transaction,
+  recurrenceRules,
   onSaved,
 }: {
   open: boolean;
@@ -27,10 +28,11 @@ export function TransactionEditor({
   categories: Category[];
   types: TransactionType[];
   transaction?: Transaction | null;
+  recurrenceRules: RecurrenceRule[];
   onSaved?: (t: Transaction) => void;
 }) {
   const today = new Date();
-  const [form, setForm] = useState(() => buildInitialForm(transaction, today, people));
+  const [form, setForm] = useState(() => buildInitialForm(transaction, today, people, recurrenceRules));
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -59,6 +61,7 @@ export function TransactionEditor({
       amountCents: form.amountCents,
       description: form.description || null,
       considered: form.considered,
+      fixedEndDate: form.fixedEndMonth ? `${form.fixedEndMonth}-01` : null,
     };
 
     startTransition(async () => {
@@ -151,6 +154,16 @@ export function TransactionEditor({
             <option value="fixed">Fixo</option>
           </Select>
         </FieldGroup>
+
+        {form.fixedVariable === "fixed" && (
+          <FieldGroup label="Data de fim (opcional)">
+            <Input
+              type="month"
+              value={form.fixedEndMonth}
+              onChange={(e) => update("fixedEndMonth", e.target.value)}
+            />
+          </FieldGroup>
+        )}
 
         <FieldGroup label="Tipo">
           <Select value={form.typeId} onChange={(e) => update("typeId", e.target.value)}>
@@ -265,15 +278,20 @@ export function TransactionEditor({
 function buildInitialForm(
   transaction: Transaction | null | undefined,
   today: Date,
-  people: Person[]
+  people: Person[],
+  recurrenceRules: RecurrenceRule[]
 ) {
   if (transaction) {
+    const linkedRule = transaction.recurrenceRuleId
+      ? recurrenceRules.find((r) => r.id === transaction.recurrenceRuleId)
+      : undefined;
     return {
       registrationDate: transaction.registrationDate,
       referenceMonth: transaction.referenceMonth,
       personId: transaction.personId,
       direction: transaction.direction,
       fixedVariable: transaction.fixedVariable,
+      fixedEndMonth: linkedRule?.endDate ? linkedRule.endDate.slice(0, 7) : "",
       typeId: transaction.typeId ?? "",
       categoryId: transaction.categoryId ?? "",
       installmentCurrent: transaction.installmentCurrent,
@@ -290,6 +308,7 @@ function buildInitialForm(
     personId: people[0]?.id ?? "",
     direction: "expense" as const,
     fixedVariable: "variable" as const,
+    fixedEndMonth: "",
     typeId: "",
     categoryId: "",
     installmentCurrent: 1,

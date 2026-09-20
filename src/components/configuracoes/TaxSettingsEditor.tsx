@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { FieldGroup, Input } from "@/components/ui/Field";
 import { setFixedSalaryTaxRates, FixedSalaryTaxRates } from "@/lib/data/settings";
-import { syncComputedTaxTransactions } from "@/lib/data/taxes";
+import { syncComputedTaxTransactions, resetComputedTaxTransactions } from "@/lib/data/taxes";
 import { Person } from "@/types/db";
 
 function toPercentString(rate: number): string {
@@ -53,6 +53,25 @@ export function TaxSettingsEditor({
     });
   }
 
+  function handleResetAndSync() {
+    setMessage(null);
+    startSyncTransition(async () => {
+      const resetResult = await resetComputedTaxTransactions();
+      if (!resetResult.ok) {
+        setMessage(resetResult.error);
+        return;
+      }
+      const syncResult = await syncComputedTaxTransactions();
+      if (!syncResult.ok) {
+        setMessage(syncResult.error);
+        return;
+      }
+      setMessage(
+        `${resetResult.deleted} apagado${resetResult.deleted === 1 ? "" : "s"} e ${syncResult.created} recriado${syncResult.created === 1 ? "" : "s"} com os valores atuais.`
+      );
+    });
+  }
+
   return (
     <Card className="p-5">
       <h3 className="mb-1 text-[15px] font-semibold">Impostos</h3>
@@ -60,7 +79,7 @@ export function TaxSettingsEditor({
         O imposto passa a existir como um lançamento real (tipo &quot;Imposto&quot;), aparecendo em Análise,
         Cadastro e Simulação. Uma vez criado, editar o valor em Cadastro nunca é sobrescrito automaticamente.
         {hasVariableSalaryPerson &&
-          " Salário variável: DAS (Simples Nacional, Anexo V) + INSS (11% sobre 28% do faturamento), lançado no mês seguinte ao do faturamento."}
+          " Salário variável: DAS (Simples Nacional, Anexo III) + INSS (11% sobre 28% do faturamento), lançado no mês seguinte ao do faturamento."}
       </p>
 
       {fixedSalaryPerson && (
@@ -90,9 +109,18 @@ export function TaxSettingsEditor({
         </div>
       )}
 
-      <Button variant="secondary" onClick={handleSync} disabled={syncing} type="button">
-        {syncing ? "Sincronizando..." : "Recalcular impostos agora"}
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="secondary" onClick={handleSync} disabled={syncing} type="button">
+          {syncing ? "Sincronizando..." : "Recalcular impostos agora"}
+        </Button>
+        <Button variant="ghost" onClick={handleResetAndSync} disabled={syncing} type="button">
+          Apagar e recalcular do zero
+        </Button>
+      </div>
+      <p className="mt-2 text-xs text-(--color-text-tertiary)">
+        &quot;Apagar e recalcular&quot; some só com os lançamentos automáticos que você nunca editou — útil depois de
+        corrigir uma alíquota ou fórmula errada.
+      </p>
 
       {message && <p className="mt-2 text-xs text-(--color-text-secondary)">{message}</p>}
     </Card>

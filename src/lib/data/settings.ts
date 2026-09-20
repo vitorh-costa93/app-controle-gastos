@@ -55,14 +55,15 @@ export interface FixedSalaryTaxRates {
   darfRate: number;
 }
 
-// Médias calculadas a partir do histórico real informado (3 salários distintos):
-// DAS ~3,05-3,06% e DARF ~3,08-3,17% do salário do mês, em todos os casos — bem
-// próximo de uma alíquota fixa (não uma tabela progressiva visível nesses 3 pontos).
+// Derivadas do salário atual (11.900, o mais relevante pra projeção hoje), pra bater
+// exato nesse ponto: DAS 363,43 e DARF 377,51 = 740,94 no total. Nos outros dois
+// salários do histórico (8.000 e 9.100) essa mesma % fica a poucos reais do valor
+// real informado, então o desvio é pequeno fora do salário atual.
 //   Salário 8.000  → DAS 244,32 (3,054%) · DARF 246,40 (3,080%)
 //   Salário 9.100  → DAS 278,58 (3,061%) · DARF 280,58 (3,083%)
-//   Salário 11.900 → DAS 363,43 (3,054%) · DARF 377,51 (3,172%)
-const DEFAULT_DAS_RATE = 0.03056;
-const DEFAULT_DARF_RATE = 0.03112;
+//   Salário 11.900 → DAS 363,43 (3,05403%) · DARF 377,51 (3,17235%)
+const DEFAULT_DAS_RATE = 0.0305403;
+const DEFAULT_DARF_RATE = 0.0317235;
 
 /**
  * Alíquotas simples usadas para estimar o imposto da pessoa de salário fixo (trabalho

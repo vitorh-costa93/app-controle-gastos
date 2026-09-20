@@ -165,36 +165,39 @@ export function sumRevenueLast12Months(entries: SalaryEntry[], targetMonth: stri
 }
 
 // ---------------------------------------------------------------------------
-// Simples Nacional — Anexo V (LC 123/2006, atualizada pela LC 155/2016)
+// Simples Nacional — Anexo III (LC 123/2006, atualizada pela LC 155/2016)
+// Confirmado com dado real: faturamento 9.015 → DAS 540,90 = 9015 × 6% exatos
+// (1ª faixa do Anexo III, dedução zero) — a suposição inicial de Anexo V (que
+// começa em 15,5%) estava errada e gerava um DAS quase 3x maior que o real.
 // ---------------------------------------------------------------------------
 
-interface AnexoVBracket {
+interface AnexoIIIBracket {
   limitCents: number;
   rate: number;
   deductionCents: number;
 }
 
-const ANEXO_V_BRACKETS: AnexoVBracket[] = [
-  { limitCents: 180_000_00, rate: 0.155, deductionCents: 0 },
-  { limitCents: 360_000_00, rate: 0.18, deductionCents: 4_500_00 },
-  { limitCents: 720_000_00, rate: 0.195, deductionCents: 9_900_00 },
-  { limitCents: 1_800_000_00, rate: 0.205, deductionCents: 17_100_00 },
-  { limitCents: 3_600_000_00, rate: 0.23, deductionCents: 62_100_00 },
-  { limitCents: 4_800_000_00, rate: 0.305, deductionCents: 540_000_00 },
+const ANEXO_III_BRACKETS: AnexoIIIBracket[] = [
+  { limitCents: 180_000_00, rate: 0.06, deductionCents: 0 },
+  { limitCents: 360_000_00, rate: 0.112, deductionCents: 9_360_00 },
+  { limitCents: 720_000_00, rate: 0.135, deductionCents: 17_640_00 },
+  { limitCents: 1_800_000_00, rate: 0.16, deductionCents: 35_640_00 },
+  { limitCents: 3_600_000_00, rate: 0.21, deductionCents: 125_640_00 },
+  { limitCents: 4_800_000_00, rate: 0.33, deductionCents: 648_000_00 },
 ];
 
-/** Alíquota efetiva do Anexo V dado o RBT12 (receita bruta acumulada últimos 12 meses). */
-export function calcAnexoVEffectiveRate(rbt12Cents: number): number {
-  if (rbt12Cents <= 0) return ANEXO_V_BRACKETS[0].rate;
+/** Alíquota efetiva do Anexo III dado o RBT12 (receita bruta acumulada últimos 12 meses). */
+export function calcAnexoIIIEffectiveRate(rbt12Cents: number): number {
+  if (rbt12Cents <= 0) return ANEXO_III_BRACKETS[0].rate;
   const bracket =
-    ANEXO_V_BRACKETS.find((b) => rbt12Cents <= b.limitCents) ?? ANEXO_V_BRACKETS[ANEXO_V_BRACKETS.length - 1];
+    ANEXO_III_BRACKETS.find((b) => rbt12Cents <= b.limitCents) ?? ANEXO_III_BRACKETS[ANEXO_III_BRACKETS.length - 1];
   const effective = (rbt12Cents * bracket.rate - bracket.deductionCents) / rbt12Cents;
   return Math.max(effective, 0);
 }
 
-/** Imposto do mês (Simples Nacional, Anexo V) = receita do mês × alíquota efetiva do RBT12. */
-export function calcAnexoVTaxCents(monthRevenueCents: number, rbt12Cents: number): number {
-  const rate = calcAnexoVEffectiveRate(rbt12Cents);
+/** Imposto do mês (Simples Nacional, Anexo III) = receita do mês × alíquota efetiva do RBT12. */
+export function calcAnexoIIITaxCents(monthRevenueCents: number, rbt12Cents: number): number {
+  const rate = calcAnexoIIIEffectiveRate(rbt12Cents);
   return Math.round(monthRevenueCents * rate);
 }
 
@@ -220,5 +223,5 @@ export function calcInssCents(monthRevenueCents: number): number {
  * do faturamento, então quem chama isso é responsável por aplicar essa defasagem.
  */
 export function calcJaquelineTaxCents(monthRevenueCents: number, rbt12Cents: number): number {
-  return calcAnexoVTaxCents(monthRevenueCents, rbt12Cents) + calcInssCents(monthRevenueCents);
+  return calcAnexoIIITaxCents(monthRevenueCents, rbt12Cents) + calcInssCents(monthRevenueCents);
 }

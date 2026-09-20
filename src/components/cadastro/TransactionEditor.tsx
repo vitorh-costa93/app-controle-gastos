@@ -89,8 +89,13 @@ export function TransactionEditor({
     });
   }
 
-  const canSave =
-    form.amountCents > 0 && form.personId && form.registrationDate && form.description.trim().length > 0;
+  const missingFields = [
+    form.amountCents <= 0 && "valor",
+    !form.personId && "origem",
+    !form.registrationDate && "data de cadastro",
+    form.description.trim().length === 0 && "descrição",
+  ].filter((f): f is string => Boolean(f));
+  const canSave = missingFields.length === 0;
 
   return (
     <Modal open={open} onClose={onClose} title={transaction ? "Editar lançamento" : "Novo lançamento"}>
@@ -209,6 +214,11 @@ export function TransactionEditor({
           {saveState === "error" && (
             <span className="text-(--color-negative)">
               {errorMessage ?? "Não foi possível salvar. Tentar novamente."}
+            </span>
+          )}
+          {saveState === "idle" && !confirmingDelete && missingFields.length > 0 && (
+            <span className="text-(--color-text-tertiary)">
+              Preencha: {missingFields.join(", ")}
             </span>
           )}
         </div>

@@ -50,38 +50,56 @@ export async function setStartingBalance(
   return { ok: true };
 }
 
-const DEFAULT_FIXED_SALARY_TAX_RATE = 0.0623; // 740,94 / 11.900 — ajustável em Configurações
+export interface FixedSalaryTaxRates {
+  dasRate: number;
+  darfRate: number;
+}
+
+// Médias calculadas a partir do histórico real informado (3 salários distintos):
+// DAS ~3,05-3,06% e DARF ~3,08-3,17% do salário do mês, em todos os casos — bem
+// próximo de uma alíquota fixa (não uma tabela progressiva visível nesses 3 pontos).
+//   Salário 8.000  → DAS 244,32 (3,054%) · DARF 246,40 (3,080%)
+//   Salário 9.100  → DAS 278,58 (3,061%) · DARF 280,58 (3,083%)
+//   Salário 11.900 → DAS 363,43 (3,054%) · DARF 377,51 (3,172%)
+const DEFAULT_DAS_RATE = 0.03056;
+const DEFAULT_DARF_RATE = 0.03112;
 
 /**
- * Alíquota simples usada para estimar o imposto da pessoa de salário fixo (trabalho
- * para o exterior) — sem uma tabela oficial confirmada, usamos uma % editável sobre
- * o salário do mês em vez de tentar adivinhar uma regra tributária.
+ * Alíquotas simples usadas para estimar o imposto da pessoa de salário fixo (trabalho
+ * para o exterior) — sem uma tabela oficial confirmada, usamos % editáveis sobre o
+ * salário do mês (DAS + DARF, que é como o usuário acompanha na prática) em vez de
+ * tentar adivinhar a regra tributária exata.
  */
-export async function getFixedSalaryTaxRate(): Promise<number> {
+export async function getFixedSalaryTaxRates(): Promise<FixedSalaryTaxRates> {
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("app_settings")
     .select("value")
-    .eq("key", "fixed_salary_tax_rate")
+    .eq("key", "fixed_salary_tax_rates")
     .maybeSingle();
 
   if (error) {
-    console.error("getFixedSalaryTaxRate failed:", error);
-    return DEFAULT_FIXED_SALARY_TAX_RATE;
+    console.error("getFixedSalaryTaxRates failed:", error);
+    return { dasRate: DEFAULT_DAS_RATE, darfRate: DEFAULT_DARF_RATE };
   }
-  const value = data?.value as { rate?: number } | undefined;
-  return typeof value?.rate === "number" ? value.rate : DEFAULT_FIXED_SALARY_TAX_RATE;
+  const value = data?.value as Partial<FixedSalaryTaxRates> | undefined;
+  return {
+    dasRate: typeof value?.dasRate === "number" ? value.dasRate : DEFAULT_DAS_RATE,
+    darfRate: typeof value?.darfRate === "number" ? value.darfRate : DEFAULT_DARF_RATE,
+  };
 }
 
-export async function setFixedSalaryTaxRate(rate: number): Promise<{ ok: true } | { ok: false; error: string }> {
+export async function setFixedSalaryTaxRates(
+  rates: FixedSalaryTaxRates
+): Promise<{ ok: true } | { ok: false; error: string }> {
   const supabase = createAdminClient();
   const { error } = await supabase
     .from("app_settings")
-    .upsert({ key: "fixed_salary_tax_rate", value: { rate }, updated_at: new Date().toISOString() });
+    .upsert({ key: "fixed_salary_tax_rates", value: rates, updated_at: new Date().toISOString() });
 
   if (error) {
-    console.error("setFixedSalaryTaxRate failed:", error);
-    return { ok: false, error: "Não foi possível salvar a alíquota." };
+    console.error("setFixedSalaryTaxRates failed:", error);
+    return { ok: false, error: "Não foi possível salvar as alíquotas." };
   }
 
   revalidatePath("/configuracoes");

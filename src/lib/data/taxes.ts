@@ -6,7 +6,7 @@ import { centsToReaisString } from "./mappers";
 import { listPeople, listTransactionTypes } from "./reference";
 import { listActiveRecurrenceRules } from "./recurrence";
 import { listSalaryEntries } from "./salary";
-import { getFixedSalaryTaxRate } from "./settings";
+import { getFixedSalaryTaxRates } from "./settings";
 import {
   findVariableSalaryPerson,
   findFixedSalaryPerson,
@@ -80,16 +80,18 @@ export async function syncComputedTaxTransactions(): Promise<
         (!salarioTypeId || r.typeId === salarioTypeId)
     );
     if (salaryRule) {
-      const rate = await getFixedSalaryTaxRate();
+      const { dasRate, darfRate } = await getFixedSalaryTaxRates();
       for (const month of windowMonths) {
-        const taxCents = Math.round(salaryRule.amountCents * rate);
+        const dasCents = Math.round(salaryRule.amountCents * dasRate);
+        const darfCents = Math.round(salaryRule.amountCents * darfRate);
+        const taxCents = dasCents + darfCents;
         if (taxCents <= 0) continue;
         const inserted = await insertTaxTransactionIfMissing(supabase, {
           personId: fixedPerson.id,
           typeId: taxTypeId,
           referenceMonth: month,
           amountCents: taxCents,
-          description: `Imposto estimado (${(rate * 100).toFixed(2).replace(".", ",")}% do salário)`,
+          description: `Imposto estimado (DAS ${formatPercent(dasRate)} + DARF ${formatPercent(darfRate)} do salário)`,
         });
         if (inserted) created++;
       }
@@ -104,6 +106,10 @@ export async function syncComputedTaxTransactions(): Promise<
   }
 
   return { ok: true, created };
+}
+
+function formatPercent(rate: number): string {
+  return `${(rate * 100).toFixed(2).replace(".", ",")}%`;
 }
 
 async function ensureTaxTransactionType(supabase: AdminClient): Promise<string | null> {

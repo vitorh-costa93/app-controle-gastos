@@ -49,3 +49,41 @@ export async function setStartingBalance(
   revalidatePath("/simulacao");
   return { ok: true };
 }
+
+const DEFAULT_FIXED_SALARY_TAX_RATE = 0.0623; // 740,94 / 11.900 — ajustável em Configurações
+
+/**
+ * Alíquota simples usada para estimar o imposto da pessoa de salário fixo (trabalho
+ * para o exterior) — sem uma tabela oficial confirmada, usamos uma % editável sobre
+ * o salário do mês em vez de tentar adivinhar uma regra tributária.
+ */
+export async function getFixedSalaryTaxRate(): Promise<number> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("app_settings")
+    .select("value")
+    .eq("key", "fixed_salary_tax_rate")
+    .maybeSingle();
+
+  if (error) {
+    console.error("getFixedSalaryTaxRate failed:", error);
+    return DEFAULT_FIXED_SALARY_TAX_RATE;
+  }
+  const value = data?.value as { rate?: number } | undefined;
+  return typeof value?.rate === "number" ? value.rate : DEFAULT_FIXED_SALARY_TAX_RATE;
+}
+
+export async function setFixedSalaryTaxRate(rate: number): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("app_settings")
+    .upsert({ key: "fixed_salary_tax_rate", value: { rate }, updated_at: new Date().toISOString() });
+
+  if (error) {
+    console.error("setFixedSalaryTaxRate failed:", error);
+    return { ok: false, error: "Não foi possível salvar a alíquota." };
+  }
+
+  revalidatePath("/configuracoes");
+  return { ok: true };
+}

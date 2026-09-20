@@ -12,6 +12,11 @@ export function findVariableSalaryPerson(people: Person[]): Person | null {
   return people.find((p) => p.name.toLowerCase().includes("jaqueline")) ?? null;
 }
 
+/** Identifica a pessoa de salário fixo (com imposto por alíquota simples) pelo nome cadastrado. */
+export function findFixedSalaryPerson(people: Person[]): Person | null {
+  return people.find((p) => p.name.toLowerCase().includes("vitor")) ?? null;
+}
+
 // ---------------------------------------------------------------------------
 // Dias úteis (feriados nacionais fixos + móveis via Domingo de Páscoa)
 // ---------------------------------------------------------------------------
@@ -191,4 +196,29 @@ export function calcAnexoVEffectiveRate(rbt12Cents: number): number {
 export function calcAnexoVTaxCents(monthRevenueCents: number, rbt12Cents: number): number {
   const rate = calcAnexoVEffectiveRate(rbt12Cents);
   return Math.round(monthRevenueCents * rate);
+}
+
+// ---------------------------------------------------------------------------
+// INSS do contribuinte individual (pró-labore) — pago junto com o DAS
+// ---------------------------------------------------------------------------
+
+const PRO_LABORE_RATE = 0.28;
+const INSS_RATE = 0.11;
+
+/** Pró-labore do mês = 28% do faturamento do mês. */
+export function calcProLaboreCents(monthRevenueCents: number): number {
+  return Math.round(monthRevenueCents * PRO_LABORE_RATE);
+}
+
+/** INSS do mês = 11% do pró-labore (28% do faturamento) — confirmado: setembro/2026, 9015 → 277,66. */
+export function calcInssCents(monthRevenueCents: number): number {
+  return Math.round(calcProLaboreCents(monthRevenueCents) * INSS_RATE);
+}
+
+/**
+ * Imposto total sobre o faturamento de um mês (DAS + INSS) — pago no mês SEGUINTE ao
+ * do faturamento, então quem chama isso é responsável por aplicar essa defasagem.
+ */
+export function calcJaquelineTaxCents(monthRevenueCents: number, rbt12Cents: number): number {
+  return calcAnexoVTaxCents(monthRevenueCents, rbt12Cents) + calcInssCents(monthRevenueCents);
 }

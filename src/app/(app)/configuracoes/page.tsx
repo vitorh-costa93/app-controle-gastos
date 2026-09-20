@@ -10,25 +10,28 @@ import {
 } from "@/lib/data/reference";
 import { listActiveRecurrenceRules } from "@/lib/data/recurrence";
 import { listSalaryEntries } from "@/lib/data/salary";
-import { getStartingBalance } from "@/lib/data/settings";
+import { getStartingBalance, getFixedSalaryTaxRate } from "@/lib/data/settings";
+import { findVariableSalaryPerson, findFixedSalaryPerson } from "@/lib/domain/salary";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { ReferenceListEditor } from "@/components/configuracoes/ReferenceListEditor";
 import { RecurrenceRulesEditor } from "@/components/configuracoes/RecurrenceRulesEditor";
 import { SalaryProjectionEditor } from "@/components/configuracoes/SalaryProjectionEditor";
 import { StartingBalanceEditor } from "@/components/configuracoes/StartingBalanceEditor";
+import { TaxSettingsEditor } from "@/components/configuracoes/TaxSettingsEditor";
 
 export default async function ConfiguracoesPage() {
-  const [people, categories, types, recurrenceRules, startingBalance] = await Promise.all([
+  const [people, categories, types, recurrenceRules, startingBalance, fixedSalaryTaxRate] = await Promise.all([
     listPeople(),
     listCategories(),
     listTransactionTypes(),
     listActiveRecurrenceRules(),
     getStartingBalance(),
+    getFixedSalaryTaxRate(),
   ]);
 
-  // Pessoa com salário variável — identificada pelo nome cadastrado em "Pessoas".
-  const variableSalaryPerson = people.find((p) => p.name.toLowerCase().includes("jaqueline"));
+  const variableSalaryPerson = findVariableSalaryPerson(people);
+  const fixedSalaryPerson = findFixedSalaryPerson(people);
   const salaryEntries = variableSalaryPerson ? await listSalaryEntries(variableSalaryPerson.id) : [];
 
   return (
@@ -52,6 +55,12 @@ export default async function ConfiguracoesPage() {
         )}
 
         <StartingBalanceEditor startingBalance={startingBalance} />
+
+        <TaxSettingsEditor
+          fixedSalaryPerson={fixedSalaryPerson}
+          fixedSalaryTaxRate={fixedSalaryTaxRate}
+          hasVariableSalaryPerson={Boolean(variableSalaryPerson)}
+        />
 
         <Card className="p-5">
           <h3 className="mb-3 text-[15px] font-semibold">Preferências</h3>

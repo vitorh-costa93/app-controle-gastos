@@ -46,6 +46,8 @@ export async function syncComputedTaxTransactions(): Promise<
 
   const taxTypeId = await ensureTaxTransactionType(supabase);
   if (!taxTypeId) return { ok: false, error: "Não foi possível preparar o tipo Imposto." };
+  const taxCategoryId = await ensureTaxCategory(supabase);
+  if (!taxCategoryId) return { ok: false, error: "Não foi possível preparar a categoria Imposto." };
 
   const currentMonth = toReferenceMonth(new Date());
   const windowMonths = monthRange(addMonths(currentMonth, -1), addMonths(currentMonth, 12));
@@ -63,6 +65,7 @@ export async function syncComputedTaxTransactions(): Promise<
       const inserted = await insertTaxTransactionIfMissing(supabase, {
         personId: variablePerson.id,
         typeId: taxTypeId,
+        categoryId: taxCategoryId,
         referenceMonth: paymentMonth,
         amountCents: taxCents,
         description: `Imposto (DAS + INSS) referente a ${formatReferenceMonthShort(revenueMonth)}`,
@@ -89,6 +92,7 @@ export async function syncComputedTaxTransactions(): Promise<
         const inserted = await insertTaxTransactionIfMissing(supabase, {
           personId: fixedPerson.id,
           typeId: taxTypeId,
+          categoryId: taxCategoryId,
           referenceMonth: month,
           amountCents: taxCents,
           description: `Imposto estimado (DAS ${formatPercent(dasRate)} + DARF ${formatPercent(darfRate)} do salário)`,
@@ -132,9 +136,28 @@ async function ensureTaxTransactionType(supabase: AdminClient): Promise<string |
   return created.id as string;
 }
 
+async function ensureTaxCategory(supabase: AdminClient): Promise<string | null> {
+  const { data: existing } = await supabase.from("categories").select("id").ilike("name", "imposto").maybeSingle();
+  if (existing?.id) return existing.id as string;
+
+  const { data: created, error } = await supabase.from("categories").insert({ name: "Imposto" }).select("id").single();
+  if (error || !created) {
+    console.error("ensureTaxCategory failed:", error);
+    return null;
+  }
+  return created.id as string;
+}
+
 async function insertTaxTransactionIfMissing(
   supabase: AdminClient,
-  params: { personId: string; typeId: string; referenceMonth: string; amountCents: number; description: string }
+  params: {
+    personId: string;
+    typeId: string;
+    categoryId: string;
+    referenceMonth: string;
+    amountCents: number;
+    description: string;
+  }
 ): Promise<boolean> {
   const { data: existing } = await supabase
     .from("transactions")
@@ -154,7 +177,7 @@ async function insertTaxTransactionIfMissing(
     direction: "expense",
     fixed_variable: "variable",
     type_id: params.typeId,
-    category_id: null,
+    category_id: params.categoryId,
     installment_current: 1,
     installment_total: 1,
     amount: centsToReaisString(params.amountCents),

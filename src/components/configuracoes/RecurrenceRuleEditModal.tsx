@@ -6,7 +6,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { FieldGroup, Input } from "@/components/ui/Field";
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
-import { addRecurrenceAmountVersion, setRecurrenceMonthOverride } from "@/lib/data/recurrence";
+import { addRecurrenceAmountVersion, setRecurrenceMonthOverride, setRecurrenceEndDate } from "@/lib/data/recurrence";
 import { formatCurrencyBRL, formatReferenceMonthShort, toReferenceMonth } from "@/lib/utils/format";
 
 export function RecurrenceRuleEditModal({
@@ -35,6 +35,11 @@ export function RecurrenceRuleEditModal({
   const [history, setHistory] = useState(rule.amountHistory);
   const sortedHistory = [...history].sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom));
 
+  const [endMonth, setEndMonth] = useState(rule.endDate ? rule.endDate.slice(0, 7) : "");
+  const [isEndDatePending, startEndDateTransition] = useTransition();
+  const [endDateSaved, setEndDateSaved] = useState(false);
+  const [endDateError, setEndDateError] = useState<string | null>(null);
+
   function handleSaveVersion() {
     setError(null);
     setSavedVersion(false);
@@ -60,6 +65,21 @@ export function RecurrenceRuleEditModal({
         return;
       }
       setSavedOverride(true);
+      onChanged();
+    });
+  }
+
+  function handleSaveEndDate() {
+    setEndDateError(null);
+    setEndDateSaved(false);
+    const endDate = endMonth ? `${endMonth}-01` : null;
+    startEndDateTransition(async () => {
+      const result = await setRecurrenceEndDate(rule.id, endDate);
+      if (!result.ok) {
+        setEndDateError(result.error);
+        return;
+      }
+      setEndDateSaved(true);
       onChanged();
     });
   }
@@ -117,6 +137,30 @@ export function RecurrenceRuleEditModal({
           {savedOverride && (
             <p className="mt-2 text-xs text-(--color-positive)">
               Valor lançado. Edite ou remova em Cadastro se precisar corrigir.
+            </p>
+          )}
+        </section>
+
+        <section className="border-t border-(--color-border) pt-4">
+          <h4 className="mb-1 text-sm font-semibold">Mês final</h4>
+          <p className="mb-3 text-xs text-(--color-text-tertiary)">
+            Vazio = reproduz indefinidamente. Se preencher, o custo/entrada some a partir do mês seguinte ao
+            escolhido.
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_auto]">
+            <FieldGroup label="Até">
+              <Input type="month" value={endMonth} onChange={(e) => setEndMonth(e.target.value)} />
+            </FieldGroup>
+            <div className="flex items-end">
+              <Button onClick={handleSaveEndDate} disabled={isEndDatePending} type="button" variant="secondary">
+                Salvar
+              </Button>
+            </div>
+          </div>
+          {endDateError && <p className="mt-2 text-xs text-(--color-negative)">{endDateError}</p>}
+          {endDateSaved && (
+            <p className="mt-2 text-xs text-(--color-positive)">
+              {endMonth ? "Mês final salvo." : "Data de término removida — volta a reproduzir sem fim."}
             </p>
           )}
         </section>

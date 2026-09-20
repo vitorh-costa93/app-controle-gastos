@@ -141,6 +141,29 @@ export async function addRecurrenceAmountVersion(
 }
 
 /**
+ * Define (ou remove) o mês final de uma recorrência fixa — a partir do mês seguinte
+ * ao informado, ela para de ser projetada em Análise/Simulação. Vazio (null) = sem
+ * data de término, projeta indefinidamente (comportamento padrão de sempre).
+ */
+export async function setRecurrenceEndDate(
+  ruleId: string,
+  endDate: string | null
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("recurrence_rules").update({ end_date: endDate }).eq("id", ruleId);
+  if (error) {
+    console.error("setRecurrenceEndDate failed:", error);
+    return { ok: false, error: "Não foi possível salvar a data de término." };
+  }
+  revalidateTag("recurrence-rules");
+  revalidateTag("analysis");
+  revalidatePath("/configuracoes");
+  revalidatePath("/analise");
+  revalidatePath("/simulacao");
+  return { ok: true };
+}
+
+/**
  * Lança (ou corrige) o valor real de UM mês específico de uma recorrência fixa, sem
  * alterar a estimativa usada nos outros meses — ex.: valor real da conta de luz do mês
  * atual, mantendo a estimativa nos demais meses pra fins de simulação. Um lançamento

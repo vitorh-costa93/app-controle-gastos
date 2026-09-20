@@ -58,6 +58,7 @@ export function RecurrenceRulesEditor({
                 <p className="text-xs text-(--color-text-tertiary)">
                   {peopleById.get(rule.personId) ?? "—"} · {formatCurrencyBRL(rule.amountCents)}/mês · desde{" "}
                   {formatDateBR(rule.startDate)}
+                  {rule.endDate && <> · até {formatDateBR(rule.endDate)}</>}
                 </p>
               </div>
             </div>
@@ -130,11 +131,13 @@ function NewRecurrenceForm({
   const [typeId, setTypeId] = useState("");
   const [amountCents, setAmountCents] = useState(0);
   const [startDate, setStartDate] = useState(toISODate(new Date()));
+  const [endMonth, setEndMonth] = useState("");
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   function handleSubmit() {
     setError(null);
+    const endDate = endMonth ? `${endMonth}-01` : null;
     startTransition(async () => {
       const result = await createRecurrenceRule({
         description,
@@ -144,7 +147,7 @@ function NewRecurrenceForm({
         categoryId: categoryId || null,
         amountCents,
         startDate,
-        endDate: null,
+        endDate,
       });
       if (!result.ok) {
         setError(result.error);
@@ -160,7 +163,7 @@ function NewRecurrenceForm({
         amountCents,
         frequency: "monthly",
         startDate,
-        endDate: null,
+        endDate,
         active: true,
         amountHistory: [],
       });
@@ -215,6 +218,13 @@ function NewRecurrenceForm({
       <FieldGroup label="Início">
         <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
       </FieldGroup>
+      <FieldGroup label="Fim (opcional)">
+        <Input type="month" value={endMonth} onChange={(e) => setEndMonth(e.target.value)} />
+      </FieldGroup>
+      <p className="text-xs text-(--color-text-tertiary) sm:col-span-2">
+        Deixe vazio para reproduzir indefinidamente. Se preencher, o custo/entrada some a partir do mês seguinte ao
+        escolhido.
+      </p>
 
       <div className="sm:col-span-2">
         {error && <p className="mb-2 text-xs text-(--color-negative)">{error}</p>}

@@ -1,5 +1,5 @@
 import { TransactionRow, RecurrenceRule as RecurrenceRuleRow, SimulationRow } from "@/types/db";
-import { Transaction, RecurrenceRule, Simulation } from "@/types/domain";
+import { Transaction, RecurrenceRule, RecurrenceAmountVersion, Simulation } from "@/types/domain";
 
 /** Postgres NUMERIC chega como string ("1234.56") — converte para centavos exatos. */
 export function reaisStringToCents(value: string | number): number {
@@ -38,7 +38,7 @@ export function mapTransactionRow(row: TransactionRow): Transaction {
   };
 }
 
-export function mapRecurrenceRuleRow(row: RecurrenceRuleRow): RecurrenceRule {
+export function mapRecurrenceRuleRow(row: RecurrenceRuleRow, amountHistory: RecurrenceAmountVersion[] = []): RecurrenceRule {
   return {
     id: row.id,
     description: row.description,
@@ -51,6 +51,7 @@ export function mapRecurrenceRuleRow(row: RecurrenceRuleRow): RecurrenceRule {
     startDate: row.start_date,
     endDate: row.end_date,
     active: row.active,
+    amountHistory,
   };
 }
 

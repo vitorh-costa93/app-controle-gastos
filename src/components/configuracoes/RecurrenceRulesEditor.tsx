@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { X, Repeat } from "lucide-react";
+import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { X, Repeat, Pencil } from "lucide-react";
 import { RecurrenceRule } from "@/types/domain";
 import { Person, Category, TransactionType } from "@/types/db";
 import { Card } from "@/components/ui/Card";
@@ -9,6 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { FieldGroup, Input, Select } from "@/components/ui/Field";
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import { createRecurrenceRule, deactivateRecurrenceRule } from "@/lib/data/recurrence";
+import { RecurrenceRuleEditModal } from "./RecurrenceRuleEditModal";
 import { formatCurrencyBRL, formatDateBR, toISODate } from "@/lib/utils/format";
 
 export function RecurrenceRulesEditor({
@@ -24,7 +26,13 @@ export function RecurrenceRulesEditor({
 }) {
   const [list, setList] = useState(rules);
   const [showForm, setShowForm] = useState(false);
+  const [editingRule, setEditingRule] = useState<RecurrenceRule | null>(null);
   const [, startTransition] = useTransition();
+  const router = useRouter();
+
+  useEffect(() => {
+    setList(rules);
+  }, [rules]);
 
   const peopleById = new Map(people.map((p) => [p.id, p.name]));
 
@@ -53,18 +61,27 @@ export function RecurrenceRulesEditor({
                 </p>
               </div>
             </div>
-            <button
-              className="rounded-full p-1 text-(--color-text-tertiary) hover:bg-black/5"
-              onClick={() =>
-                startTransition(async () => {
-                  const result = await deactivateRecurrenceRule(rule.id);
-                  if (result.ok) setList((prev) => prev.filter((r) => r.id !== rule.id));
-                })
-              }
-              aria-label="Desativar recorrência"
-            >
-              <X size={14} />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                className="rounded-full p-1.5 text-(--color-text-tertiary) hover:bg-black/5"
+                onClick={() => setEditingRule(rule)}
+                aria-label="Editar recorrência"
+              >
+                <Pencil size={14} />
+              </button>
+              <button
+                className="rounded-full p-1.5 text-(--color-text-tertiary) hover:bg-black/5"
+                onClick={() =>
+                  startTransition(async () => {
+                    const result = await deactivateRecurrenceRule(rule.id);
+                    if (result.ok) setList((prev) => prev.filter((r) => r.id !== rule.id));
+                  })
+                }
+                aria-label="Desativar recorrência"
+              >
+                <X size={14} />
+              </button>
+            </div>
           </li>
         ))}
         {list.length === 0 && (
@@ -81,6 +98,14 @@ export function RecurrenceRulesEditor({
             setList((prev) => [...prev, rule]);
             setShowForm(false);
           }}
+        />
+      )}
+
+      {editingRule && (
+        <RecurrenceRuleEditModal
+          rule={editingRule}
+          onClose={() => setEditingRule(null)}
+          onChanged={() => router.refresh()}
         />
       )}
     </Card>
@@ -137,6 +162,7 @@ function NewRecurrenceForm({
         startDate,
         endDate: null,
         active: true,
+        amountHistory: [],
       });
     });
   }

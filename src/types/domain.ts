@@ -22,6 +22,11 @@ export interface Transaction {
   updatedAt: string;
 }
 
+export interface RecurrenceAmountVersion {
+  effectiveFrom: string; // "YYYY-MM" — nunca retroativo
+  amountCents: number;
+}
+
 export interface RecurrenceRule {
   id: string;
   description: string;
@@ -29,11 +34,14 @@ export interface RecurrenceRule {
   direction: Direction;
   typeId: string | null;
   categoryId: string | null;
+  /** Valor mais recente conhecido — usado quando não há histórico de versões. */
   amountCents: number;
   frequency: "monthly";
   startDate: string;
   endDate: string | null;
   active: boolean;
+  /** Histórico de mudanças de valor, mais antigo primeiro. Vazio = nunca teve mudança de valor. */
+  amountHistory: RecurrenceAmountVersion[];
 }
 
 /** Uma ocorrência (real ou projetada) de um lançamento dentro de um mês. */

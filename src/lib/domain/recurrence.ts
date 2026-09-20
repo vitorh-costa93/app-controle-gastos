@@ -11,6 +11,15 @@ function isRuleActiveInMonth(rule: RecurrenceRule, referenceMonth: string): bool
   return true;
 }
 
+/** Valor vigente da regra num mês: a versão mais recente cujo "a partir de" já começou, nunca retroativa. */
+function effectiveAmountCents(rule: RecurrenceRule, referenceMonth: string): number {
+  if (!rule.amountHistory || rule.amountHistory.length === 0) return rule.amountCents;
+  const applicable = rule.amountHistory
+    .filter((v) => v.effectiveFrom <= referenceMonth)
+    .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom));
+  return applicable[0]?.amountCents ?? rule.amountCents;
+}
+
 /**
  * Combina lançamentos reais de um mês com ocorrências projetadas a partir de
  * regras de recorrência ativas — sem duplicar quando já existe um lançamento
@@ -60,7 +69,7 @@ export function buildMonthOccurrences(
       categoryId: rule.categoryId,
       installmentCurrent: 1,
       installmentTotal: 1,
-      amountCents: rule.amountCents,
+      amountCents: effectiveAmountCents(rule, referenceMonth),
       description: rule.description,
       considered: true,
       recurrenceRuleId: rule.id,

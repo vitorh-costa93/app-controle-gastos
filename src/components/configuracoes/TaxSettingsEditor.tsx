@@ -3,37 +3,30 @@
 import { useState, useTransition } from "react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { FieldGroup, Input } from "@/components/ui/Field";
-import { setFixedSalaryTaxRates, FixedSalaryTaxRates } from "@/lib/data/settings";
+import { FieldGroup } from "@/components/ui/Field";
+import { CurrencyInput } from "@/components/ui/CurrencyInput";
+import { setFixedSalaryTaxAmountCents } from "@/lib/data/settings";
 import { syncComputedTaxTransactions, resetComputedTaxTransactions } from "@/lib/data/taxes";
 import { Person } from "@/types/db";
 
-function toPercentString(rate: number): string {
-  return (rate * 100).toFixed(2).replace(".", ",");
-}
-
 export function TaxSettingsEditor({
   fixedSalaryPerson,
-  fixedSalaryTaxRates,
+  fixedSalaryTaxAmountCents,
   hasVariableSalaryPerson,
 }: {
   fixedSalaryPerson: Person | null;
-  fixedSalaryTaxRates: FixedSalaryTaxRates;
+  fixedSalaryTaxAmountCents: number;
   hasVariableSalaryPerson: boolean;
 }) {
-  const [dasPercent, setDasPercent] = useState(toPercentString(fixedSalaryTaxRates.dasRate));
-  const [darfPercent, setDarfPercent] = useState(toPercentString(fixedSalaryTaxRates.darfRate));
+  const [amountCents, setAmountCents] = useState(fixedSalaryTaxAmountCents);
   const [isPending, startTransition] = useTransition();
   const [syncing, startSyncTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
 
-  function handleSaveRates() {
-    const dasRate = Number(dasPercent.replace(",", ".")) / 100;
-    const darfRate = Number(darfPercent.replace(",", ".")) / 100;
-    if (!Number.isFinite(dasRate) || dasRate < 0 || !Number.isFinite(darfRate) || darfRate < 0) return;
+  function handleSaveAmount() {
     startTransition(async () => {
-      const result = await setFixedSalaryTaxRates({ dasRate, darfRate });
-      if (result.ok) setMessage("Alíquotas salvas.");
+      const result = await setFixedSalaryTaxAmountCents(amountCents);
+      if (result.ok) setMessage("Valor salvo.");
     });
   }
 
@@ -85,27 +78,21 @@ export function TaxSettingsEditor({
       {fixedSalaryPerson && (
         <div className="mb-4">
           <p className="mb-2 text-xs font-medium text-(--color-text-secondary)">
-            Alíquotas estimadas — {fixedSalaryPerson.name} (trabalho para o exterior), sobre o salário do mês
+            Imposto mensal — {fixedSalaryPerson.name} (trabalho para o exterior)
           </p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_auto]">
-            <FieldGroup label="DAS">
-              <div className="flex items-center gap-2">
-                <Input value={dasPercent} onChange={(e) => setDasPercent(e.target.value)} className="max-w-28" />
-                <span className="text-sm text-(--color-text-tertiary)">%</span>
-              </div>
-            </FieldGroup>
-            <FieldGroup label="DARF">
-              <div className="flex items-center gap-2">
-                <Input value={darfPercent} onChange={(e) => setDarfPercent(e.target.value)} className="max-w-28" />
-                <span className="text-sm text-(--color-text-tertiary)">%</span>
-              </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_auto]">
+            <FieldGroup label="Valor fixo (DAS + DARF)">
+              <CurrencyInput valueCents={amountCents} onChange={setAmountCents} />
             </FieldGroup>
             <div className="flex items-end">
-              <Button onClick={handleSaveRates} disabled={isPending} type="button">
-                Salvar alíquotas
+              <Button onClick={handleSaveAmount} disabled={isPending} type="button">
+                Salvar valor
               </Button>
             </div>
           </div>
+          <p className="mt-2 text-xs text-(--color-text-tertiary)">
+            Valor fixo em vez de calculado — ajuste aqui sempre que houver mudança salarial.
+          </p>
         </div>
       )}
 
@@ -119,7 +106,7 @@ export function TaxSettingsEditor({
       </div>
       <p className="mt-2 text-xs text-(--color-text-tertiary)">
         &quot;Apagar e recalcular&quot; some só com os lançamentos automáticos que você nunca editou — útil depois de
-        corrigir uma alíquota ou fórmula errada.
+        corrigir um valor ou fórmula errada.
       </p>
 
       {message && <p className="mt-2 text-xs text-(--color-text-secondary)">{message}</p>}

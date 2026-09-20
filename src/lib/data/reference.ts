@@ -90,6 +90,7 @@ export async function createCategory(
   const { error } = await supabase.from("categories").insert({ name });
   if (error) {
     console.error("createCategory failed:", error);
+    if (error.code === "23505") return { ok: false, error: "Já existe uma categoria com esse nome." };
     return { ok: false, error: "Não foi possível adicionar esta categoria." };
   }
   revalidateTag("categories");
@@ -104,6 +105,7 @@ export async function createTransactionType(
   const { error } = await supabase.from("transaction_types").insert({ name });
   if (error) {
     console.error("createTransactionType failed:", error);
+    if (error.code === "23505") return { ok: false, error: "Já existe um tipo com esse nome." };
     return { ok: false, error: "Não foi possível adicionar este tipo." };
   }
   revalidateTag("transaction-types");

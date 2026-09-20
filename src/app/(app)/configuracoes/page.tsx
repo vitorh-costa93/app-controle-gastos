@@ -10,7 +10,7 @@ import {
 } from "@/lib/data/reference";
 import { listActiveRecurrenceRules } from "@/lib/data/recurrence";
 import { listSalaryEntries } from "@/lib/data/salary";
-import { getStartingBalance, getFixedSalaryTaxRates } from "@/lib/data/settings";
+import { getStartingBalance, getFixedSalaryTaxAmountCents } from "@/lib/data/settings";
 import { findVariableSalaryPerson, findFixedSalaryPerson } from "@/lib/domain/salary";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
@@ -21,13 +21,13 @@ import { StartingBalanceEditor } from "@/components/configuracoes/StartingBalanc
 import { TaxSettingsEditor } from "@/components/configuracoes/TaxSettingsEditor";
 
 export default async function ConfiguracoesPage() {
-  const [people, categories, types, recurrenceRules, startingBalance, fixedSalaryTaxRates] = await Promise.all([
+  const [people, categories, types, recurrenceRules, startingBalance, fixedSalaryTaxAmountCents] = await Promise.all([
     listPeople(),
     listCategories(),
     listTransactionTypes(),
     listActiveRecurrenceRules(),
     getStartingBalance(),
-    getFixedSalaryTaxRates(),
+    getFixedSalaryTaxAmountCents(),
   ]);
 
   const variableSalaryPerson = findVariableSalaryPerson(people);
@@ -58,7 +58,7 @@ export default async function ConfiguracoesPage() {
 
         <TaxSettingsEditor
           fixedSalaryPerson={fixedSalaryPerson}
-          fixedSalaryTaxRates={fixedSalaryTaxRates}
+          fixedSalaryTaxAmountCents={fixedSalaryTaxAmountCents}
           hasVariableSalaryPerson={Boolean(variableSalaryPerson)}
         />
 

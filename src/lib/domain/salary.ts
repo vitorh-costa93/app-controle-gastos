@@ -1,8 +1,15 @@
 import { addMonths } from "@/lib/utils/format";
+import { Person } from "@/types/db";
+import { MonthlyOccurrence } from "@/types/domain";
 
 export interface SalaryEntry {
   referenceMonth: string; // "YYYY-MM"
   amountCents: number;
+}
+
+/** Identifica a pessoa de salário variável pelo nome cadastrado (mesmo critério usado em Configurações). */
+export function findVariableSalaryPerson(people: Person[]): Person | null {
+  return people.find((p) => p.name.toLowerCase().includes("jaqueline")) ?? null;
 }
 
 // ---------------------------------------------------------------------------
@@ -100,6 +107,45 @@ export function projectSalaryForMonth(entries: SalaryEntry[], targetMonth: strin
   const ratePerDay = computeRollingAverageCentsPerDay(entries, targetMonth);
   const days = countBusinessDaysInMonth(targetMonth);
   return Math.round(ratePerDay * days);
+}
+
+/**
+ * Gera lançamentos projetados de salário variável para os meses futuros que ainda não
+ * têm um lançamento real registrado — sem isso, Análise e Simulação simplesmente não
+ * enxergavam a receita da pessoa de salário variável nos meses que ela ainda não fechou.
+ * O mês seguinte ao atual nunca é projetado: por acordo, esse mês é sempre digitado
+ * manualmente antes de fechar, então não deve aparecer nenhum valor estimado nele.
+ */
+export function buildProjectedSalaryOccurrences(params: {
+  months: string[];
+  currentMonth: string;
+  personId: string;
+  typeId: string | null;
+  salaryEntries: SalaryEntry[];
+  monthsWithRealIncome: Set<string>;
+}): MonthlyOccurrence[] {
+  const { months, currentMonth, personId, typeId, salaryEntries, monthsWithRealIncome } = params;
+  const firstProjectableMonth = addMonths(currentMonth, 2);
+
+  return months
+    .filter((m) => m >= firstProjectableMonth && !monthsWithRealIncome.has(m))
+    .map((m) => ({
+      id: `projected-salary:${personId}:${m}`,
+      origin: "projected" as const,
+      registrationDate: `${m}-01`,
+      referenceMonth: m,
+      personId,
+      direction: "income" as const,
+      fixedVariable: "variable" as const,
+      typeId,
+      categoryId: null,
+      installmentCurrent: 1,
+      installmentTotal: 1,
+      amountCents: projectSalaryForMonth(salaryEntries, m),
+      description: "Salário estimado (projeção por dias úteis)",
+      considered: true,
+      recurrenceRuleId: null,
+    }));
 }
 
 /** Receita bruta dos 12 meses anteriores a `targetMonth` (RBT12, não inclui o próprio mês) — real onde houver, projetada onde faltar. */

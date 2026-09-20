@@ -4,11 +4,12 @@ import { unstable_cache } from "next/cache";
 import { listConsideredTransactionsInRange, listTransactionsForMonth } from "./transactions";
 import { listActiveRecurrenceRules } from "./recurrence";
 import { listPeople, listCategories, listTransactionTypes } from "./reference";
+import { getSalaryProjectionOccurrences } from "./salary";
 import { buildMonthOccurrences, monthRange } from "@/lib/domain/recurrence";
 import { summarizeMonth, breakdownByCategory, breakdownByKey } from "@/lib/domain/finance";
 import { addMonths } from "@/lib/utils/format";
 import { isAiConfigured, generateMonthInsight } from "@/lib/ai/openai";
-import { MonthSummary, Transaction } from "@/types/domain";
+import { MonthSummary, MonthlyOccurrence, Transaction } from "@/types/domain";
 import { Person, Category, TransactionType } from "@/types/db";
 
 export interface AnalysisData {
@@ -52,11 +53,16 @@ async function computeAnalysisData(month: string, personId?: string): Promise<An
   const transactions = personId ? allTransactions.filter((t) => t.personId === personId) : allTransactions;
   const months = monthRange(from12, month);
 
-  const summaries = months.map((m) => summarizeMonth(m, buildMonthOccurrences(m, transactions, rules)));
+  // Preenche meses futuros sem lançamento real com o salário variável projetado
+  // (dias úteis) — senão Análise simplesmente não via essa receita nesses meses.
+  const salaryByMonth = await getSalaryProjectionOccurrences(months, people, types, allTransactions, personId);
+  const withSalary = (m: string, occ: MonthlyOccurrence[]) => [...occ, ...(salaryByMonth.get(m) ?? [])];
+
+  const summaries = months.map((m) => summarizeMonth(m, withSalary(m, buildMonthOccurrences(m, transactions, rules))));
   const currentSummary = summaries[summaries.length - 1];
   const previousSummary = summaries.length > 1 ? summaries[summaries.length - 2] : null;
 
-  const currentOccurrences = buildMonthOccurrences(month, transactions, rules);
+  const currentOccurrences = withSalary(month, buildMonthOccurrences(month, transactions, rules));
   const categoryBreakdown = breakdownByCategory(currentOccurrences, "expense");
   const typeBreakdown = breakdownByKey(currentOccurrences, "typeId", "expense");
   const personBreakdown = breakdownByKey(currentOccurrences, "personId", "expense");

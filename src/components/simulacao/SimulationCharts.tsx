@@ -12,7 +12,7 @@ import {
   Legend,
 } from "recharts";
 import { ScenarioComparisonMonth } from "@/lib/domain/simulation";
-import { formatCurrencyBRL, formatMonthShort, formatMonthLabel } from "@/lib/utils/format";
+import { formatCurrencyBRL, formatMonthShortWithYear, formatMonthLabel } from "@/lib/utils/format";
 
 export interface AccumulatedPoint {
   referenceMonth: string;
@@ -21,7 +21,7 @@ export interface AccumulatedPoint {
 
 /** Saldo acumulado projetado, sem nenhuma simulação — só com o que já está cadastrado. */
 export function BaseAccumulatedChart({ points }: { points: AccumulatedPoint[] }) {
-  const data = points.map((p) => ({ ...p, label: formatMonthShort(p.referenceMonth) }));
+  const data = points.map((p) => ({ ...p, label: formatMonthShortWithYear(p.referenceMonth) }));
 
   return (
     <div className="h-56 w-full">
@@ -59,7 +59,7 @@ export function BaseAccumulatedChart({ points }: { points: AccumulatedPoint[] })
 export function LeftoverComparisonChart({ comparison }: { comparison: ScenarioComparisonMonth[] }) {
   const data = comparison.map((c) => ({
     ...c,
-    label: formatMonthShort(c.referenceMonth),
+    label: formatMonthShortWithYear(c.referenceMonth),
     semCompra: c.leftoverWithoutCents,
     comCompra: c.leftoverWithCents,
   }));
@@ -87,7 +87,7 @@ export function LeftoverComparisonChart({ comparison }: { comparison: ScenarioCo
 export function AccumulatedBalanceChart({ comparison }: { comparison: ScenarioComparisonMonth[] }) {
   const data = comparison.map((c) => ({
     ...c,
-    label: formatMonthShort(c.referenceMonth),
+    label: formatMonthShortWithYear(c.referenceMonth),
     semCompra: c.accumulatedWithoutCents,
     comCompra: c.accumulatedWithCents,
   }));

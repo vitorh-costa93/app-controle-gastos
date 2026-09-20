@@ -31,6 +31,16 @@ export function formatMonthShort(referenceMonth: string): string {
   return label.replace(".", "").replace(/^\w/, (c) => c.toUpperCase());
 }
 
+/**
+ * "2027-11" -> "Nov/27" — usado em gráficos com horizonte de mais de 12 meses
+ * (Simulação), onde o mesmo mês abreviado ("Out", "Dez"...) aparece mais de uma vez
+ * sem indicar o ano, deixando o eixo ambíguo sobre a ordem cronológica dos pontos.
+ */
+export function formatMonthShortWithYear(referenceMonth: string): string {
+  const [year] = referenceMonth.split("-");
+  return `${formatMonthShort(referenceMonth)}/${year.slice(2)}`;
+}
+
 export function formatDateBR(isoDate: string): string {
   const [year, month, day] = isoDate.split("-").map(Number);
   return `${String(day).padStart(2, "0")}/${String(month).padStart(2, "0")}/${year}`;

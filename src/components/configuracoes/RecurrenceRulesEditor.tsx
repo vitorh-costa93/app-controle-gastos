@@ -104,6 +104,7 @@ export function RecurrenceRulesEditor({
 
       {editingRule && (
         <RecurrenceRuleEditModal
+          key={editingRule.id}
           rule={editingRule}
           onClose={() => setEditingRule(null)}
           onChanged={() => router.refresh()}

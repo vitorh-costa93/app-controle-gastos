@@ -11,6 +11,21 @@ import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import { AlertTriangle } from "lucide-react";
 import { toReferenceMonth } from "@/lib/utils/format";
 
+const MONTH_NAMES = [
+  "Janeiro",
+  "Fevereiro",
+  "Março",
+  "Abril",
+  "Maio",
+  "Junho",
+  "Julho",
+  "Agosto",
+  "Setembro",
+  "Outubro",
+  "Novembro",
+  "Dezembro",
+];
+
 const CONFIDENCE_TONE: Record<FieldConfidence, "positive" | "warning" | "negative"> = {
   alta: "positive",
   media: "warning",
@@ -34,13 +49,19 @@ export function AIReviewTable({
   source: IngestMethod;
   onDone: () => void;
 }) {
-  const [rows, setRows] = useState(initialRows);
+  const initialBatchMonth =
+    initialRows.find((r) => r.data.reference_month)?.data.reference_month ?? toReferenceMonth(new Date());
+  // O mês do lote já é aplicado a TODAS as linhas desde a montagem — antes, se o valor
+  // inicial já "parecesse certo" (batia com a 1ª linha), o seletor nunca disparava
+  // onChange e as outras linhas ficavam com o mês extraído por elas mesmas (a data),
+  // não com o mês do lote. Agora todas partem já normalizadas pro mesmo mês.
+  const [rows, setRows] = useState<IngestResultRow[]>(() =>
+    initialRows.map((r) => ({ ...r, data: { ...r.data, reference_month: initialBatchMonth } }))
+  );
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [confirmedCount, setConfirmedCount] = useState<number | null>(null);
-  const [batchMonth, setBatchMonth] = useState(
-    () => initialRows.find((r) => r.data.reference_month)?.data.reference_month ?? toReferenceMonth(new Date())
-  );
+  const [batchMonth, setBatchMonth] = useState(initialBatchMonth);
 
   function updateRow(id: string, patch: Partial<ExtractedTransactionData>) {
     setRows((prev) =>
@@ -51,6 +72,12 @@ export function AIReviewTable({
   function applyBatchMonth(month: string) {
     setBatchMonth(month);
     setRows((prev) => prev.map((r) => ({ ...r, data: { ...r.data, reference_month: month } })));
+  }
+
+  const [batchYear, batchMonthNum] = batchMonth.split("-").map(Number);
+
+  function applyBatchYearMonth(year: number, monthNum: number) {
+    applyBatchMonth(`${year}-${String(monthNum).padStart(2, "0")}`);
   }
 
   function toggleIncluded(id: string, included: boolean) {
@@ -107,17 +134,34 @@ export function AIReviewTable({
         )}
       </p>
 
-      <div className="mb-4 flex items-center gap-2 rounded-(--radius-lg) border border-(--color-border) bg-(--color-surface-secondary) p-3">
-        <label htmlFor="batch-month" className="text-xs font-medium text-(--color-text-secondary)">
+      <div className="mb-4 flex flex-wrap items-center gap-2 rounded-(--radius-lg) border border-(--color-border) bg-(--color-surface-secondary) p-3">
+        <span className="text-xs font-medium text-(--color-text-secondary)">
           Mês de referência para todos os lançamentos
-        </label>
-        <input
-          id="batch-month"
-          type="month"
-          value={batchMonth}
-          onChange={(e) => e.target.value && applyBatchMonth(e.target.value)}
-          className="rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-2 py-1 text-sm"
-        />
+        </span>
+        <select
+          aria-label="Mês"
+          value={batchMonthNum}
+          onChange={(e) => applyBatchYearMonth(batchYear, Number(e.target.value))}
+          className="rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-2 py-1.5 text-sm"
+        >
+          {MONTH_NAMES.map((name, i) => (
+            <option key={name} value={i + 1}>
+              {name}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label="Ano"
+          value={batchYear}
+          onChange={(e) => applyBatchYearMonth(Number(e.target.value), batchMonthNum)}
+          className="rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-2 py-1.5 text-sm"
+        >
+          {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 1 + i).map((year) => (
+            <option key={year} value={year}>
+              {year}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="flex flex-col gap-3">

@@ -12,6 +12,7 @@ import { CategoryDonutChart } from "./CategoryDonutChart";
 import { MonthlyEvolutionChart } from "./MonthlyEvolutionChart";
 import { ComparativeBars } from "./ComparativeBars";
 import { AnaliseTransactionsTable } from "./AnaliseTransactionsTable";
+import { PivotTable } from "./PivotTable";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { addMonths, formatCurrencyBRL } from "@/lib/utils/format";
@@ -186,6 +187,13 @@ export function AnalisePageClient({
               )}
             </div>
           </Card>
+
+          <PivotTable
+            transactions={monthTransactions}
+            people={data.people}
+            categories={data.categories}
+            types={data.types}
+          />
 
           <AnaliseTransactionsTable
             transactions={monthTransactions}

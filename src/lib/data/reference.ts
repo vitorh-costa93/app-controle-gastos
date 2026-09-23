@@ -113,18 +113,32 @@ export async function createTransactionType(
   return { ok: true };
 }
 
+/**
+ * Pessoas continuam com soft-delete (active=false) — histórico financeiro ligado a uma
+ * pessoa é sensível demais pra apagar de verdade sem uma tela de reativação.
+ * Categorias e tipos são apagados de verdade: não existe UI pra reativar um "active=false",
+ * então deixá-los só marcados como inativos era pior que resolver (o nome ficava preso
+ * pra sempre, sem poder reusar). Lançamentos que usavam o item apagado ficam com
+ * category_id/type_id nulo (ver migration 0010 — FK com "on delete set null").
+ */
 export async function deactivateReferenceItem(
   table: "people" | "categories" | "transaction_types",
   id: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const supabase = createAdminClient();
-  const { error } = await supabase.from(table).update({ active: false }).eq("id", id);
+  const { error } =
+    table === "people"
+      ? await supabase.from(table).update({ active: false }).eq("id", id)
+      : await supabase.from(table).delete().eq("id", id);
   if (error) {
     console.error("deactivateReferenceItem failed:", error);
     return { ok: false, error: "Não foi possível remover este item." };
   }
   const tag = table === "people" ? "people" : table === "categories" ? "categories" : "transaction-types";
   revalidateTag(tag);
+  revalidateTag("analysis");
   revalidatePath("/configuracoes");
+  revalidatePath("/cadastro");
+  revalidatePath("/analise");
   return { ok: true };
 }

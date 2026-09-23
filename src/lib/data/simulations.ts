@@ -6,7 +6,7 @@ import { SimulationRow } from "@/types/db";
 import { Simulation } from "@/types/domain";
 import { mapSimulationRow, centsToReaisString } from "./mappers";
 import { generateSimulationImage } from "@/lib/ai/openai";
-import { persistExternalImage } from "@/lib/supabase/storage";
+import { persistGeneratedImage } from "@/lib/supabase/storage";
 
 export interface SimulationInput {
   description: string;
@@ -30,10 +30,9 @@ export async function createSimulation(
   input: SimulationInput
 ): Promise<{ ok: true; data: Simulation } | { ok: false; error: string }> {
   const supabase = createAdminClient();
-  // Gera a foto ilustrativa antes de salvar — se falhar, a simulação é criada sem imagem mesmo assim.
-  // A URL do DALL-E expira em ~1h, então baixamos e persistimos no Storage antes de gravar.
-  const temporaryImageUrl = await generateSimulationImage(input.description);
-  const imageUrl = temporaryImageUrl ? await persistExternalImage(temporaryImageUrl) : null;
+  // Gera a foto ilustrativa antes de salvar — se falhar, a simulação é criada sem imagem
+  // mesmo assim (dá pra tentar de novo depois pelo botão "Gerar imagem").
+  const imageUrl = await generateAndStoreImage(input.description);
   const { data, error } = await supabase
     .from("simulations")
     .insert({
@@ -49,6 +48,33 @@ export async function createSimulation(
   if (error) return { ok: false, error: "Não foi possível salvar esta simulação." };
   revalidatePath("/simulacao");
   return { ok: true, data: mapSimulationRow(data as SimulationRow) };
+}
+
+async function generateAndStoreImage(description: string): Promise<string | null> {
+  const image = await generateSimulationImage(description);
+  return image ? persistGeneratedImage(image) : null;
+}
+
+/** Gera (ou refaz) a foto de uma simulação já existente. */
+export async function regenerateSimulationImage(
+  id: string
+): Promise<{ ok: true; imageUrl: string } | { ok: false; error: string }> {
+  const supabase = createAdminClient();
+  const { data: sim, error: readError } = await supabase.from("simulations").select("description").eq("id", id).single();
+  if (readError || !sim) return { ok: false, error: "Simulação não encontrada." };
+
+  const imageUrl = await generateAndStoreImage(sim.description as string);
+  if (!imageUrl) {
+    return {
+      ok: false,
+      error: "Não foi possível gerar a imagem agora. Verifique a chave da OpenAI (acesso a modelos de imagem) e tente de novo.",
+    };
+  }
+
+  const { error } = await supabase.from("simulations").update({ image_url: imageUrl }).eq("id", id);
+  if (error) return { ok: false, error: "A imagem foi gerada, mas não foi possível salvá-la." };
+  revalidatePath("/simulacao");
+  return { ok: true, imageUrl };
 }
 
 export async function deleteSimulation(

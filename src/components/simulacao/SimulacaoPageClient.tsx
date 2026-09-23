@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Sparkles } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ImageIcon, RefreshCw, Sparkles } from "lucide-react";
 import { Simulation, MonthSummary } from "@/types/domain";
 import { buildScenarioComparison, summarizeScenarioImpact } from "@/lib/domain/simulation";
 import { accumulateBalance } from "@/lib/domain/finance";
@@ -13,6 +13,7 @@ import { ScenarioList } from "./ScenarioList";
 import { LeftoverComparisonChart, AccumulatedBalanceChart, BaseAccumulatedChart } from "./SimulationCharts";
 import { ImpactSummaryCard } from "./ImpactSummaryCard";
 import { generateScenarioAiSummary } from "@/lib/data/simulation-analysis";
+import { regenerateSimulationImage } from "@/lib/data/simulations";
 import { formatMonthLabel } from "@/lib/utils/format";
 
 export function SimulacaoPageClient({
@@ -78,6 +79,31 @@ export function SimulacaoPageClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiRequestKey]);
 
+  const [imagePendingId, setImagePendingId] = useState<string | null>(null);
+  const [imageError, setImageError] = useState<{ id: string; message: string } | null>(null);
+  const autoImageAttempted = useRef(new Set<string>());
+
+  async function generateImage(id: string) {
+    setImagePendingId(id);
+    setImageError(null);
+    const result = await regenerateSimulationImage(id);
+    setImagePendingId((current) => (current === id ? null : current));
+    if (result.ok) {
+      setSimulations((prev) => prev.map((s) => (s.id === id ? { ...s, imageUrl: result.imageUrl } : s)));
+    } else {
+      setImageError({ id, message: result.error });
+    }
+  }
+
+  // Simulações criadas quando a geração de imagem falhava ficaram só com o ícone —
+  // tenta gerar a foto uma vez por visita quando a simulação principal não tem imagem.
+  useEffect(() => {
+    if (!primary || primary.imageUrl || autoImageAttempted.current.has(primary.id)) return;
+    autoImageAttempted.current.add(primary.id);
+    generateImage(primary.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [primary?.id, primary?.imageUrl]);
+
   const aiSummary = aiState?.key === aiRequestKey ? aiState.summary : null;
   const aiLoading = Boolean(primary) && aiState?.key !== aiRequestKey;
 
@@ -108,13 +134,29 @@ export function SimulacaoPageClient({
           ) : (
             <>
               <Card className="p-5">
-                {primary.imageUrl && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={primary.imageUrl}
-                    alt=""
-                    className="mb-4 h-40 w-full rounded-(--radius-lg) object-cover"
-                  />
+                <div className="relative mb-4 h-48 w-full overflow-hidden rounded-(--radius-lg) bg-(--color-primary-soft) sm:h-56">
+                  {primary.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={primary.imageUrl} alt={primary.description} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-(--color-primary)">
+                      <ImageIcon size={28} className={imagePendingId === primary.id ? "animate-pulse" : ""} />
+                      <span className="text-xs">
+                        {imagePendingId === primary.id ? "Gerando imagem..." : "Sem imagem"}
+                      </span>
+                    </div>
+                  )}
+                  <button
+                    onClick={() => generateImage(primary.id)}
+                    disabled={imagePendingId === primary.id}
+                    className="absolute right-2 bottom-2 flex items-center gap-1 rounded-full bg-black/55 px-3 py-1.5 text-xs font-medium text-white backdrop-blur hover:bg-black/70 disabled:opacity-60"
+                  >
+                    <RefreshCw size={12} className={imagePendingId === primary.id ? "animate-spin" : ""} />
+                    {primary.imageUrl ? "Gerar outra" : "Gerar imagem"}
+                  </button>
+                </div>
+                {imageError?.id === primary.id && (
+                  <p className="-mt-2 mb-3 text-xs text-(--color-negative)">{imageError.message}</p>
                 )}
                 <div className="mb-1 flex items-center justify-between">
                   <h3 className="text-[15px] font-semibold">{primary.description}</h3>

@@ -25,30 +25,28 @@ export async function fileToDataUrl(file: File): Promise<string> {
 }
 
 /**
- * Baixa uma imagem de uma URL temporária (ex.: link do DALL-E, que expira em ~1h)
- * e a persiste no Storage do Supabase, retornando uma URL pública estável.
+ * Salva uma imagem gerada por IA no Storage do Supabase e retorna uma URL pública estável.
  * Bucket público e separado do de uploads privados: são ilustrações geradas por IA,
  * sem dados financeiros do usuário, não há motivo para exigir URL assinada.
  * Retorna null em qualquer falha, sem lançar — nunca deve bloquear quem chamou.
  */
-export async function persistExternalImage(sourceUrl: string): Promise<string | null> {
+export async function persistGeneratedImage(image: { data: Buffer; contentType: string }): Promise<string | null> {
   try {
-    const response = await fetch(sourceUrl);
-    if (!response.ok) return null;
-    const contentType = response.headers.get("content-type") ?? "image/png";
-    const ext = contentType.includes("jpeg") ? "jpg" : contentType.split("/")[1] || "png";
-    const buffer = Buffer.from(await response.arrayBuffer());
-
+    const ext = image.contentType.includes("jpeg") ? "jpg" : image.contentType.split("/")[1] || "png";
     const supabase = createAdminClient();
     const path = `${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.${ext}`;
     const { error } = await supabase.storage
       .from(SIMULATION_IMAGES_BUCKET)
-      .upload(path, buffer, { contentType, upsert: false });
-    if (error) return null;
+      .upload(path, image.data, { contentType: image.contentType, upsert: false });
+    if (error) {
+      console.error("persistGeneratedImage upload failed:", error);
+      return null;
+    }
 
     const { data } = supabase.storage.from(SIMULATION_IMAGES_BUCKET).getPublicUrl(path);
     return data.publicUrl;
-  } catch {
+  } catch (error) {
+    console.error("persistGeneratedImage failed:", error);
     return null;
   }
 }

@@ -1,4 +1,6 @@
 export const dynamic = "force-dynamic";
+// Gerar a foto da simulação leva de 10 a 40s — mais que o timeout padrão da função.
+export const maxDuration = 60;
 
 import { listActiveSimulations } from "@/lib/data/simulations";
 import { getBaseMonthSummaries } from "@/lib/data/simulation-analysis";

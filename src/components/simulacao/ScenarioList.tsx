@@ -73,10 +73,10 @@ export function ScenarioList({
                     <img
                       src={sim.imageUrl}
                       alt=""
-                      className="h-9 w-9 shrink-0 rounded-(--radius-md) object-cover"
+                      className="h-12 w-16 shrink-0 rounded-(--radius-md) object-cover"
                     />
                   ) : (
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-(--radius-md) bg-(--color-primary-soft) text-(--color-primary)">
+                    <div className="flex h-12 w-16 shrink-0 items-center justify-center rounded-(--radius-md) bg-(--color-primary-soft) text-(--color-primary)">
                       <Luggage size={16} />
                     </div>
                   )}

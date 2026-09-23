@@ -19,26 +19,58 @@ export const EXTRACTION_MODEL = "gpt-4o-mini";
 export const VISION_MODEL = "gpt-4o-mini";
 export const TRANSCRIPTION_MODEL = "whisper-1";
 export const INSIGHT_MODEL = "gpt-4o-mini";
-export const IMAGE_MODEL = "dall-e-3";
+// dall-e-3 é legado e vinha falhando em silêncio (só aparecia o ícone na Simulação).
+// gpt-image-1 é o modelo atual; dall-e-3 fica só como segunda tentativa.
+export const IMAGE_MODELS = ["gpt-image-1", "dall-e-3"] as const;
+
+export interface GeneratedImage {
+  data: Buffer;
+  contentType: string;
+}
 
 /**
- * Gera uma imagem ilustrativa para uma simulação (ex.: "Viagem para Gramado").
- * Retorna null em qualquer falha — a simulação nunca deve ficar bloqueada por causa da imagem.
+ * Gera uma foto ilustrativa para uma simulação (ex.: "Viagem para Gramado").
+ * Retorna os bytes da imagem (sem URL temporária pra baixar depois) ou null em
+ * qualquer falha — a simulação nunca deve ficar bloqueada por causa da imagem.
  */
-export async function generateSimulationImage(description: string): Promise<string | null> {
+export async function generateSimulationImage(description: string): Promise<GeneratedImage | null> {
   if (!isAiConfigured()) return null;
-  try {
-    const openai = getOpenAIClient();
-    const response = await openai.images.generate({
-      model: IMAGE_MODEL,
-      prompt: `Ilustração digital simples, elegante e minimalista representando: "${description}". Cores suaves, sem texto, sem letras, sem números.`,
-      size: "1024x1024",
-      n: 1,
-    });
-    return response.data?.[0]?.url ?? null;
-  } catch {
-    return null;
+  const openai = getOpenAIClient();
+  const prompt = `Fotografia realista, bonita e bem iluminada representando: "${description}". Estilo foto de revista/banco de imagens, cores naturais, enquadramento horizontal, sem texto, sem letras, sem números, sem logotipos.`;
+
+  for (const model of IMAGE_MODELS) {
+    try {
+      const response =
+        model === "gpt-image-1"
+          ? await openai.images.generate({
+              model,
+              prompt,
+              size: "1536x1024",
+              quality: "medium",
+              output_format: "jpeg",
+              n: 1,
+            })
+          : await openai.images.generate({
+              model,
+              prompt,
+              size: "1792x1024",
+              response_format: "b64_json",
+              n: 1,
+            });
+      const b64 = response.data?.[0]?.b64_json;
+      if (!b64) {
+        console.error(`generateSimulationImage (${model}): resposta sem imagem`);
+        continue;
+      }
+      return {
+        data: Buffer.from(b64, "base64"),
+        contentType: model === "gpt-image-1" ? "image/jpeg" : "image/png",
+      };
+    } catch (error) {
+      console.error(`generateSimulationImage (${model}) failed:`, error);
+    }
   }
+  return null;
 }
 
 export const RAW_EXTRACTION_SCHEMA = {

@@ -5,8 +5,116 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { TransactionRow } from "@/types/db";
 import { Transaction } from "@/types/domain";
 import { mapTransactionRow, centsToReaisString, reaisStringToCents } from "./mappers";
+import { addMonths, addMonthsToISODate } from "@/lib/utils/format";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
+
+type TransactionInsertRow = {
+  registration_date: string;
+  reference_month: string;
+  person_id: string;
+  direction: "income" | "expense";
+  fixed_variable: "fixed" | "variable";
+  type_id: string | null;
+  category_id: string | null;
+  installment_current: number;
+  installment_total: number;
+  amount: string;
+  description: string | null;
+  considered: boolean;
+  source: string;
+  installment_group_id?: string | null;
+};
+
+function toInsertRow(input: TransactionInput): TransactionInsertRow {
+  return {
+    registration_date: input.registrationDate,
+    reference_month: input.referenceMonth,
+    person_id: input.personId,
+    direction: input.direction,
+    fixed_variable: input.fixedVariable,
+    type_id: input.typeId,
+    category_id: input.categoryId,
+    installment_current: input.installmentCurrent,
+    installment_total: input.installmentTotal,
+    amount: centsToReaisString(input.amountCents),
+    description: input.description,
+    considered: input.considered,
+    source: input.source ?? "manual",
+  };
+}
+
+function isInstallmentPurchase(input: TransactionInput): boolean {
+  return (
+    input.fixedVariable === "variable" &&
+    input.installmentTotal > 1 &&
+    input.installmentCurrent >= 1 &&
+    input.installmentCurrent <= input.installmentTotal
+  );
+}
+
+/**
+ * Compra parcelada ("recorrência variável"): a parcela lançada vira o primeiro
+ * registro de um grupo e as parcelas seguintes são criadas já nos meses certos —
+ * sem isso, uma compra em 10x só existia no mês em que foi lançada.
+ *
+ * Se a compra já tem grupo (ex.: a fatura de outubro trouxe o 4/10 de uma compra
+ * lançada em setembro), a parcela nova substitui a gerada automaticamente para o
+ * mesmo número, em vez de duplicar o valor naquele mês.
+ */
+async function expandInstallments(
+  supabase: AdminClient,
+  input: TransactionInput
+): Promise<{ rows: TransactionInsertRow[]; replaceIds: string[] }> {
+  const base = toInsertRow(input);
+  if (!isInstallmentPurchase(input)) return { rows: [base], replaceIds: [] };
+
+  const anchor = addMonths(input.referenceMonth, -input.installmentCurrent);
+  const { data: candidates } = await supabase
+    .from("transactions")
+    .select("id, installment_group_id, installment_current, reference_month")
+    .eq("person_id", input.personId)
+    .eq("installment_total", input.installmentTotal)
+    .eq("amount", base.amount)
+    .not("installment_group_id", "is", null)
+    .is("deleted_at", null);
+
+  const sameGroup = ((candidates ?? []) as {
+    id: string;
+    installment_group_id: string;
+    installment_current: number;
+    reference_month: string;
+  }[]).filter((c) => addMonths(c.reference_month, -c.installment_current) === anchor);
+
+  if (sameGroup.length > 0) {
+    const groupId = sameGroup[0].installment_group_id;
+    const replaced = sameGroup.filter((c) => c.installment_current === input.installmentCurrent).map((c) => c.id);
+    return { rows: [{ ...base, installment_group_id: groupId }], replaceIds: replaced };
+  }
+
+  const groupId = crypto.randomUUID();
+  const rows: TransactionInsertRow[] = [{ ...base, installment_group_id: groupId }];
+  for (let n = input.installmentCurrent + 1; n <= input.installmentTotal; n++) {
+    const offset = n - input.installmentCurrent;
+    rows.push({
+      ...base,
+      installment_current: n,
+      reference_month: addMonths(input.referenceMonth, offset),
+      registration_date: addMonthsToISODate(input.registrationDate, offset),
+      installment_group_id: groupId,
+    });
+  }
+  return { rows, replaceIds: [] };
+}
+
+async function softDelete(supabase: AdminClient, ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const { error } = await supabase
+    .from("transactions")
+    .update({ deleted_at: new Date().toISOString() })
+    .in("id", ids);
+  if (error) console.error("softDelete (installment replace) failed:", error);
+}
 
 interface RecurrenceFields {
   personId: string;
@@ -226,32 +334,20 @@ export async function createTransaction(
   input: TransactionInput
 ): Promise<{ ok: true; data: Transaction } | { ok: false; error: string }> {
   const supabase = createAdminClient();
-  const { data, error } = await supabase
-    .from("transactions")
-    .insert({
-      registration_date: input.registrationDate,
-      reference_month: input.referenceMonth,
-      person_id: input.personId,
-      direction: input.direction,
-      fixed_variable: input.fixedVariable,
-      type_id: input.typeId,
-      category_id: input.categoryId,
-      installment_current: input.installmentCurrent,
-      installment_total: input.installmentTotal,
-      amount: centsToReaisString(input.amountCents),
-      description: input.description,
-      considered: input.considered,
-      source: input.source ?? "manual",
-    })
-    .select("*")
-    .single();
+  const { rows, replaceIds } = await expandInstallments(supabase, input);
+  const { data, error } = await supabase.from("transactions").insert(rows).select("*");
 
-  if (error) {
+  if (error || !data || data.length === 0) {
     console.error("createTransaction failed:", error);
     return { ok: false, error: "Não foi possível salvar este lançamento." };
   }
+  await softDelete(supabase, replaceIds);
 
-  const row = data as TransactionRow;
+  const inserted = data as TransactionRow[];
+  const row =
+    inserted.find(
+      (r) => r.reference_month === input.referenceMonth && r.installment_current === input.installmentCurrent
+    ) ?? inserted[0];
   if (input.fixedVariable === "fixed") {
     const ruleId = await linkFixedRecurrence(supabase, row.id, {
       personId: input.personId,
@@ -278,33 +374,28 @@ export async function createTransactionsBatch(
 ): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
   if (inputs.length === 0) return { ok: true, count: 0 };
   const supabase = createAdminClient();
-  const { data, error } = await supabase
-    .from("transactions")
-    .insert(
-      inputs.map((input) => ({
-        registration_date: input.registrationDate,
-        reference_month: input.referenceMonth,
-        person_id: input.personId,
-        direction: input.direction,
-        fixed_variable: input.fixedVariable,
-        type_id: input.typeId,
-        category_id: input.categoryId,
-        installment_current: input.installmentCurrent,
-        installment_total: input.installmentTotal,
-        amount: centsToReaisString(input.amountCents),
-        description: input.description,
-        considered: input.considered,
-        source: input.source ?? "manual",
-      }))
-    )
-    .select("id, fixed_variable");
 
-  if (error) {
+  // Só a primeira linha de cada entrada é a que o usuário revisou — as demais são as
+  // parcelas futuras geradas automaticamente, que nunca viram recorrência fixa.
+  const expanded = await Promise.all(inputs.map((input) => expandInstallments(supabase, input)));
+  const rows = expanded.flatMap((e) => e.rows);
+  const primaryIndexes: number[] = [];
+  let cursor = 0;
+  for (const e of expanded) {
+    primaryIndexes.push(cursor);
+    cursor += e.rows.length;
+  }
+
+  const { data, error } = await supabase.from("transactions").insert(rows).select("id, fixed_variable");
+
+  if (error || !data) {
     console.error("createTransactionsBatch failed:", error);
     return { ok: false, error: "Não foi possível confirmar os lançamentos." };
   }
+  await softDelete(supabase, expanded.flatMap((e) => e.replaceIds));
 
-  const inserted = data as { id: string; fixed_variable: string }[];
+  const allInserted = data as { id: string; fixed_variable: string }[];
+  const inserted = primaryIndexes.map((i) => allInserted[i]);
   await Promise.all(
     inserted.map((row, i) => {
       const input = inputs[i];

@@ -77,6 +77,7 @@ export async function createRecurrenceRule(
   revalidateTag("recurrence-rules");
   revalidateTag("analysis");
   revalidatePath("/configuracoes");
+  revalidatePath("/cadastro");
   revalidatePath("/analise");
   revalidatePath("/simulacao");
   return { ok: true };
@@ -91,6 +92,7 @@ export async function deactivateRecurrenceRule(
   revalidateTag("recurrence-rules");
   revalidateTag("analysis");
   revalidatePath("/configuracoes");
+  revalidatePath("/cadastro");
   revalidatePath("/analise");
   revalidatePath("/simulacao");
   return { ok: true };
@@ -135,6 +137,7 @@ export async function addRecurrenceAmountVersion(
   revalidateTag("recurrence-rules");
   revalidateTag("analysis");
   revalidatePath("/configuracoes");
+  revalidatePath("/cadastro");
   revalidatePath("/analise");
   revalidatePath("/simulacao");
   return { ok: true };
@@ -158,6 +161,7 @@ export async function setRecurrenceEndDate(
   revalidateTag("recurrence-rules");
   revalidateTag("analysis");
   revalidatePath("/configuracoes");
+  revalidatePath("/cadastro");
   revalidatePath("/analise");
   revalidatePath("/simulacao");
   return { ok: true };

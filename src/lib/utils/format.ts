@@ -67,3 +67,13 @@ export function toReferenceMonth(date: Date): string {
 export function toISODate(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
+
+/** Soma meses a uma data "YYYY-MM-DD", limitando o dia ao último dia do mês de destino (31/01 + 1 → 28/02). */
+export function addMonthsToISODate(isoDate: string, count: number): string {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  const target = new Date(Date.UTC(year, month - 1 + count, 1));
+  const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+  return `${target.getUTCFullYear()}-${String(target.getUTCMonth() + 1).padStart(2, "0")}-${String(
+    Math.min(day, lastDay)
+  ).padStart(2, "0")}`;
+}

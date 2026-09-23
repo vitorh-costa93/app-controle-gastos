@@ -13,6 +13,7 @@ import { FiltersBar } from "./FiltersBar";
 import { TransactionTable } from "./TransactionTable";
 import { TransactionEditor } from "./TransactionEditor";
 import { CaptureFlow } from "@/components/ingest/CaptureFlow";
+import { CadastroTabs } from "./CadastroTabs";
 
 export function CadastroPageClient({
   transactions,
@@ -53,6 +54,8 @@ export function CadastroPageClient({
           </Button>
         }
       />
+
+      <CadastroTabs active="lancamentos" />
 
       <InputMethodCards onSelect={setCaptureMethod} />
 

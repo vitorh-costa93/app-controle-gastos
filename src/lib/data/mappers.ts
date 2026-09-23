@@ -33,6 +33,7 @@ export function mapTransactionRow(row: TransactionRow): Transaction {
     source: row.source,
     aiConfidence: row.ai_confidence,
     recurrenceRuleId: row.recurrence_rule_id,
+    installmentGroupId: row.installment_group_id ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

@@ -6,7 +6,10 @@ export const maxDuration = 60;
 import { listTransactions } from "@/lib/data/transactions";
 import { listPeople, listCategories, listTransactionTypes } from "@/lib/data/reference";
 import { listActiveRecurrenceRules } from "@/lib/data/recurrence";
+import { listInstallmentGroups } from "@/lib/data/installments";
+import { getEstimatedExpenses } from "@/lib/data/estimates";
 import { CadastroPageClient } from "@/components/cadastro/CadastroPageClient";
+import { RecorrenciasView } from "@/components/recorrencias/RecorrenciasView";
 
 export default async function CadastroPage({
   searchParams,
@@ -22,6 +25,23 @@ export default async function CadastroPage({
     listTransactionTypes(),
     listActiveRecurrenceRules(),
   ]);
+
+  if (sp.tab === "recorrencias") {
+    const [installmentGroups, estimatedExpenses] = await Promise.all([
+      listInstallmentGroups(),
+      getEstimatedExpenses(),
+    ]);
+    return (
+      <RecorrenciasView
+        recurrenceRules={recurrenceRules}
+        installmentGroups={installmentGroups}
+        estimatedExpenses={estimatedExpenses}
+        people={people}
+        categories={categories}
+        types={types}
+      />
+    );
+  }
 
   const { data: transactions, total } = await listTransactions({
     referenceMonth: typeof sp.month === "string" ? sp.month : undefined,

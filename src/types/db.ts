@@ -68,6 +68,7 @@ export interface TransactionRow {
   source: TransactionSource;
   ai_confidence: Record<string, FieldConfidence> | null;
   recurrence_rule_id: string | null;
+  installment_group_id: string | null;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;

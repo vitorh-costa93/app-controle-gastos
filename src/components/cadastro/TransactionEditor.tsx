@@ -203,6 +203,11 @@ export function TransactionEditor({
               onChange={(e) => update("installmentTotal", Number(e.target.value) || 1)}
             />
           </div>
+          {!transaction && form.fixedVariable === "variable" && form.installmentTotal > form.installmentCurrent && (
+            <p className="mt-1 text-xs text-(--color-text-tertiary)">
+              As parcelas {form.installmentCurrent + 1} a {form.installmentTotal} serão criadas nos meses seguintes.
+            </p>
+          )}
         </FieldGroup>
 
         <FieldGroup label="Valor">

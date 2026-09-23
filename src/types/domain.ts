@@ -18,6 +18,7 @@ export interface Transaction {
   source: TransactionSource;
   aiConfidence: Record<string, FieldConfidence> | null;
   recurrenceRuleId: string | null;
+  installmentGroupId: string | null;
   createdAt: string;
   updatedAt: string;
 }

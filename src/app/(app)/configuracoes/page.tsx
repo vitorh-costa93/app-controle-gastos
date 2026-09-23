@@ -8,24 +8,21 @@ import {
   createCategory,
   createTransactionType,
 } from "@/lib/data/reference";
-import { listActiveRecurrenceRules } from "@/lib/data/recurrence";
 import { listSalaryEntries } from "@/lib/data/salary";
 import { getStartingBalance, getFixedSalaryTaxAmountCents } from "@/lib/data/settings";
 import { findVariableSalaryPerson, findFixedSalaryPerson } from "@/lib/domain/salary";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { ReferenceListEditor } from "@/components/configuracoes/ReferenceListEditor";
-import { RecurrenceRulesEditor } from "@/components/configuracoes/RecurrenceRulesEditor";
 import { SalaryProjectionEditor } from "@/components/configuracoes/SalaryProjectionEditor";
 import { StartingBalanceEditor } from "@/components/configuracoes/StartingBalanceEditor";
 import { TaxSettingsEditor } from "@/components/configuracoes/TaxSettingsEditor";
 
 export default async function ConfiguracoesPage() {
-  const [people, categories, types, recurrenceRules, startingBalance, fixedSalaryTaxAmountCents] = await Promise.all([
+  const [people, categories, types, startingBalance, fixedSalaryTaxAmountCents] = await Promise.all([
     listPeople(),
     listCategories(),
     listTransactionTypes(),
-    listActiveRecurrenceRules(),
     getStartingBalance(),
     getFixedSalaryTaxAmountCents(),
   ]);
@@ -38,7 +35,7 @@ export default async function ConfiguracoesPage() {
     <div>
       <PageHeader
         title="Configurações"
-        subtitle="Gerencie pessoas, categorias, tipos e recorrências do casal."
+        subtitle="Gerencie pessoas, categorias, tipos, salário e impostos do casal. Recorrências ficam em Cadastro → Recorrências."
       />
 
       <div className="flex flex-col gap-6">
@@ -47,8 +44,6 @@ export default async function ConfiguracoesPage() {
           <ReferenceListEditor title="Categorias" table="categories" items={categories} onCreate={createCategory} />
           <ReferenceListEditor title="Tipos" table="transaction_types" items={types} onCreate={createTransactionType} />
         </div>
-
-        <RecurrenceRulesEditor rules={recurrenceRules} people={people} categories={categories} types={types} />
 
         {variableSalaryPerson && (
           <SalaryProjectionEditor entries={salaryEntries} person={variableSalaryPerson} />

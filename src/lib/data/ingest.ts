@@ -120,10 +120,7 @@ export async function submitIngest(
         }
         rawItems = await extractTransactionsFromText(transcript, context);
       } else if (method === "pdf") {
-        const { PDFParse } = await import("pdf-parse");
-        const buffer = Buffer.from(await file.arrayBuffer());
-        const parser = new PDFParse({ data: buffer });
-        const parsed = await parser.getText();
+        const parsed = await extractPdfText(Buffer.from(await file.arrayBuffer()));
         if (uploadedFileId) {
           await supabase.from("uploaded_files").update({ raw_text: parsed.text }).eq("id", uploadedFileId);
         }
@@ -292,4 +289,25 @@ export async function confirmExtractedRows(
   revalidatePath("/cadastro");
   revalidatePath("/analise");
   return { ok: true, count: result.count };
+}
+
+/**
+ * pdf.js espera APIs de navegador (DOMMatrix, ImageData, Path2D) que não existem no
+ * Node da Vercel — sem o polyfill o envio de PDF falhava com "DOMMatrix is not defined".
+ */
+async function extractPdfText(buffer: Buffer): Promise<{ text: string }> {
+  const canvas = await import("@napi-rs/canvas");
+  const g = globalThis as Record<string, unknown>;
+  g.DOMMatrix ??= canvas.DOMMatrix;
+  g.ImageData ??= canvas.ImageData;
+  g.Path2D ??= canvas.Path2D;
+
+  const { CanvasFactory } = await import("pdf-parse/worker");
+  const { PDFParse } = await import("pdf-parse");
+  const parser = new PDFParse({ data: buffer, CanvasFactory });
+  try {
+    return await parser.getText();
+  } finally {
+    await parser.destroy();
+  }
 }

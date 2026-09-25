@@ -1,13 +1,14 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown } from "lucide-react";
 import { fetchPivotTransactions } from "@/lib/data/analysis";
 import { Transaction } from "@/types/domain";
 import { Person, Category, TransactionType } from "@/types/db";
 import { Card } from "@/components/ui/Card";
 import { formatCurrencyBRL, formatReferenceMonthShort } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/cn";
+import { FilterButton, ValuesFilter } from "./filter-popup";
 
 type DimensionKey = "month" | "person" | "category" | "type" | "fixedVariable" | "direction" | "considered";
 type MeasureKey = "sum" | "count" | "avg";
@@ -41,12 +42,12 @@ interface PivotNode {
   children: PivotNode[];
 }
 
-// Cores do tema "tabela dinâmica" (cinza-esverdeado), usadas em cabeçalho, chips e totais.
+// Mesmos tokens visuais do restante do app (tabelas e chips de Análise).
 const TONE = {
-  header: "bg-[#e3ebe9]",
-  border: "border-[#cbd8d5]",
-  chip: "bg-[#e3ebe9] border-[#cbd8d5]",
-  active: "bg-[#dbe7e4]",
+  header: "bg-(--color-surface-secondary)",
+  border: "border-(--color-border)",
+  chip: "bg-(--color-surface-secondary) border-(--color-border)",
+  active: "bg-(--color-primary-soft)",
 };
 
 /**
@@ -76,6 +77,9 @@ export function PivotTable({
   const [totals, setTotals] = useState<TotalsMode>("both");
   const [directionFilter, setDirectionFilter] = useState<"expense" | "income" | "all">("expense");
   const [dragOverZone, setDragOverZone] = useState<ZoneKey | null>(null);
+  const [valueFilters, setValueFilters] = useState<Partial<Record<DimensionKey, Set<string>>>>({});
+  const [openFilter, setOpenFilter] = useState<DimensionKey | null>(null);
+  const [valueSort, setValueSort] = useState<{ colKey: string; measure: MeasureKey; dir: "asc" | "desc" } | null>(null);
 
   const peopleById = useMemo(() => new Map(people.map((p) => [p.id, p.name])), [people]);
   const categoriesById = useMemo(() => new Map(categories.map((c) => [c.id, c.name])), [categories]);
@@ -130,8 +134,33 @@ export function PivotTable({
 
   const filtered = useMemo(() => {
     const all = transactions ?? [];
-    return directionFilter === "all" ? all : all.filter((t) => t.direction === directionFilter);
-  }, [transactions, directionFilter]);
+    const byDirection = directionFilter === "all" ? all : all.filter((t) => t.direction === directionFilter);
+    const active = Object.entries(valueFilters).filter(([, set]) => set && set.size > 0) as [DimensionKey, Set<string>][];
+    if (active.length === 0) return byDirection;
+    return byDirection.filter((t) => active.every(([dim, set]) => set.has(dimValue(dim, t))));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transactions, directionFilter, valueFilters, peopleById, categoriesById, typesById]);
+
+  /** Valores elegíveis de cada dimensão (na base completa) para os popups de filtro. */
+  const optionsByDimension = useMemo(() => {
+    const result = {} as Record<DimensionKey, string[]>;
+    for (const dim of DIMENSIONS) {
+      const seen = new Map<string, string>();
+      for (const t of transactions ?? []) {
+        const label = dimValue(dim.key, t);
+        if (!seen.has(label)) seen.set(label, dimSortKey(dim.key, t));
+      }
+      result[dim.key] = [...seen.entries()].sort(([, a], [, b]) => a.localeCompare(b, "pt-BR")).map(([label]) => label);
+    }
+    return result;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transactions, peopleById, categoriesById, typesById]);
+
+  /** Transações de uma linha que caem numa coluna ("" ou "__total__" = todas). */
+  function columnItems(items: Transaction[], colKey: string): Transaction[] {
+    if (colKey === "" || colKey === "__total__") return items;
+    return items.filter((t) => colDims.map((d) => dimValue(d, t)).join(" › ") === colKey);
+  }
 
   const tree = useMemo<PivotNode[]>(() => {
     if (rowDims.length === 0) return [{ path: "/total", label: "Total", level: 0, items: filtered, children: [] }];
@@ -147,8 +176,14 @@ export function PivotTable({
         else groups.set(label, { sortKey: dimSortKey(dim, t), items: [t] });
       }
       const direction = descDims.includes(dim) ? -1 : 1;
+      const spec = valueSort;
+      const valueOf = (items: Transaction[]) => (spec ? aggregate(columnItems(items, spec.colKey), spec.measure) : 0);
       return [...groups.entries()]
-        .sort(([, a], [, b]) => direction * a.sortKey.localeCompare(b.sortKey, "pt-BR"))
+        .sort(([, a], [, b]) =>
+          spec
+            ? (spec.dir === "asc" ? 1 : -1) * (valueOf(a.items) - valueOf(b.items))
+            : direction * a.sortKey.localeCompare(b.sortKey, "pt-BR")
+        )
         .map(([label, group]) => {
           const path = `${parentPath}/${label}`;
           return { path, label, level, items: group.items, children: build(group.items, level + 1, path) };
@@ -156,7 +191,7 @@ export function PivotTable({
     }
     return build(filtered, 0, "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtered, rowDims, descDims, peopleById, categoriesById, typesById]);
+  }, [filtered, rowDims, colDims, descDims, valueSort, peopleById, categoriesById, typesById]);
 
   const columnLabels = useMemo(() => {
     if (colDims.length === 0) return [""];
@@ -234,6 +269,47 @@ export function PivotTable({
     setMeasures((prev) => (prev.includes(measure) ? prev : [...prev, measure]));
   }
 
+  function toggleValueSort(colKey: string, measure: MeasureKey) {
+    setValueSort((prev) =>
+      !prev || prev.colKey !== colKey || prev.measure !== measure
+        ? { colKey, measure, dir: "desc" }
+        : prev.dir === "desc"
+          ? { colKey, measure, dir: "asc" }
+          : null
+    );
+  }
+
+  function toggleDimensionValue(dim: DimensionKey, value: string) {
+    setValueFilters((prev) => {
+      const next = new Set(prev[dim] ?? []);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
+      return { ...prev, [dim]: next };
+    });
+  }
+
+  /** Cabeçalho de medida: clicar ordena as linhas por esse valor (maior → menor → menor → maior → padrão). */
+  function measureTh(colKey: string, m: MeasureKey) {
+    const active = valueSort?.colKey === colKey && valueSort.measure === m;
+    const Icon = !active ? ArrowUpDown : valueSort.dir === "asc" ? ArrowUp : ArrowDown;
+    return (
+      <th
+        key={`${colKey}-${m}`}
+        aria-sort={active ? (valueSort.dir === "asc" ? "ascending" : "descending") : "none"}
+        className={cn("border-b px-3 py-2 text-right text-xs font-medium text-(--color-text-tertiary)", TONE.header, TONE.border)}
+      >
+        <button
+          type="button"
+          onClick={() => toggleValueSort(colKey, m)}
+          className={cn("inline-flex items-center gap-1 hover:text-(--color-text-primary)", active && "text-(--color-text-primary)")}
+        >
+          {measureLabel(m)}
+          <Icon size={12} className={active ? "" : "opacity-40"} />
+        </button>
+      </th>
+    );
+  }
+
   function toggleSortDirection(dim: DimensionKey) {
     setDescDims((prev) => (prev.includes(dim) ? prev.filter((d) => d !== dim) : [...prev, dim]));
   }
@@ -305,14 +381,14 @@ export function PivotTable({
             <p className="mb-2 text-[11px] font-semibold tracking-wider text-(--color-text-secondary)">DIMENSÕES</p>
             <ul className="mb-4 space-y-1">
               {DIMENSIONS.map((d) => (
-                <li key={d.key}>
+                <li key={d.key} className="flex items-center gap-1">
                   <button
                     type="button"
                     draggable
                     onDragStart={(e) => handleDragStart("dimension", d.key, e)}
                     onClick={() => toggleFromList("dimension", d.key)}
                     className={cn(
-                      "flex w-full cursor-grab items-center justify-between rounded-md border px-2.5 py-1.5 text-left text-sm active:cursor-grabbing",
+                      "flex min-w-0 flex-1 cursor-grab items-center justify-between rounded-md border px-2.5 py-1.5 text-left text-sm active:cursor-grabbing",
                       usedDimensions.has(d.key)
                         ? cn(TONE.active, TONE.border)
                         : "border-(--color-border) bg-(--color-surface) hover:bg-(--color-surface-secondary)"
@@ -325,6 +401,20 @@ export function PivotTable({
                       </span>
                     )}
                   </button>
+                  <FilterButton
+                    active={(valueFilters[d.key]?.size ?? 0) > 0}
+                    open={openFilter === d.key}
+                    onToggle={() => setOpenFilter((cur) => (cur === d.key ? null : d.key))}
+                    onClose={() => setOpenFilter(null)}
+                    align="left"
+                  >
+                    <ValuesFilter
+                      options={optionsByDimension[d.key]}
+                      selected={valueFilters[d.key] ?? new Set()}
+                      onToggle={(v) => toggleDimensionValue(d.key, v)}
+                      onClear={() => setValueFilters((prev) => ({ ...prev, [d.key]: new Set() }))}
+                    />
+                  </FilterButton>
                 </li>
               ))}
             </ul>
@@ -468,7 +558,7 @@ export function PivotTable({
                         <tr>
                           <th
                             rowSpan={2}
-                            className={cn("border px-3 py-2 text-left align-bottom font-semibold", TONE.header, TONE.border)}
+                            className={cn("border-b px-3 py-2 text-left align-bottom text-xs font-medium text-(--color-text-tertiary)", TONE.header, TONE.border)}
                           >
                             {rowHeaderLabel}
                           </th>
@@ -476,7 +566,7 @@ export function PivotTable({
                             <th
                               key={c}
                               colSpan={measures.length}
-                              className={cn("border px-3 py-2 text-center font-semibold", TONE.header, TONE.border)}
+                              className={cn("border-b px-3 py-2 text-center text-xs font-medium text-(--color-text-tertiary)", TONE.header, TONE.border)}
                             >
                               {c}
                             </th>
@@ -484,42 +574,22 @@ export function PivotTable({
                           {showTotalColumn && (
                             <th
                               colSpan={measures.length}
-                              className={cn("border px-3 py-2 text-center font-semibold", TONE.header, TONE.border)}
+                              className={cn("border-b px-3 py-2 text-center text-xs font-medium text-(--color-text-tertiary)", TONE.header, TONE.border)}
                             >
                               Total
                             </th>
                           )}
                         </tr>
                         <tr>
-                          {[...columnLabels, ...(showTotalColumn ? ["__total__"] : [])].map((c) =>
-                            measures.map((m) => (
-                              <th
-                                key={`${c}-${m}`}
-                                className={cn(
-                                  "border px-3 py-1.5 text-right font-mono text-xs font-semibold",
-                                  TONE.header,
-                                  TONE.border
-                                )}
-                              >
-                                {measureLabel(m)}
-                              </th>
-                            ))
-                          )}
+                          {[...columnLabels, ...(showTotalColumn ? ["__total__"] : [])].map((c) => measures.map((m) => measureTh(c, m)))}
                         </tr>
                       </>
                     ) : (
                       <tr>
-                        <th className={cn("border px-3 py-2 text-left font-semibold", TONE.header, TONE.border)}>
+                        <th className={cn("border-b px-3 py-2 text-left text-xs font-medium text-(--color-text-tertiary)", TONE.header, TONE.border)}>
                           {rowHeaderLabel}
                         </th>
-                        {measures.map((m) => (
-                          <th
-                            key={m}
-                            className={cn("border px-3 py-2 text-right font-mono text-xs font-semibold", TONE.header, TONE.border)}
-                          >
-                            {measureLabel(m)}
-                          </th>
-                        ))}
+                        {measures.map((m) => measureTh("", m))}
                       </tr>
                     )}
                   </thead>
@@ -530,7 +600,7 @@ export function PivotTable({
                       const open = canToggle && isExpanded(node);
                       return (
                         <tr key={node.path} className={cn(canToggle && "font-medium")}>
-                          <td className={cn("border px-3 py-1.5", TONE.border)} style={{ paddingLeft: 12 + node.level * 18 }}>
+                          <td className={cn("border-b px-3 py-1.5", TONE.border)} style={{ paddingLeft: 12 + node.level * 18 }}>
                             {canToggle ? (
                               <button
                                 type="button"
@@ -557,7 +627,7 @@ export function PivotTable({
                             measures.map((m) => (
                               <td
                                 key={`${ci}-${m}`}
-                                className={cn("border px-3 py-1.5 text-right font-mono tabular-nums", TONE.border)}
+                                className={cn("border-b px-3 py-1.5 text-right tabular-nums", TONE.border)}
                               >
                                 {formatValue(m, aggregate(bucket, m))}
                               </td>
@@ -568,7 +638,7 @@ export function PivotTable({
                               <td
                                 key={`t-${m}`}
                                 className={cn(
-                                  "border px-3 py-1.5 text-right font-mono font-semibold tabular-nums",
+                                  "border-b px-3 py-1.5 text-right font-semibold tabular-nums",
                                   TONE.header,
                                   TONE.border
                                 )}
@@ -590,7 +660,7 @@ export function PivotTable({
                   {showTotalRow && filtered.length > 0 && (
                     <tfoot>
                       <tr className="font-semibold">
-                        <td className={cn("border px-3 py-2", TONE.header, TONE.border)}>Total geral</td>
+                        <td className={cn("border-b px-3 py-2", TONE.header, TONE.border)}>Total geral</td>
                         {(() => {
                           const { perColumn, all } = cellsFor(filtered);
                           return (
@@ -599,7 +669,7 @@ export function PivotTable({
                                 measures.map((m) => (
                                   <td
                                     key={`${ci}-${m}`}
-                                    className={cn("border px-3 py-2 text-right font-mono tabular-nums", TONE.header, TONE.border)}
+                                    className={cn("border-b px-3 py-2 text-right tabular-nums", TONE.header, TONE.border)}
                                   >
                                     {formatValue(m, aggregate(bucket, m))}
                                   </td>
@@ -609,7 +679,7 @@ export function PivotTable({
                                 measures.map((m) => (
                                   <td
                                     key={`t-${m}`}
-                                    className={cn("border px-3 py-2 text-right font-mono tabular-nums", TONE.header, TONE.border)}
+                                    className={cn("border-b px-3 py-2 text-right tabular-nums", TONE.header, TONE.border)}
                                   >
                                     {formatValue(m, aggregate(all, m))}
                                   </td>

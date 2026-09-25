@@ -8,7 +8,7 @@ import {
   createCategory,
   createTransactionType,
 } from "@/lib/data/reference";
-import { listSalaryEntries } from "@/lib/data/salary";
+import { listEffectiveSalaryEntries } from "@/lib/data/salary";
 import { getStartingBalance, getFixedSalaryTaxAmountCents } from "@/lib/data/settings";
 import { findVariableSalaryPerson, findFixedSalaryPerson } from "@/lib/domain/salary";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -29,7 +29,7 @@ export default async function ConfiguracoesPage() {
 
   const variableSalaryPerson = findVariableSalaryPerson(people);
   const fixedSalaryPerson = findFixedSalaryPerson(people);
-  const salaryEntries = variableSalaryPerson ? await listSalaryEntries(variableSalaryPerson.id) : [];
+  const salaryEntries = variableSalaryPerson ? await listEffectiveSalaryEntries(variableSalaryPerson.id) : [];
 
   return (
     <div>

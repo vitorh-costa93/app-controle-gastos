@@ -4,7 +4,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { centsToReaisString } from "./mappers";
 import { listPeople } from "./reference";
-import { listSalaryEntries } from "./salary";
+import { listEffectiveSalaryEntries } from "./salary";
 import { getFixedSalaryTaxAmountCents } from "./settings";
 import {
   findVariableSalaryPerson,
@@ -49,7 +49,7 @@ export async function syncComputedTaxTransactions(): Promise<
   let created = 0;
 
   if (variablePerson) {
-    const salaryEntries = await listSalaryEntries(variablePerson.id);
+    const salaryEntries = await listEffectiveSalaryEntries(variablePerson.id);
     for (const revenueMonth of windowMonths) {
       const gross = projectSalaryForMonth(salaryEntries, revenueMonth);
       if (gross <= 0) continue;

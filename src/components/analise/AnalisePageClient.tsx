@@ -1,21 +1,26 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { Sparkles } from "lucide-react";
 import { AnalysisData, fetchAnalysisPageData, getMonthInsight } from "@/lib/data/analysis";
-import { Transaction } from "@/types/domain";
+import { MonthlyOccurrence } from "@/types/domain";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { MonthSelector } from "./MonthSelector";
 import { PersonFilter } from "./PersonFilter";
 import { KpiCard } from "./KpiCard";
 import { CategoryDonutChart } from "./CategoryDonutChart";
 import { MonthlyEvolutionChart } from "./MonthlyEvolutionChart";
-import { ComparativeBars } from "./ComparativeBars";
+import { SavingsRateCard } from "./SavingsRateCard";
+import { CompositionCard } from "./CompositionCard";
+import { CommitmentsChart } from "./CommitmentsChart";
+import { CategoryChangesCard } from "./CategoryChangesCard";
+import { PersonComparisonCard } from "./PersonComparisonCard";
+import { TopExpensesCard } from "./TopExpensesCard";
 import { AnaliseTransactionsTable } from "./AnaliseTransactionsTable";
 import { PivotTable } from "./PivotTable";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { addMonths, formatCurrencyBRL } from "@/lib/utils/format";
+import { addMonths } from "@/lib/utils/format";
 
 export function AnalisePageClient({
   initialMonth,
@@ -27,7 +32,7 @@ export function AnalisePageClient({
   initialMonth: string;
   initialPersonId: string;
   initialData: AnalysisData;
-  initialTransactions: Transaction[];
+  initialTransactions: MonthlyOccurrence[];
   initialInsight: string;
 }) {
   const [month, setMonth] = useState(initialMonth);
@@ -84,8 +89,6 @@ export function AnalisePageClient({
     data.currentSummary.expenseCents > 0 ||
     data.categoryBreakdown.length > 0;
 
-  const categoriesById = useMemo(() => new Map(data.categories.map((c) => [c.id, c.name])), [data.categories]);
-  const topExpenses = data.categoryBreakdown.slice(0, 5);
 
   return (
     <div>
@@ -108,7 +111,7 @@ export function AnalisePageClient({
         <EmptyState title="Ainda não existem dados suficientes neste mês para uma análise confiável. Cadastre alguns lançamentos em Cadastro." />
       ) : (
         <div className={"flex min-w-0 flex-col gap-6 transition-opacity" + (isPending ? " opacity-60" : "")}>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <KpiCard
               label="Entradas"
               currentCents={data.currentSummary.incomeCents}
@@ -128,6 +131,11 @@ export function AnalisePageClient({
               previousCents={data.previousSummary?.leftoverCents ?? null}
               tone="info"
             />
+            <SavingsRateCard
+              current={data.currentSummary}
+              previous={data.previousSummary}
+              history={data.summaries}
+            />
           </div>
 
           <Card className="p-5">
@@ -136,42 +144,31 @@ export function AnalisePageClient({
               breakdown={data.categoryBreakdown}
               categories={data.categories}
               totalCents={data.currentSummary.expenseCents}
+              occurrences={monthTransactions}
+              people={data.people}
             />
           </Card>
 
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <CompositionCard commitment={data.commitments[0]} />
+            <CommitmentsChart commitments={data.commitments} />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <CategoryChangesCard changes={data.categoryChanges} categories={data.categories} />
+            <PersonComparisonCard summaries={data.personSummaries} people={data.people} />
+          </div>
+
           <Card className="p-5">
-            <h3 className="mb-4 text-[15px] font-semibold">Evolução do que sobrou (últimos 12 meses)</h3>
+            <h3 className="mb-1 text-[15px] font-semibold">Evolução do que sobrou (últimos 12 meses)</h3>
+            <p className="mb-4 text-xs text-(--color-text-tertiary)">
+              Barras: quanto sobrou. Linha: taxa de poupança (% da renda).
+            </p>
             <MonthlyEvolutionChart summaries={data.summaries} selectedMonth={month} />
           </Card>
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <Card className="p-5">
-              <h3 className="mb-4 text-[15px] font-semibold">Maiores gastos do mês</h3>
-              <ul className="space-y-3">
-                {topExpenses.map((item, i) => (
-                  <li key={i} className="flex items-center justify-between text-sm">
-                    <span>{item.categoryId ? categoriesById.get(item.categoryId) ?? "Outros" : "Sem categoria"}</span>
-                    <span className="tabular-nums font-medium">
-                      {formatCurrencyBRL(item.amountCents)}{" "}
-                      <span className="text-(--color-text-tertiary)">({item.percent.toFixed(1)}%)</span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-
-            <Card className="p-5">
-              <h3 className="mb-4 text-[15px] font-semibold">Comparativo de saídas</h3>
-              <ComparativeBars
-                categoryBreakdown={data.categoryBreakdown}
-                typeBreakdown={data.typeBreakdown}
-                personBreakdown={data.personBreakdown}
-                categories={data.categories}
-                types={data.types}
-                people={data.people}
-              />
-            </Card>
-          </div>
+            <TopExpensesCard occurrences={monthTransactions} people={data.people} />
 
           <Card className="flex gap-3 bg-(--color-primary-soft)/40 p-4">
             <Sparkles size={18} className="mt-0.5 shrink-0 text-(--color-primary)" />
@@ -187,13 +184,7 @@ export function AnalisePageClient({
               )}
             </div>
           </Card>
-
-          <PivotTable
-            transactions={monthTransactions}
-            people={data.people}
-            categories={data.categories}
-            types={data.types}
-          />
+          </div>
 
           <AnaliseTransactionsTable
             transactions={monthTransactions}
@@ -201,6 +192,8 @@ export function AnalisePageClient({
             categories={data.categories}
             types={data.types}
           />
+
+          <PivotTable people={data.people} categories={data.categories} types={data.types} />
         </div>
       )}
     </div>

@@ -4,7 +4,8 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { reaisStringToCents, centsToReaisString } from "./mappers";
 import { findVariableSalaryPerson, buildProjectedSalaryOccurrences } from "@/lib/domain/salary";
-import { toReferenceMonth } from "@/lib/utils/format";
+import { getPsiMonthlyRevenueCents } from "./psi-revenue";
+import { addMonths, toReferenceMonth } from "@/lib/utils/format";
 import { Person, TransactionType } from "@/types/db";
 import { Transaction, MonthlyOccurrence } from "@/types/domain";
 
@@ -40,6 +41,26 @@ export async function listSalaryEntries(personId: string): Promise<SalaryEntry[]
     .order("reference_month", { ascending: true });
   if (error) throw new Error("Não foi possível carregar o histórico de salário.");
   return (data as SalaryEntryRow[]).map(mapSalaryEntryRow);
+}
+
+/**
+ * Salário efetivo por mês: o "Valor Recebido" do dashboard-psi (fonte principal) ou, sem dado dele,
+ * o valor digitado. O salário cai um mês depois do mês do psi (set/26 lá = out/26 aqui).
+ * É o que alimenta projeção e impostos.
+ */
+export async function listEffectiveSalaryEntries(personId: string): Promise<SalaryEntry[]> {
+  const [manual, psiByMonth] = await Promise.all([listSalaryEntries(personId), getPsiMonthlyRevenueCents()]);
+  const merged = new Map(manual.map((e) => [e.referenceMonth, e]));
+  const psiShifted = new Map(Object.entries(psiByMonth).map(([month, cents]) => [addMonths(month, 1), cents]));
+  for (const [referenceMonth, psiCents] of psiShifted) {
+    merged.set(referenceMonth, {
+      id: `psi:${referenceMonth}`,
+      personId,
+      referenceMonth,
+      amountCents: psiCents,
+    });
+  }
+  return [...merged.values()].sort((a, b) => a.referenceMonth.localeCompare(b.referenceMonth));
 }
 
 /** Cria ou atualiza o valor de um mês (um mês só pode ter um lançamento por pessoa). */
@@ -94,7 +115,7 @@ export async function getSalaryProjectionOccurrences(
   if (!variablePerson) return new Map();
   if (personFilter && personFilter !== variablePerson.id) return new Map();
 
-  const salaryEntries = await listSalaryEntries(variablePerson.id);
+  const salaryEntries = await listEffectiveSalaryEntries(variablePerson.id);
   const currentMonth = toReferenceMonth(new Date());
   const monthsWithRealIncome = new Set(
     allTransactions

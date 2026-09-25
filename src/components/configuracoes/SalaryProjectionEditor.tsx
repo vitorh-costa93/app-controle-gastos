@@ -11,6 +11,8 @@ import { syncComputedTaxTransactions } from "@/lib/data/taxes";
 import { projectSalaryForMonth, sumRevenueLast12Months, calcJaquelineTaxCents } from "@/lib/domain/salary";
 import { Person } from "@/types/db";
 
+const isFromPsi = (entry: SalaryEntry) => entry.id.startsWith("psi:");
+
 export function SalaryProjectionEditor({ entries: initialEntries, person }: { entries: SalaryEntry[]; person: Person }) {
   const [entries, setEntries] = useState(initialEntries);
   const [month, setMonth] = useState(toReferenceMonth(new Date()));
@@ -21,10 +23,13 @@ export function SalaryProjectionEditor({ entries: initialEntries, person }: { en
     startTransition(async () => {
       const result = await upsertSalaryEntry(person.id, month, amountCents);
       if (result.ok) {
+        // Meses que o dashboard-psi já informa não são sobrescritos pelo valor digitado.
         setEntries((prev) =>
-          [...prev.filter((e) => e.referenceMonth !== month), result.data].sort((a, b) =>
-            a.referenceMonth.localeCompare(b.referenceMonth)
-          )
+          prev.some((e) => e.referenceMonth === month && isFromPsi(e))
+            ? prev
+            : [...prev.filter((e) => e.referenceMonth !== month), result.data].sort((a, b) =>
+                a.referenceMonth.localeCompare(b.referenceMonth)
+              )
         );
         setAmountCents(0);
         syncComputedTaxTransactions();
@@ -58,10 +63,11 @@ export function SalaryProjectionEditor({ entries: initialEntries, person }: { en
     <Card className="p-5">
       <h3 className="mb-1 text-[15px] font-semibold">Salário variável — {person.name}</h3>
       <p className="mb-4 text-xs text-(--color-text-tertiary)">
-        Cadastre só o mês que já fechou. Os próximos são projetados pela média móvel dos últimos 12 meses (por dia
-        útil). O imposto (DAS pelo Simples Nacional — Anexo V — mais INSS de 11% sobre 28% do faturamento) é
-        referente ao faturamento deste mês, mas é pago no mês seguinte — o lançamento real de imposto aparece em
-        Análise com essa defasagem.
+        O valor de cada mês vem automaticamente do dashboard-psi (KPI &quot;Valor Recebido&quot;): o que é set/26 lá
+        entra aqui como out/26. Só cadastre manualmente um mês que o dashboard-psi
+        não cobre. Os meses seguintes são projetados pelo mesmo mês do ano anterior × a variação YoY acumulada no
+        ano até o último mês real. O imposto (DAS pelo Simples Nacional mais INSS de 11% sobre 28% do faturamento)
+        é pago no mês seguinte — o lançamento real de imposto aparece em Análise com essa defasagem.
       </p>
 
       <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_auto]">
@@ -111,13 +117,17 @@ export function SalaryProjectionEditor({ entries: initialEntries, person }: { en
                 <span>
                   {formatReferenceMonthShort(e.referenceMonth)} — {formatCurrencyBRL(e.amountCents)}
                 </span>
-                <button
-                  type="button"
-                  className="text-xs text-(--color-text-tertiary) hover:text-(--color-negative)"
-                  onClick={() => handleDelete(e.id)}
-                >
-                  remover
-                </button>
+                {isFromPsi(e) ? (
+                  <span className="text-xs text-(--color-text-tertiary)">dashboard-psi</span>
+                ) : (
+                  <button
+                    type="button"
+                    className="text-xs text-(--color-text-tertiary) hover:text-(--color-negative)"
+                    onClick={() => handleDelete(e.id)}
+                  >
+                    remover
+                  </button>
+                )}
               </li>
             ))}
           </ul>

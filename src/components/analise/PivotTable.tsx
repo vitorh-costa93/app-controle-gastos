@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { ChevronDown } from "lucide-react";
+import { fetchPivotTransactions } from "@/lib/data/analysis";
 import { Transaction } from "@/types/domain";
 import { Person, Category, TransactionType } from "@/types/db";
 import { Card } from "@/components/ui/Card";
@@ -38,13 +40,16 @@ function findField(kind: string, key: string): FieldChip | undefined {
   return ALL_FIELDS.find((f) => f.kind === kind && f.key === key);
 }
 
+/**
+ * Tabela dinâmica de uso pontual: independe do mês e da origem selecionados na página — trabalha
+ * sempre sobre a base completa (todos os meses, todas as pessoas). Vem recolhida e só busca os
+ * dados quando é aberta pela primeira vez.
+ */
 export function PivotTable({
-  transactions,
   people,
   categories,
   types,
 }: {
-  transactions: Transaction[];
   people: Person[];
   categories: Category[];
   types: TransactionType[];
@@ -54,6 +59,20 @@ export function PivotTable({
   const [valuesField, setValuesField] = useState<FieldChip>(MEASURE_FIELDS[0]); // Soma
   const [directionFilter, setDirectionFilter] = useState<"expense" | "income" | "all">("expense");
   const [dragOverZone, setDragOverZone] = useState<ZoneKey | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [transactions, setTransactions] = useState<Transaction[] | null>(null);
+  const [loadError, setLoadError] = useState(false);
+
+  function toggleExpanded() {
+    const next = !expanded;
+    setExpanded(next);
+    if (next && transactions === null) {
+      setLoadError(false);
+      fetchPivotTransactions()
+        .then(setTransactions)
+        .catch(() => setLoadError(true));
+    }
+  }
 
   const peopleById = useMemo(() => new Map(people.map((p) => [p.id, p.name])), [people]);
   const categoriesById = useMemo(() => new Map(categories.map((c) => [c.id, c.name])), [categories]);
@@ -85,7 +104,10 @@ export function PivotTable({
   }
 
   const filtered = useMemo(
-    () => (directionFilter === "all" ? transactions : transactions.filter((t) => t.direction === directionFilter)),
+    () => {
+      const all = transactions ?? [];
+      return directionFilter === "all" ? all : all.filter((t) => t.direction === directionFilter);
+    },
     [transactions, directionFilter]
   );
 
@@ -163,7 +185,32 @@ export function PivotTable({
 
   return (
     <Card className="min-w-0 p-5">
-      <h3 className="mb-1 text-[15px] font-semibold">Tabela dinâmica</h3>
+      <button
+        type="button"
+        onClick={toggleExpanded}
+        aria-expanded={expanded}
+        className="flex w-full items-center justify-between text-left"
+      >
+        <span>
+          <span className="block text-[15px] font-semibold">Tabela dinâmica</span>
+          <span className="block text-xs text-(--color-text-tertiary)">
+            Base completa — todos os meses e origens, sem os filtros da página.
+          </span>
+        </span>
+        <ChevronDown
+          size={18}
+          className={cn("shrink-0 text-(--color-text-tertiary) transition-transform", expanded && "rotate-180")}
+        />
+      </button>
+
+      {expanded && transactions === null && (
+        <p className="py-8 text-center text-xs text-(--color-text-tertiary)">
+          {loadError ? "Não foi possível carregar os lançamentos. Recolha e abra de novo." : "Carregando..."}
+        </p>
+      )}
+
+      {expanded && transactions !== null && (
+        <div className="mt-4">
       <p className="mb-4 text-xs text-(--color-text-tertiary)">
         Arraste os campos abaixo para Linhas, Colunas ou Valores pra montar sua própria agregação.
       </p>
@@ -282,6 +329,8 @@ export function PivotTable({
               </tfoot>
             )}
           </table>
+        </div>
+      )}
         </div>
       )}
     </Card>

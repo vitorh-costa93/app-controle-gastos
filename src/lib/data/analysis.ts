@@ -1,12 +1,13 @@
 "use server";
 
 import { unstable_cache } from "next/cache";
-import { listConsideredTransactionsInRange, listTransactionsForMonth } from "./transactions";
+import { listAllTransactions, listConsideredTransactionsInRange, listTransactionsForMonth } from "./transactions";
 import { listActiveRecurrenceRules } from "./recurrence";
 import { listPeople, listCategories, listTransactionTypes } from "./reference";
 import { getSalaryProjectionOccurrences } from "./salary";
 import { buildMonthOccurrences, monthRange } from "@/lib/domain/recurrence";
 import { summarizeMonth, breakdownByCategory, breakdownByKey } from "@/lib/domain/finance";
+import { computeCommitment, computeCategoryChanges, MonthCommitment, CategoryChange } from "@/lib/domain/insights";
 import { addMonths } from "@/lib/utils/format";
 import { isAiConfigured, generateMonthInsight } from "@/lib/ai/openai";
 import { MonthSummary, MonthlyOccurrence, Transaction } from "@/types/domain";
@@ -20,6 +21,14 @@ export interface AnalysisData {
   categoryBreakdown: { categoryId: string | null; amountCents: number; percent: number }[];
   typeBreakdown: { key: string | null; amountCents: number; percent: number }[];
   personBreakdown: { key: string | null; amountCents: number; percent: number }[];
+  /** Renda × gastos fixos/parcelas/variáveis do mês selecionado e dos 5 seguintes (o primeiro item é o mês selecionado). */
+  commitments: MonthCommitment[];
+  /** Categorias que mais subiram/caíram contra a média dos 3 meses anteriores (vazio sem histórico). */
+  categoryChanges: CategoryChange[];
+  /** Entradas e saídas do mês por pessoa. */
+  personSummaries: { personId: string; incomeCents: number; expenseCents: number }[];
+  /** Ocorrências projetadas do mês (recorrências fixas + salário estimado) que ainda não viraram lançamento real. */
+  projectedOccurrences: MonthlyOccurrence[];
   people: Person[];
   categories: Category[];
   types: TransactionType[];
@@ -35,7 +44,7 @@ export const getAnalysisData = unstable_cache(
   async (month: string, personId?: string): Promise<AnalysisData> => {
     return computeAnalysisData(month, personId);
   },
-  ["analysis-data"],
+  ["analysis-data-v3"],
   { tags: ["analysis"], revalidate: 300 }
 );
 
@@ -67,6 +76,38 @@ async function computeAnalysisData(month: string, personId?: string): Promise<An
   const typeBreakdown = breakdownByKey(currentOccurrences, "typeId", "expense");
   const personBreakdown = breakdownByKey(currentOccurrences, "personId", "expense");
 
+  // Compromissos já assumidos: o mês selecionado + os próximos 5 (fixos e parcelas já lançadas).
+  const futureMonths = monthRange(addMonths(month, 1), addMonths(month, 5));
+  const futureAll = await listConsideredTransactionsInRange(futureMonths[0], futureMonths[futureMonths.length - 1]);
+  const futureTransactions = personId ? futureAll.filter((t) => t.personId === personId) : futureAll;
+  const futureSalary = await getSalaryProjectionOccurrences(
+    futureMonths,
+    people,
+    types,
+    [...allTransactions, ...futureAll],
+    personId
+  );
+  const commitments = [
+    computeCommitment(month, currentOccurrences),
+    ...futureMonths.map((m) =>
+      computeCommitment(m, [...buildMonthOccurrences(m, futureTransactions, rules), ...(futureSalary.get(m) ?? [])])
+    ),
+  ];
+
+  // O que mudou: mês atual contra a média dos 3 meses anteriores que têm algum dado.
+  const previousBreakdowns = [3, 2, 1]
+    .map((back) => addMonths(month, -back))
+    .map((m) => withSalary(m, buildMonthOccurrences(m, transactions, rules)))
+    .filter((occ) => occ.some((o) => o.considered))
+    .map((occ) => breakdownByCategory(occ, "expense"));
+  const categoryChanges = computeCategoryChanges(categoryBreakdown, previousBreakdowns);
+
+  const personIds = new Set(currentOccurrences.filter((o) => o.considered).map((o) => o.personId));
+  const personSummaries = Array.from(personIds).map((id) => {
+    const s = summarizeMonth(month, currentOccurrences.filter((o) => o.personId === id));
+    return { personId: id, incomeCents: s.incomeCents, expenseCents: s.expenseCents };
+  });
+
   const monthsWithData = summaries.filter((s) => s.incomeCents > 0 || s.expenseCents > 0).length;
 
   return {
@@ -77,6 +118,10 @@ async function computeAnalysisData(month: string, personId?: string): Promise<An
     categoryBreakdown,
     typeBreakdown,
     personBreakdown,
+    commitments,
+    categoryChanges,
+    personSummaries,
+    projectedOccurrences: currentOccurrences.filter((o) => o.origin === "projected"),
     people,
     categories,
     types,
@@ -94,12 +139,41 @@ async function computeAnalysisData(month: string, personId?: string): Promise<An
 export async function fetchAnalysisPageData(
   month: string,
   personId?: string
-): Promise<{ data: AnalysisData; transactions: Transaction[] }> {
-  const [data, transactions] = await Promise.all([
+): Promise<{ data: AnalysisData; transactions: MonthlyOccurrence[] }> {
+  const [data, realTransactions] = await Promise.all([
     getAnalysisData(month, personId),
     listTransactionsForMonth(month, personId),
   ]);
-  return { data, transactions };
+  return { data, transactions: buildMovementRows(realTransactions, data.projectedOccurrences) };
+}
+
+/**
+ * Linhas da tabela "Todas as movimentações do mês": lançamentos reais + as ocorrências
+ * fixas projetadas (ex.: um gasto fixo cadastrado num mês continua aparecendo nos meses
+ * seguintes até a data de encerramento). Um lançamento real já vinculado à mesma regra
+ * (mesmo que "não considerado") substitui a projeção, para nunca duplicar.
+ */
+function buildMovementRows(real: Transaction[], projected: MonthlyOccurrence[]): MonthlyOccurrence[] {
+  const materializedRules = new Set(real.map((t) => t.recurrenceRuleId).filter((id): id is string => Boolean(id)));
+  const realRows = real.map<MonthlyOccurrence>((t) => ({
+    id: t.id,
+    origin: "real",
+    registrationDate: t.registrationDate,
+    referenceMonth: t.referenceMonth,
+    personId: t.personId,
+    direction: t.direction,
+    fixedVariable: t.fixedVariable,
+    typeId: t.typeId,
+    categoryId: t.categoryId,
+    installmentCurrent: t.installmentCurrent,
+    installmentTotal: t.installmentTotal,
+    amountCents: t.amountCents,
+    description: t.description,
+    considered: t.considered,
+    recurrenceRuleId: t.recurrenceRuleId,
+  }));
+  const projectedRows = projected.filter((o) => !o.recurrenceRuleId || !materializedRules.has(o.recurrenceRuleId));
+  return [...realRows, ...projectedRows].sort((a, b) => b.registrationDate.localeCompare(a.registrationDate));
 }
 
 export async function getMonthInsight(month: string, personId?: string): Promise<string> {
@@ -135,4 +209,9 @@ Gere um insight curto e objetivo sobre a evolução dos gastos.`;
   } catch {
     return "Não foi possível gerar o insight agora. Tente novamente mais tarde.";
   }
+}
+
+/** Base completa (todos os meses, todas as pessoas) da tabela dinâmica — carregada só quando ela é aberta. */
+export async function fetchPivotTransactions(): Promise<Transaction[]> {
+  return listAllTransactions();
 }

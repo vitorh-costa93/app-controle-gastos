@@ -105,13 +105,45 @@ export function computeRollingAverageCentsPerDay(entries: SalaryEntry[], asOfMon
   return totalCents / totalDays;
 }
 
-/** Valor bruto de um mês: real se já cadastrado, senão projetado pela média móvel × dias úteis do mês alvo. */
+/**
+ * Variação YoY acumulada no ano até o último mês real: soma dos meses de janeiro até esse mês
+ * neste ano contra os mesmos meses do ano anterior (só meses presentes nos dois anos). 0 se não há base.
+ */
+export function computeYtdYoyRate(entries: SalaryEntry[]): number {
+  if (entries.length === 0) return 0;
+  const byMonth = new Map(entries.map((e) => [e.referenceMonth, e.amountCents]));
+  const lastMonth = entries.reduce((max, e) => (e.referenceMonth > max ? e.referenceMonth : max), "");
+  const year = Number(lastMonth.slice(0, 4));
+  const lastMonthNumber = Number(lastMonth.slice(5, 7));
+  let current = 0;
+  let previous = 0;
+  for (let m = 1; m <= lastMonthNumber; m++) {
+    const mm = String(m).padStart(2, "0");
+    const cur = byMonth.get(`${year}-${mm}`);
+    const prev = byMonth.get(`${year - 1}-${mm}`);
+    if (cur === undefined || prev === undefined) continue;
+    current += cur;
+    previous += prev;
+  }
+  return previous > 0 ? current / previous - 1 : 0;
+}
+
+/**
+ * Valor bruto de um mês: real se já existe; senão, o mesmo mês do ano anterior × (1 + YoY acumulado
+ * até o último mês real). Sem base no ano anterior, cai na média móvel por dia útil.
+ */
 export function projectSalaryForMonth(entries: SalaryEntry[], targetMonth: string): number {
   const real = entries.find((e) => e.referenceMonth === targetMonth);
   if (real) return real.amountCents;
+
+  const lastRealMonth = entries.reduce((max, e) => (e.referenceMonth > max ? e.referenceMonth : max), "");
+  if (targetMonth > lastRealMonth) {
+    const base = projectSalaryForMonth(entries, addMonths(targetMonth, -12));
+    if (base > 0) return Math.round(base * (1 + computeYtdYoyRate(entries)));
+  }
+
   const ratePerDay = computeRollingAverageCentsPerDay(entries, targetMonth);
-  const days = countBusinessDaysInMonth(targetMonth);
-  return Math.round(ratePerDay * days);
+  return Math.round(ratePerDay * countBusinessDaysInMonth(targetMonth));
 }
 
 /**

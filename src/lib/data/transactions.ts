@@ -628,3 +628,26 @@ export async function findPotentialDuplicates(
       : null;
   });
 }
+
+/** Todos os lançamentos reais de todos os meses e pessoas — alimenta a tabela dinâmica, que nunca é filtrada por mês/origem. */
+export async function listAllTransactions(): Promise<Transaction[]> {
+  const supabase = createAdminClient();
+  const pageSize = 1000;
+  const rows: TransactionRow[] = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from("transactions")
+      .select("*")
+      .is("deleted_at", null)
+      .order("registration_date", { ascending: false })
+      .order("id", { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (error) {
+      console.error("listAllTransactions failed:", error);
+      throw new Error("Não foi possível carregar os lançamentos.");
+    }
+    rows.push(...(data as TransactionRow[]));
+    if (data.length < pageSize) break;
+  }
+  return rows.map(mapTransactionRow);
+}

@@ -1,44 +1,53 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { fetchPivotTransactions } from "@/lib/data/analysis";
 import { Transaction } from "@/types/domain";
 import { Person, Category, TransactionType } from "@/types/db";
 import { Card } from "@/components/ui/Card";
-import { formatCurrencyBRL } from "@/lib/utils/format";
+import { formatCurrencyBRL, formatReferenceMonthShort } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/cn";
 
-type DimensionKey = "person" | "category" | "type" | "fixedVariable" | "direction" | "considered";
+type DimensionKey = "month" | "person" | "category" | "type" | "fixedVariable" | "direction" | "considered";
 type MeasureKey = "sum" | "count" | "avg";
 type ZoneKey = "rows" | "columns" | "values";
+type TotalsMode = "none" | "row" | "column" | "both";
 
-interface FieldChip {
-  kind: "dimension" | "measure";
-  key: DimensionKey | MeasureKey;
+const DIMENSIONS: { key: DimensionKey; label: string }[] = [
+  { key: "month", label: "Mês" },
+  { key: "person", label: "Origem" },
+  { key: "category", label: "Categoria" },
+  { key: "type", label: "Tipo" },
+  { key: "fixedVariable", label: "Fixo/Variável" },
+  { key: "direction", label: "Direção" },
+  { key: "considered", label: "Considerado" },
+];
+
+const MEASURES: { key: MeasureKey; label: string }[] = [
+  { key: "sum", label: "Soma (R$)" },
+  { key: "count", label: "Quantidade" },
+  { key: "avg", label: "Média (R$)" },
+];
+
+const dimensionLabel = (key: DimensionKey) => DIMENSIONS.find((d) => d.key === key)?.label ?? key;
+const measureLabel = (key: MeasureKey) => MEASURES.find((m) => m.key === key)?.label ?? key;
+
+interface PivotNode {
+  path: string;
   label: string;
+  level: number;
+  items: Transaction[];
+  children: PivotNode[];
 }
 
-const DIMENSION_FIELDS: FieldChip[] = [
-  { kind: "dimension", key: "person", label: "Origem" },
-  { kind: "dimension", key: "category", label: "Categoria" },
-  { kind: "dimension", key: "type", label: "Tipo" },
-  { kind: "dimension", key: "fixedVariable", label: "Fixo/Variável" },
-  { kind: "dimension", key: "direction", label: "Direção" },
-  { kind: "dimension", key: "considered", label: "Considerado" },
-];
-
-const MEASURE_FIELDS: FieldChip[] = [
-  { kind: "measure", key: "sum", label: "Soma (R$)" },
-  { kind: "measure", key: "count", label: "Quantidade" },
-  { kind: "measure", key: "avg", label: "Média (R$)" },
-];
-
-const ALL_FIELDS: FieldChip[] = [...DIMENSION_FIELDS, ...MEASURE_FIELDS];
-
-function findField(kind: string, key: string): FieldChip | undefined {
-  return ALL_FIELDS.find((f) => f.kind === kind && f.key === key);
-}
+// Cores do tema "tabela dinâmica" (cinza-esverdeado), usadas em cabeçalho, chips e totais.
+const TONE = {
+  header: "bg-[#e3ebe9]",
+  border: "border-[#cbd8d5]",
+  chip: "bg-[#e3ebe9] border-[#cbd8d5]",
+  active: "bg-[#dbe7e4]",
+};
 
 /**
  * Tabela dinâmica de uso pontual: independe do mês e da origem selecionados na página — trabalha
@@ -54,14 +63,23 @@ export function PivotTable({
   categories: Category[];
   types: TransactionType[];
 }) {
-  const [rowsField, setRowsField] = useState<FieldChip | null>(DIMENSION_FIELDS[1]); // Categoria
-  const [columnsField, setColumnsField] = useState<FieldChip | null>(null);
-  const [valuesField, setValuesField] = useState<FieldChip>(MEASURE_FIELDS[0]); // Soma
-  const [directionFilter, setDirectionFilter] = useState<"expense" | "income" | "all">("expense");
-  const [dragOverZone, setDragOverZone] = useState<ZoneKey | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[] | null>(null);
   const [loadError, setLoadError] = useState(false);
+
+  const [rowDims, setRowDims] = useState<DimensionKey[]>(["category"]);
+  const [colDims, setColDims] = useState<DimensionKey[]>([]);
+  const [measures, setMeasures] = useState<MeasureKey[]>(["sum"]);
+  const [descDims, setDescDims] = useState<DimensionKey[]>([]);
+  const [expandTo, setExpandTo] = useState<number | null>(null);
+  const [toggled, setToggled] = useState<Set<string>>(new Set());
+  const [totals, setTotals] = useState<TotalsMode>("both");
+  const [directionFilter, setDirectionFilter] = useState<"expense" | "income" | "all">("expense");
+  const [dragOverZone, setDragOverZone] = useState<ZoneKey | null>(null);
+
+  const peopleById = useMemo(() => new Map(people.map((p) => [p.id, p.name])), [people]);
+  const categoriesById = useMemo(() => new Map(categories.map((c) => [c.id, c.name])), [categories]);
+  const typesById = useMemo(() => new Map(types.map((t) => [t.id, t.name])), [types]);
 
   function toggleExpanded() {
     const next = !expanded;
@@ -74,12 +92,10 @@ export function PivotTable({
     }
   }
 
-  const peopleById = useMemo(() => new Map(people.map((p) => [p.id, p.name])), [people]);
-  const categoriesById = useMemo(() => new Map(categories.map((c) => [c.id, c.name])), [categories]);
-  const typesById = useMemo(() => new Map(types.map((t) => [t.id, t.name])), [types]);
-
   function dimValue(dim: DimensionKey, t: Transaction): string {
     switch (dim) {
+      case "month":
+        return formatReferenceMonthShort(t.referenceMonth);
       case "person":
         return peopleById.get(t.personId) ?? "—";
       case "category":
@@ -95,6 +111,11 @@ export function PivotTable({
     }
   }
 
+  /** Chave de ordenação: meses seguem o calendário, o resto segue o texto. */
+  function dimSortKey(dim: DimensionKey, t: Transaction): string {
+    return dim === "month" ? t.referenceMonth : dimValue(dim, t);
+  }
+
   function aggregate(list: Transaction[], measure: MeasureKey): number {
     if (list.length === 0) return 0;
     const sum = list.reduce((s, t) => s + t.amountCents, 0);
@@ -103,61 +124,129 @@ export function PivotTable({
     return Math.round(sum / list.length);
   }
 
-  const filtered = useMemo(
-    () => {
-      const all = transactions ?? [];
-      return directionFilter === "all" ? all : all.filter((t) => t.direction === directionFilter);
-    },
-    [transactions, directionFilter]
-  );
+  function formatValue(measure: MeasureKey, v: number): string {
+    return measure === "count" ? String(v) : formatCurrencyBRL(v);
+  }
 
-  const pivot = useMemo(() => {
-    if (!rowsField) return null;
-    const rowDim = rowsField.key as DimensionKey;
-    const colDim = columnsField ? (columnsField.key as DimensionKey) : null;
-    const measure = valuesField.key as MeasureKey;
+  const filtered = useMemo(() => {
+    const all = transactions ?? [];
+    return directionFilter === "all" ? all : all.filter((t) => t.direction === directionFilter);
+  }, [transactions, directionFilter]);
 
-    const rowKeys = new Set<string>();
-    const colKeys = new Set<string>();
-    const groups = new Map<string, Transaction[]>();
+  const tree = useMemo<PivotNode[]>(() => {
+    if (rowDims.length === 0) return [{ path: "/total", label: "Total", level: 0, items: filtered, children: [] }];
 
-    for (const t of filtered) {
-      const rk = dimValue(rowDim, t);
-      const ck = colDim ? dimValue(colDim, t) : "Total";
-      rowKeys.add(rk);
-      colKeys.add(ck);
-      const key = `${rk}||${ck}`;
-      const arr = groups.get(key);
-      if (arr) arr.push(t);
-      else groups.set(key, [t]);
+    function build(items: Transaction[], level: number, parentPath: string): PivotNode[] {
+      if (level >= rowDims.length) return [];
+      const dim = rowDims[level];
+      const groups = new Map<string, { sortKey: string; items: Transaction[] }>();
+      for (const t of items) {
+        const label = dimValue(dim, t);
+        const group = groups.get(label);
+        if (group) group.items.push(t);
+        else groups.set(label, { sortKey: dimSortKey(dim, t), items: [t] });
+      }
+      const direction = descDims.includes(dim) ? -1 : 1;
+      return [...groups.entries()]
+        .sort(([, a], [, b]) => direction * a.sortKey.localeCompare(b.sortKey, "pt-BR"))
+        .map(([label, group]) => {
+          const path = `${parentPath}/${label}`;
+          return { path, label, level, items: group.items, children: build(group.items, level + 1, path) };
+        });
     }
+    return build(filtered, 0, "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered, rowDims, descDims, peopleById, categoriesById, typesById]);
 
-    const rowsArr = Array.from(rowKeys).sort();
-    const colsArr = colDim ? Array.from(colKeys).sort() : ["Total"];
+  const columnLabels = useMemo(() => {
+    if (colDims.length === 0) return [""];
+    const seen = new Map<string, string>();
+    for (const t of filtered) {
+      const label = colDims.map((d) => dimValue(d, t)).join(" › ");
+      if (!seen.has(label)) seen.set(label, colDims.map((d) => dimSortKey(d, t)).join("|"));
+    }
+    const direction = descDims.includes(colDims[0]) ? -1 : 1;
+    return [...seen.entries()].sort(([, a], [, b]) => direction * a.localeCompare(b, "pt-BR")).map(([label]) => label);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered, colDims, descDims, peopleById, categoriesById, typesById]);
 
-    const matrix = new Map<string, number>();
-    for (const rk of rowsArr) {
-      for (const ck of colsArr) {
-        matrix.set(`${rk}||${ck}`, aggregate(groups.get(`${rk}||${ck}`) ?? [], measure));
+  const hasCols = colDims.length > 0;
+  const levelsShown = Math.max(1, Math.min(expandTo ?? rowDims.length, Math.max(rowDims.length, 1)));
+  const showTotalRow = (totals === "row" || totals === "both") && rowDims.length > 0;
+  const showTotalColumn = (totals === "column" || totals === "both") && hasCols;
+
+  function isExpanded(node: PivotNode): boolean {
+    const byDefault = node.level < levelsShown - 1;
+    return toggled.has(node.path) ? !byDefault : byDefault;
+  }
+
+  const visibleRows = useMemo(() => {
+    const out: PivotNode[] = [];
+    function walk(nodes: PivotNode[]) {
+      for (const node of nodes) {
+        out.push(node);
+        if (node.children.length > 0 && isExpanded(node)) walk(node.children);
       }
     }
-
-    const rowTotals = new Map<string, number>();
-    for (const rk of rowsArr) {
-      rowTotals.set(rk, aggregate(filtered.filter((t) => dimValue(rowDim, t) === rk), measure));
-    }
-
-    const colTotals = new Map<string, number>();
-    for (const ck of colsArr) {
-      colTotals.set(ck, colDim ? aggregate(filtered.filter((t) => dimValue(colDim, t) === ck), measure) : aggregate(filtered, measure));
-    }
-
-    return { rowDim, rows: rowsArr, cols: colsArr, matrix, rowTotals, colTotals, grandTotal: aggregate(filtered, measure) };
+    walk(tree);
+    return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtered, rowsField, columnsField, valuesField]);
+  }, [tree, levelsShown, toggled]);
 
-  function formatValue(v: number): string {
-    return valuesField.key === "count" ? String(v) : formatCurrencyBRL(v);
+  /** Transações de uma linha separadas por coluna, mais o total da linha. */
+  function cellsFor(items: Transaction[]): { perColumn: Transaction[][]; all: Transaction[] } {
+    if (!hasCols) return { perColumn: [items], all: items };
+    const buckets = new Map<string, Transaction[]>();
+    for (const t of items) {
+      const label = colDims.map((d) => dimValue(d, t)).join(" › ");
+      const arr = buckets.get(label);
+      if (arr) arr.push(t);
+      else buckets.set(label, [t]);
+    }
+    return { perColumn: columnLabels.map((c) => buckets.get(c) ?? []), all: items };
+  }
+
+  const valueColumnCount = columnLabels.length * measures.length + (showTotalColumn ? measures.length : 0);
+
+  // ---- Edição dos shelves (arrastar, clicar na lista ou remover pelo ×) ----
+
+  function resetRowState(next: DimensionKey[]) {
+    setRowDims(next);
+    setExpandTo(null);
+    setToggled(new Set());
+  }
+
+  function addDimension(zone: "rows" | "columns", dim: DimensionKey) {
+    const nextRows = rowDims.filter((d) => d !== dim);
+    const nextCols = colDims.filter((d) => d !== dim);
+    if (zone === "rows") nextRows.push(dim);
+    else nextCols.push(dim);
+    resetRowState(nextRows);
+    setColDims(nextCols);
+  }
+
+  function removeDimension(dim: DimensionKey) {
+    resetRowState(rowDims.filter((d) => d !== dim));
+    setColDims(colDims.filter((d) => d !== dim));
+  }
+
+  function addMeasure(measure: MeasureKey) {
+    setMeasures((prev) => (prev.includes(measure) ? prev : [...prev, measure]));
+  }
+
+  function toggleSortDirection(dim: DimensionKey) {
+    setDescDims((prev) => (prev.includes(dim) ? prev.filter((d) => d !== dim) : [...prev, dim]));
+  }
+
+  function toggleFromList(kind: "dimension" | "measure", key: string) {
+    if (kind === "measure") {
+      const measure = key as MeasureKey;
+      setMeasures((prev) => (prev.includes(measure) ? prev.filter((m) => m !== measure) : [...prev, measure]));
+      return;
+    }
+    const dim = key as DimensionKey;
+    if (rowDims.includes(dim) || colDims.includes(dim)) removeDimension(dim);
+    else addDimension("rows", dim);
   }
 
   function handleDrop(zone: ZoneKey, e: React.DragEvent) {
@@ -165,23 +254,23 @@ export function PivotTable({
     setDragOverZone(null);
     const kind = e.dataTransfer.getData("kind");
     const key = e.dataTransfer.getData("key");
-    const field = findField(kind, key);
-    if (!field) return;
-
     if (zone === "values") {
-      if (field.kind === "measure") setValuesField(field);
+      if (kind === "measure") addMeasure(key as MeasureKey);
       return;
     }
-    if (field.kind !== "dimension") return;
-    if (zone === "rows") setRowsField(field);
-    else setColumnsField(field);
+    if (kind === "dimension") addDimension(zone, key as DimensionKey);
   }
 
-  function handleDragStart(field: FieldChip, e: React.DragEvent) {
-    e.dataTransfer.setData("kind", field.kind);
-    e.dataTransfer.setData("key", field.key);
+  function handleDragStart(kind: "dimension" | "measure", key: string, e: React.DragEvent) {
+    e.dataTransfer.setData("kind", kind);
+    e.dataTransfer.setData("key", key);
     e.dataTransfer.effectAllowed = "copy";
   }
+
+  const usedDimensions = new Set<DimensionKey>([...rowDims, ...colDims]);
+  const rowHeaderLabel = rowDims.length > 0 ? rowDims.map(dimensionLabel).join(" › ") : "Total";
+  const controlClass =
+    "h-8 rounded-(--radius-md) border border-[#cbd8d5] bg-(--color-surface) px-2 text-xs text-(--color-text-primary)";
 
   return (
     <Card className="min-w-0 p-5">
@@ -210,149 +299,353 @@ export function PivotTable({
       )}
 
       {expanded && transactions !== null && (
-        <div className="mt-4">
-      <p className="mb-4 text-xs text-(--color-text-tertiary)">
-        Arraste os campos abaixo para Linhas, Colunas ou Valores pra montar sua própria agregação.
-      </p>
-
-      <div className="mb-4 flex flex-wrap gap-2">
-        {ALL_FIELDS.map((field) => (
-          <div
-            key={`${field.kind}-${field.key}`}
-            draggable
-            onDragStart={(e) => handleDragStart(field, e)}
-            className={cn(
-              "cursor-grab select-none rounded-full border px-3 py-1.5 text-xs font-medium active:cursor-grabbing",
-              field.kind === "measure"
-                ? "border-(--color-primary)/30 bg-(--color-primary-soft) text-(--color-primary)"
-                : "border-(--color-border) bg-(--color-surface-secondary) text-(--color-text-secondary)"
-            )}
-          >
-            {field.label}
-          </div>
-        ))}
-      </div>
-
-      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <DropZone
-          label="Linhas"
-          field={rowsField}
-          isOver={dragOverZone === "rows"}
-          onDragOver={() => setDragOverZone("rows")}
-          onDragLeave={() => setDragOverZone(null)}
-          onDrop={(e) => handleDrop("rows", e)}
-          onClear={() => setRowsField(null)}
-        />
-        <DropZone
-          label="Colunas (opcional)"
-          field={columnsField}
-          isOver={dragOverZone === "columns"}
-          onDragOver={() => setDragOverZone("columns")}
-          onDragLeave={() => setDragOverZone(null)}
-          onDrop={(e) => handleDrop("columns", e)}
-          onClear={() => setColumnsField(null)}
-        />
-        <DropZone
-          label="Valores"
-          field={valuesField}
-          isOver={dragOverZone === "values"}
-          onDragOver={() => setDragOverZone("values")}
-          onDragLeave={() => setDragOverZone(null)}
-          onDrop={(e) => handleDrop("values", e)}
-        />
-      </div>
-
-      <div className="mb-4">
-        <label className="mr-2 text-xs font-medium text-(--color-text-secondary)">Direção</label>
-        <select
-          value={directionFilter}
-          onChange={(e) => setDirectionFilter(e.target.value as "expense" | "income" | "all")}
-          className="h-8 rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-2 text-xs"
-        >
-          <option value="expense">Saídas</option>
-          <option value="income">Entradas</option>
-          <option value="all">Entradas e saídas</option>
-        </select>
-      </div>
-
-      {!pivot ? (
-        <p className="py-8 text-center text-xs text-(--color-text-tertiary)">
-          Arraste um campo para &quot;Linhas&quot; pra começar.
-        </p>
-      ) : (
-        <div className="min-w-0 overflow-x-auto">
-          <table className="w-full min-w-[480px] text-sm">
-            <thead>
-              <tr className="border-b border-(--color-border) text-left text-xs text-(--color-text-tertiary)">
-                <th className="px-3 py-2 font-medium">{rowsField?.label}</th>
-                {pivot.cols.map((c) => (
-                  <th key={c} className="px-3 py-2 text-right font-medium">
-                    {c}
-                  </th>
-                ))}
-                <th className="px-3 py-2 text-right font-medium">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pivot.rows.map((r) => (
-                <tr key={r} className="border-b border-(--color-border) last:border-0">
-                  <td className="px-3 py-2">{r}</td>
-                  {pivot.cols.map((c) => (
-                    <td key={c} className="px-3 py-2 text-right tabular-nums text-(--color-text-secondary)">
-                      {formatValue(pivot.matrix.get(`${r}||${c}`) ?? 0)}
-                    </td>
-                  ))}
-                  <td className="px-3 py-2 text-right font-medium tabular-nums">
-                    {formatValue(pivot.rowTotals.get(r) ?? 0)}
-                  </td>
-                </tr>
+        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
+          {/* Lista de campos */}
+          <aside className={cn("h-fit rounded-(--radius-lg) border p-3", TONE.border)}>
+            <p className="mb-2 text-[11px] font-semibold tracking-wider text-(--color-text-secondary)">DIMENSÕES</p>
+            <ul className="mb-4 space-y-1">
+              {DIMENSIONS.map((d) => (
+                <li key={d.key}>
+                  <button
+                    type="button"
+                    draggable
+                    onDragStart={(e) => handleDragStart("dimension", d.key, e)}
+                    onClick={() => toggleFromList("dimension", d.key)}
+                    className={cn(
+                      "flex w-full cursor-grab items-center justify-between rounded-md border px-2.5 py-1.5 text-left text-sm active:cursor-grabbing",
+                      usedDimensions.has(d.key)
+                        ? cn(TONE.active, TONE.border)
+                        : "border-(--color-border) bg-(--color-surface) hover:bg-(--color-surface-secondary)"
+                    )}
+                  >
+                    {d.label}
+                    {usedDimensions.has(d.key) && (
+                      <span className="text-[11px] font-semibold text-(--color-text-secondary)">
+                        {rowDims.includes(d.key) ? "L" : "C"}
+                      </span>
+                    )}
+                  </button>
+                </li>
               ))}
-              {pivot.rows.length === 0 && (
-                <tr>
-                  <td colSpan={pivot.cols.length + 2} className="px-3 py-8 text-center text-(--color-text-tertiary)">
-                    Nenhuma movimentação encontrada com esses filtros.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-            {pivot.rows.length > 0 && (
-              <tfoot>
-                <tr className="border-t-2 border-(--color-border) font-medium">
-                  <td className="px-3 py-2">Total</td>
-                  {pivot.cols.map((c) => (
-                    <td key={c} className="px-3 py-2 text-right tabular-nums">
-                      {formatValue(pivot.colTotals.get(c) ?? 0)}
-                    </td>
+            </ul>
+            <p className="mb-2 text-[11px] font-semibold tracking-wider text-(--color-text-secondary)">MEDIDAS</p>
+            <ul className="space-y-1">
+              {MEASURES.map((m) => (
+                <li key={m.key}>
+                  <button
+                    type="button"
+                    draggable
+                    onDragStart={(e) => handleDragStart("measure", m.key, e)}
+                    onClick={() => toggleFromList("measure", m.key)}
+                    className={cn(
+                      "flex w-full cursor-grab items-center rounded-md border px-2.5 py-1.5 text-left text-sm active:cursor-grabbing",
+                      measures.includes(m.key)
+                        ? cn(TONE.active, TONE.border, "font-semibold")
+                        : "border-(--color-border) bg-(--color-surface) hover:bg-(--color-surface-secondary)"
+                    )}
+                  >
+                    {m.label}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </aside>
+
+          <div className="min-w-0">
+            {/* Shelves lado a lado */}
+            <div className="mb-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+              <Shelf
+                label="LINHAS"
+                isOver={dragOverZone === "rows"}
+                onDragOver={() => setDragOverZone("rows")}
+                onDragLeave={() => setDragOverZone(null)}
+                onDrop={(e) => handleDrop("rows", e)}
+                isEmpty={rowDims.length === 0}
+              >
+                {rowDims.map((d) => (
+                  <ShelfChip
+                    key={d}
+                    label={dimensionLabel(d)}
+                    arrow={descDims.includes(d) ? "←" : "→"}
+                    onArrow={() => toggleSortDirection(d)}
+                    onRemove={() => removeDimension(d)}
+                  />
+                ))}
+              </Shelf>
+              <Shelf
+                label="COLUNAS"
+                isOver={dragOverZone === "columns"}
+                onDragOver={() => setDragOverZone("columns")}
+                onDragLeave={() => setDragOverZone(null)}
+                onDrop={(e) => handleDrop("columns", e)}
+                isEmpty={colDims.length === 0}
+              >
+                {colDims.map((d) => (
+                  <ShelfChip
+                    key={d}
+                    label={dimensionLabel(d)}
+                    arrow={descDims.includes(d) ? "←" : "→"}
+                    onArrow={() => toggleSortDirection(d)}
+                    onRemove={() => removeDimension(d)}
+                  />
+                ))}
+              </Shelf>
+              <Shelf
+                label="VALORES"
+                isOver={dragOverZone === "values"}
+                onDragOver={() => setDragOverZone("values")}
+                onDragLeave={() => setDragOverZone(null)}
+                onDrop={(e) => handleDrop("values", e)}
+                isEmpty={measures.length === 0}
+              >
+                {measures.map((m) => (
+                  <ShelfChip
+                    key={m}
+                    label={measureLabel(m)}
+                    onRemove={() => setMeasures((prev) => prev.filter((x) => x !== m))}
+                  />
+                ))}
+              </Shelf>
+            </div>
+
+            {/* Controles */}
+            <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-(--color-text-secondary)">
+              <label className="flex items-center gap-2">
+                Expandir até
+                <select
+                  className={controlClass}
+                  value={levelsShown}
+                  disabled={rowDims.length < 2}
+                  onChange={(e) => {
+                    setExpandTo(Number(e.target.value));
+                    setToggled(new Set());
+                  }}
+                >
+                  {(rowDims.length > 0 ? rowDims : (["category"] as DimensionKey[])).map((d, i) => (
+                    <option key={d} value={i + 1}>
+                      {dimensionLabel(d)}
+                    </option>
                   ))}
-                  <td className="px-3 py-2 text-right tabular-nums">{formatValue(pivot.grandTotal)}</td>
-                </tr>
-              </tfoot>
+                </select>
+              </label>
+              <label className="flex items-center gap-2">
+                Totais
+                <select className={controlClass} value={totals} onChange={(e) => setTotals(e.target.value as TotalsMode)}>
+                  <option value="both">Ambos</option>
+                  <option value="row">Só linha total</option>
+                  <option value="column">Só coluna total</option>
+                  <option value="none">Nenhum</option>
+                </select>
+              </label>
+              <label className="flex items-center gap-2">
+                Direção
+                <select
+                  className={controlClass}
+                  value={directionFilter}
+                  onChange={(e) => setDirectionFilter(e.target.value as "expense" | "income" | "all")}
+                >
+                  <option value="expense">Saídas</option>
+                  <option value="income">Entradas</option>
+                  <option value="all">Entradas e saídas</option>
+                </select>
+              </label>
+              <span className="text-(--color-text-tertiary)">
+                {visibleRows.length} linhas · {valueColumnCount} colunas de valor
+              </span>
+            </div>
+
+            {/* Tabela */}
+            {measures.length === 0 ? (
+              <p className="py-8 text-center text-xs text-(--color-text-tertiary)">
+                Arraste (ou clique em) uma medida para começar.
+              </p>
+            ) : (
+              <div className={cn("min-w-0 overflow-x-auto rounded-md border", TONE.border)}>
+                <table className="w-full border-collapse text-sm">
+                  <thead>
+                    {hasCols ? (
+                      <>
+                        <tr>
+                          <th
+                            rowSpan={2}
+                            className={cn("border px-3 py-2 text-left align-bottom font-semibold", TONE.header, TONE.border)}
+                          >
+                            {rowHeaderLabel}
+                          </th>
+                          {columnLabels.map((c) => (
+                            <th
+                              key={c}
+                              colSpan={measures.length}
+                              className={cn("border px-3 py-2 text-center font-semibold", TONE.header, TONE.border)}
+                            >
+                              {c}
+                            </th>
+                          ))}
+                          {showTotalColumn && (
+                            <th
+                              colSpan={measures.length}
+                              className={cn("border px-3 py-2 text-center font-semibold", TONE.header, TONE.border)}
+                            >
+                              Total
+                            </th>
+                          )}
+                        </tr>
+                        <tr>
+                          {[...columnLabels, ...(showTotalColumn ? ["__total__"] : [])].map((c) =>
+                            measures.map((m) => (
+                              <th
+                                key={`${c}-${m}`}
+                                className={cn(
+                                  "border px-3 py-1.5 text-right font-mono text-xs font-semibold",
+                                  TONE.header,
+                                  TONE.border
+                                )}
+                              >
+                                {measureLabel(m)}
+                              </th>
+                            ))
+                          )}
+                        </tr>
+                      </>
+                    ) : (
+                      <tr>
+                        <th className={cn("border px-3 py-2 text-left font-semibold", TONE.header, TONE.border)}>
+                          {rowHeaderLabel}
+                        </th>
+                        {measures.map((m) => (
+                          <th
+                            key={m}
+                            className={cn("border px-3 py-2 text-right font-mono text-xs font-semibold", TONE.header, TONE.border)}
+                          >
+                            {measureLabel(m)}
+                          </th>
+                        ))}
+                      </tr>
+                    )}
+                  </thead>
+                  <tbody>
+                    {visibleRows.map((node) => {
+                      const { perColumn, all } = cellsFor(node.items);
+                      const canToggle = node.children.length > 0;
+                      const open = canToggle && isExpanded(node);
+                      return (
+                        <tr key={node.path} className={cn(canToggle && "font-medium")}>
+                          <td className={cn("border px-3 py-1.5", TONE.border)} style={{ paddingLeft: 12 + node.level * 18 }}>
+                            {canToggle ? (
+                              <button
+                                type="button"
+                                aria-label={open ? "Recolher" : "Expandir"}
+                                aria-expanded={open}
+                                onClick={() =>
+                                  setToggled((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(node.path)) next.delete(node.path);
+                                    else next.add(node.path);
+                                    return next;
+                                  })
+                                }
+                                className="mr-1.5 inline-block w-3 text-[10px] text-(--color-text-tertiary)"
+                              >
+                                {open ? "▾" : "▸"}
+                              </button>
+                            ) : (
+                              <span className="mr-1.5 inline-block w-3" />
+                            )}
+                            {node.label}
+                          </td>
+                          {perColumn.map((bucket, ci) =>
+                            measures.map((m) => (
+                              <td
+                                key={`${ci}-${m}`}
+                                className={cn("border px-3 py-1.5 text-right font-mono tabular-nums", TONE.border)}
+                              >
+                                {formatValue(m, aggregate(bucket, m))}
+                              </td>
+                            ))
+                          )}
+                          {showTotalColumn &&
+                            measures.map((m) => (
+                              <td
+                                key={`t-${m}`}
+                                className={cn(
+                                  "border px-3 py-1.5 text-right font-mono font-semibold tabular-nums",
+                                  TONE.header,
+                                  TONE.border
+                                )}
+                              >
+                                {formatValue(m, aggregate(all, m))}
+                              </td>
+                            ))}
+                        </tr>
+                      );
+                    })}
+                    {filtered.length === 0 && (
+                      <tr>
+                        <td colSpan={valueColumnCount + 1} className="px-3 py-8 text-center text-(--color-text-tertiary)">
+                          Nenhuma movimentação encontrada.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                  {showTotalRow && filtered.length > 0 && (
+                    <tfoot>
+                      <tr className="font-semibold">
+                        <td className={cn("border px-3 py-2", TONE.header, TONE.border)}>Total geral</td>
+                        {(() => {
+                          const { perColumn, all } = cellsFor(filtered);
+                          return (
+                            <Fragment>
+                              {perColumn.map((bucket, ci) =>
+                                measures.map((m) => (
+                                  <td
+                                    key={`${ci}-${m}`}
+                                    className={cn("border px-3 py-2 text-right font-mono tabular-nums", TONE.header, TONE.border)}
+                                  >
+                                    {formatValue(m, aggregate(bucket, m))}
+                                  </td>
+                                ))
+                              )}
+                              {showTotalColumn &&
+                                measures.map((m) => (
+                                  <td
+                                    key={`t-${m}`}
+                                    className={cn("border px-3 py-2 text-right font-mono tabular-nums", TONE.header, TONE.border)}
+                                  >
+                                    {formatValue(m, aggregate(all, m))}
+                                  </td>
+                                ))}
+                            </Fragment>
+                          );
+                        })()}
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
+              </div>
             )}
-          </table>
-        </div>
-      )}
+          </div>
         </div>
       )}
     </Card>
   );
 }
 
-function DropZone({
+function Shelf({
   label,
-  field,
   isOver,
+  isEmpty,
   onDragOver,
   onDragLeave,
   onDrop,
-  onClear,
+  children,
 }: {
   label: string;
-  field: FieldChip | null;
   isOver: boolean;
+  isEmpty: boolean;
   onDragOver: () => void;
   onDragLeave: () => void;
   onDrop: (e: React.DragEvent) => void;
-  onClear?: () => void;
+  children: React.ReactNode;
 }) {
   return (
     <div
@@ -363,36 +656,52 @@ function DropZone({
       onDragLeave={onDragLeave}
       onDrop={onDrop}
       className={cn(
-        "flex min-h-16 flex-col gap-1 rounded-(--radius-lg) border-2 border-dashed p-3 transition-colors",
-        isOver ? "border-(--color-primary) bg-(--color-primary-soft)/40" : "border-(--color-border)"
+        "flex min-h-14 flex-col gap-1.5 rounded-(--radius-lg) border p-2.5 transition-colors",
+        isOver ? "border-(--color-primary) bg-(--color-primary-soft)/40" : cn("border-dashed", TONE.border)
       )}
     >
-      <span className="text-[11px] font-medium text-(--color-text-tertiary)">{label}</span>
-      {field ? (
-        <div className="flex items-center justify-between">
-          <span
-            className={cn(
-              "rounded-full px-2.5 py-1 text-xs font-medium",
-              field.kind === "measure"
-                ? "bg-(--color-primary-soft) text-(--color-primary)"
-                : "bg-(--color-surface-secondary) text-(--color-text-secondary)"
-            )}
-          >
-            {field.label}
-          </span>
-          {onClear && (
-            <button
-              onClick={onClear}
-              className="text-xs text-(--color-text-tertiary) hover:text-(--color-negative)"
-              type="button"
-            >
-              remover
-            </button>
-          )}
-        </div>
-      ) : (
-        <span className="text-xs text-(--color-text-tertiary)">Solte um campo aqui</span>
-      )}
+      <span className="text-[11px] font-semibold tracking-wider text-(--color-text-secondary)">{label}</span>
+      <div className="flex flex-wrap gap-1.5">
+        {children}
+        {isEmpty && <span className="text-xs text-(--color-text-tertiary)">Solte um campo aqui</span>}
+      </div>
     </div>
+  );
+}
+
+function ShelfChip({
+  label,
+  arrow,
+  onArrow,
+  onRemove,
+}: {
+  label: string;
+  arrow?: string;
+  onArrow?: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <span className={cn("inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium", TONE.chip)}>
+      {label}
+      {arrow && (
+        <button
+          type="button"
+          onClick={onArrow}
+          aria-label={arrow === "→" ? "Ordem crescente (clique para inverter)" : "Ordem decrescente (clique para inverter)"}
+          title={arrow === "→" ? "Ordem crescente" : "Ordem decrescente"}
+          className="text-(--color-text-secondary) hover:text-(--color-text-primary)"
+        >
+          {arrow}
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label={`Remover ${label}`}
+        className="text-(--color-text-tertiary) hover:text-(--color-negative)"
+      >
+        ×
+      </button>
+    </span>
   );
 }

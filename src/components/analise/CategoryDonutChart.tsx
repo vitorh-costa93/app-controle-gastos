@@ -86,8 +86,10 @@ export function CategoryDonutChart({
 
   if (items.length === 0) return null;
 
+  // Com uma categoria aberta, a lista dos lançamentos ocupa a metade direita do card.
   return (
-    <div>
+    <div className="flex flex-col gap-4 lg:flex-row">
+    <div className={cn("min-w-0", selected ? "lg:w-1/2" : "flex-1")}>
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
       <div className="relative mx-auto h-44 w-44 shrink-0">
         <ResponsiveContainer width="100%" height="100%">
@@ -154,8 +156,10 @@ export function CategoryDonutChart({
       </ul>
     </div>
 
+    </div>
+
     {selected && (
-      <div className="mt-4 rounded-(--radius-lg) border border-(--color-border) bg-(--color-surface-secondary) p-4">
+      <div className="min-w-0 rounded-(--radius-lg) border border-(--color-border) bg-(--color-surface-secondary) p-4 lg:w-1/2">
         <div className="mb-2 flex items-center justify-between">
           <span className="flex items-center gap-2 text-sm font-semibold">
             <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: selected.color }} />

@@ -70,6 +70,8 @@ export function AnaliseTransactionsTable({
   const [range, setRange] = useState<RangeFilter>({ min: "", max: "" });
   const [sort, setSort] = useState<Sort | null>(null);
   const [openFilter, setOpenFilter] = useState<ColumnKey | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   const peopleById = useMemo(() => new Map(people.map((p) => [p.id, p])), [people]);
   const categoriesById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
@@ -143,7 +145,12 @@ export function AnaliseTransactionsTable({
     }
   }
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageRows = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
   function toggleSort(key: ColumnKey) {
+    setPage(1);
     setSort((prev) => {
       if (!prev || prev.key !== key) return { key, dir: "asc" };
       if (prev.dir === "asc") return { key, dir: "desc" };
@@ -152,6 +159,7 @@ export function AnaliseTransactionsTable({
   }
 
   function toggleValue(key: ColumnKey, value: string) {
+    setPage(1);
     setValueFilters((prev) => {
       const next = new Set(prev[key] ?? []);
       if (next.has(value)) next.delete(value);
@@ -161,6 +169,7 @@ export function AnaliseTransactionsTable({
   }
 
   function clearColumn(key: ColumnKey) {
+    setPage(1);
     if (key === "description") setDescription("");
     else if (key === "amount") setRange({ min: "", max: "" });
     else setValueFilters((prev) => ({ ...prev, [key]: new Set() }));
@@ -183,6 +192,7 @@ export function AnaliseTransactionsTable({
             <button
               type="button"
               onClick={() => {
+                setPage(1);
                 setValueFilters({});
                 setDescription("");
                 setRange({ min: "", max: "" });
@@ -249,10 +259,22 @@ export function AnaliseTransactionsTable({
                             />
                           )}
                           {col.filter === "text" && (
-                            <TextFilter value={description} onChange={setDescription} onClear={() => clearColumn(col.key)} />
+                            <TextFilter
+                              value={description}
+                              onChange={(v) => {
+                                setPage(1);
+                                setDescription(v);
+                              }}
+                              onClear={() => clearColumn(col.key)} />
                           )}
                           {col.filter === "range" && (
-                            <RangeFilterPanel value={range} onChange={setRange} onClear={() => clearColumn(col.key)} />
+                            <RangeFilterPanel
+                              value={range}
+                              onChange={(v) => {
+                                setPage(1);
+                                setRange(v);
+                              }}
+                              onClear={() => clearColumn(col.key)} />
                           )}
                         </FilterButton>
                       )}
@@ -263,7 +285,7 @@ export function AnaliseTransactionsTable({
             </tr>
           </thead>
           <tbody>
-            {filtered.map((t) => {
+            {pageRows.map((t) => {
               const person = peopleById.get(t.personId);
               const category = t.categoryId ? categoriesById.get(t.categoryId) : undefined;
               const type = t.typeId ? typesById.get(t.typeId) : undefined;
@@ -328,6 +350,52 @@ export function AnaliseTransactionsTable({
           </tbody>
         </table>
       </div>
+
+      {filtered.length > 0 && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-(--color-text-secondary)">
+          <span>
+            {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, filtered.length)} de {filtered.length}
+          </span>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-1.5">
+              Linhas por página
+              <select
+                className="h-7 rounded-(--radius-sm) border border-(--color-border) bg-(--color-surface) px-1.5 text-xs"
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(1);
+                }}
+              >
+                {[25, 50, 100].map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              disabled={currentPage <= 1}
+              onClick={() => setPage(currentPage - 1)}
+              className="h-7 rounded-(--radius-sm) border border-(--color-border) px-2.5 hover:bg-(--color-surface-secondary) disabled:opacity-40"
+            >
+              Anterior
+            </button>
+            <span className="tabular-nums">
+              Página {currentPage} de {totalPages}
+            </span>
+            <button
+              type="button"
+              disabled={currentPage >= totalPages}
+              onClick={() => setPage(currentPage + 1)}
+              className="h-7 rounded-(--radius-sm) border border-(--color-border) px-2.5 hover:bg-(--color-surface-secondary) disabled:opacity-40"
+            >
+              Próxima
+            </button>
+          </div>
+        </div>
+      )}
     </Card>
   );
 }

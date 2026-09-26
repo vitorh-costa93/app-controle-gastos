@@ -15,7 +15,7 @@ import { RawExtractedTransaction } from "@/lib/ai/openai";
 import { listPeople, listCategories, listTransactionTypes } from "@/lib/data/reference";
 import { createTransactionsBatch, findPotentialDuplicates, TransactionInput } from "@/lib/data/transactions";
 import { AiExtractedTransactionRow, ExtractedTransactionData, FieldConfidence } from "@/types/db";
-import { toISODate, toReferenceMonth, formatDateBR, addMonths } from "@/lib/utils/format";
+import { toISODate, toReferenceMonth, formatDateBR } from "@/lib/utils/format";
 
 export type IngestMethod = "audio" | "photo" | "text" | "pdf" | "csv";
 
@@ -249,9 +249,11 @@ export async function confirmExtractedRows(
         source,
       } as const;
 
-      // Lançamento da parcela extraída, mais uma linha para cada parcela restante
-      // (mesmo valor, mês de referência avançando), já que a IA só reporta a parcela atual.
-      const rowsForInstallments: TransactionInput[] = [
+      // Só a parcela que aparece no documento (ex.: 3/10). As demais parcelas — as seguintes e, se
+      // a fatura antiga chegar depois, as anteriores — são geradas/encaixadas por createTransactionsBatch
+      // (compra parcelada agrupada), que também substitui uma parcela já gerada quando a fatura daquele
+      // mês é importada, sem duplicar.
+      return [
         {
           ...base,
           registrationDate,
@@ -259,18 +261,7 @@ export async function confirmExtractedRows(
           installmentCurrent,
           installmentTotal,
         },
-      ];
-      for (let n = installmentCurrent + 1; n <= installmentTotal; n++) {
-        const monthsAhead = n - installmentCurrent;
-        rowsForInstallments.push({
-          ...base,
-          registrationDate: toISODate(new Date()),
-          referenceMonth: addMonths(referenceMonth, monthsAhead),
-          installmentCurrent: n,
-          installmentTotal,
-        });
-      }
-      return rowsForInstallments;
+      ] satisfies TransactionInput[];
     });
 
   const result = await createTransactionsBatch(inputs);

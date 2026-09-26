@@ -41,12 +41,17 @@ const MONTH_ABBREVIATIONS: Record<string, string> = {
 const MONTH_PATTERN = "jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez";
 
 // "Vencimento: 05-11-2025", "Data de vencimento 10/11/2025", "Vence em 05/11/2025", "VENCIMENTO 10 NOV 2025"
-const DUE_LABEL = "(?:data\\s+de\\s+)?(?:vencimento|vence(?:\\s+em)?)";
+const DUE_LABEL = "(?:data\\s+de\\s+)?(?:vencimento(?:\\s+em)?|vence(?:\\s+em)?)";
 const DUE_NUMERIC = new RegExp(DUE_LABEL + "\\s*(?:da\\s+fatura)?\\s*:?\\s*(\\d{2})[-/.](\\d{2})[-/.](\\d{4})", "i");
 const DUE_TEXTUAL = new RegExp(DUE_LABEL + "\\s*:?\\s*(\\d{1,2})\\s*(?:de\\s+)?(" + MONTH_PATTERN + ")[a-zç]*\\.?\\s*(?:de\\s+)?(\\d{4})", "i");
 
+// Cabeçalho do PicPay em algumas extrações: "05-02-2026 | 29-01-2026" vem ANTES dos rótulos "Vencimento: Fechamento:".
+const DUE_HEADER_DATES_FIRST = /(\d{2})-(\d{2})-(\d{4})\s*\|\s*\d{2}-\d{2}-\d{4}\s*Vencimento/i;
+
 /** Vencimento da fatura (YYYY-MM-DD) lido do texto: vale para qualquer banco que imprima "Vencimento ...". */
 export function detectDueDate(text: string): string | null {
+  const datesFirst = text.match(DUE_HEADER_DATES_FIRST);
+  if (datesFirst) return `${datesFirst[3]}-${datesFirst[2]}-${datesFirst[1]}`;
   const numeric = text.match(DUE_NUMERIC);
   if (numeric) return `${numeric[3]}-${numeric[2]}-${numeric[1]}`;
   const textual = text.match(DUE_TEXTUAL);

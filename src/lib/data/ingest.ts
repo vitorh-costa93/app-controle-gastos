@@ -10,7 +10,7 @@ import {
   transcribeAudio,
 } from "@/lib/ai/openai";
 import { resolveExtractedTransaction } from "@/lib/ai/resolve";
-import { applyStatementDueDate } from "@/lib/ai/statement";
+import { applyStatementDueDate, applyInstallmentHints, prepareStatementPdf } from "@/lib/ai/statement";
 import { RawExtractedTransaction } from "@/lib/ai/openai";
 import { listPeople, listCategories, listTransactionTypes } from "@/lib/data/reference";
 import { createTransactionsBatch, findPotentialDuplicates, TransactionInput } from "@/lib/data/transactions";
@@ -126,10 +126,14 @@ export async function submitIngest(
         ({ transactions: rawItems, statementDueDate } = await extractTransactionsFromText(transcript, context));
       } else if (method === "pdf") {
         const parsed = await extractPdfText(Buffer.from(await file.arrayBuffer()));
+        // Fatura de cartão: só as páginas com a lista de compras vão para a IA; o vencimento é lido do texto.
+        const prepared = prepareStatementPdf(parsed.pages, parsed.text);
         if (uploadedFileId) {
-          await supabase.from("uploaded_files").update({ raw_text: parsed.text }).eq("id", uploadedFileId);
+          await supabase.from("uploaded_files").update({ raw_text: prepared.text }).eq("id", uploadedFileId);
         }
-        ({ transactions: rawItems, statementDueDate } = await extractTransactionsFromText(parsed.text, context));
+        const extracted = await extractTransactionsFromText(prepared.text, context);
+        rawItems = extracted.transactions;
+        statementDueDate = prepared.dueDate ?? extracted.statementDueDate;
       } else {
         // csv — texto puro, sem parsing: a IA lê as colunas e extrai um lançamento por linha.
         const csvText = await file.text();
@@ -148,7 +152,7 @@ export async function submitIngest(
     if (jobError || !job) throw new Error(jobError?.message ?? "Falha ao criar job de processamento.");
 
     // Fatura de cartão: mês de referência = mês do vencimento; o ano das compras vem do vencimento.
-    const statement = applyStatementDueDate(rawItems, statementDueDate);
+    const statement = applyStatementDueDate(applyInstallmentHints(rawItems), statementDueDate);
     const resolved = statement.rows.map((raw) =>
       resolveExtractedTransaction(raw, { people, categories, types }, { referenceMonth: statement.referenceMonth })
     );
@@ -295,7 +299,7 @@ export async function confirmExtractedRows(
  * pdf.js espera APIs de navegador (DOMMatrix, ImageData, Path2D) que não existem no
  * Node da Vercel — sem o polyfill o envio de PDF falhava com "DOMMatrix is not defined".
  */
-async function extractPdfText(buffer: Buffer): Promise<{ text: string }> {
+async function extractPdfText(buffer: Buffer): Promise<{ text: string; pages: { num: number; text: string }[] }> {
   const canvas = await import("@napi-rs/canvas");
   const g = globalThis as Record<string, unknown>;
   g.DOMMatrix ??= canvas.DOMMatrix;
@@ -306,7 +310,8 @@ async function extractPdfText(buffer: Buffer): Promise<{ text: string }> {
   const { PDFParse } = await import("pdf-parse");
   const parser = new PDFParse({ data: buffer, CanvasFactory });
   try {
-    return await parser.getText();
+    const result = await parser.getText();
+    return { text: result.text, pages: result.pages.map((p) => ({ num: p.num, text: p.text })) };
   } finally {
     await parser.destroy();
   }

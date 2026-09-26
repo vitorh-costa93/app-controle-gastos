@@ -499,8 +499,13 @@ export async function updateTransaction(
 
     if (finalFixedVariable === "fixed") {
       if (!before.recurrence_rule_id) {
-        const ruleId = await linkFixedRecurrence(supabase, id, recurrenceFields);
-        if (ruleId) row.recurrence_rule_id = ruleId;
+        // Só cria a regra quando o lançamento ACABOU de virar fixo. Um lançamento que já era "fixo" mas
+        // não tem regra (ex.: importado de planilha) não pode ganhar uma regra em aberto só porque o valor
+        // foi editado — isso propagava o custo para todos os meses seguintes e gerava duplicações.
+        if (before.fixed_variable !== "fixed") {
+          const ruleId = await linkFixedRecurrence(supabase, id, recurrenceFields);
+          if (ruleId) row.recurrence_rule_id = ruleId;
+        }
       } else {
         await syncFixedRecurrence(supabase, before.recurrence_rule_id, recurrenceFields);
       }

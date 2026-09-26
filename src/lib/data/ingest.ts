@@ -15,7 +15,7 @@ import { RawExtractedTransaction } from "@/lib/ai/openai";
 import { listPeople, listCategories, listTransactionTypes } from "@/lib/data/reference";
 import { createTransactionsBatch, findPotentialDuplicates, TransactionInput } from "@/lib/data/transactions";
 import { AiExtractedTransactionRow, ExtractedTransactionData, FieldConfidence } from "@/types/db";
-import { toISODate, toReferenceMonth, formatDateBR } from "@/lib/utils/format";
+import { toISODate, toReferenceMonth, formatDateBR, formatReferenceMonthShort } from "@/lib/utils/format";
 
 export type IngestMethod = "audio" | "photo" | "text" | "pdf" | "csv";
 
@@ -166,6 +166,8 @@ export async function submitIngest(
         amountCents: data.amount !== null ? Math.round(data.amount * 100) : 0,
         registrationDate: data.registration_date,
         description: data.description,
+        installmentCurrent: data.installment_current,
+        installmentTotal: data.installment_total,
       }))
     );
 
@@ -203,7 +205,9 @@ export async function submitIngest(
           data: r.extracted_data,
           confidence: r.confidence ?? {},
           included: r.included,
-          duplicateWarning: duplicate
+          duplicateWarning: duplicate?.installmentTotal
+            ? `Parcela ${duplicate.installmentCurrent}/${duplicate.installmentTotal} já lançada em ${formatReferenceMonthShort(duplicate.referenceMonth ?? "")}${duplicate.description ? ` (${duplicate.description})` : ""} — provavelmente gerada pela fatura anterior.`
+            : duplicate
             ? `Possível duplicata — já existe um lançamento parecido em ${formatDateBR(duplicate.registrationDate)}${duplicate.description ? ` (${duplicate.description})` : ""}.`
             : null,
         };

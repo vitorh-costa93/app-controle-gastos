@@ -577,12 +577,38 @@ export interface DuplicateCandidate {
   amountCents: number;
   registrationDate: string | null;
   description: string | null;
+  installmentCurrent?: number | null;
+  installmentTotal?: number | null;
 }
 
 export interface DuplicateMatch {
   transactionId: string;
   registrationDate: string;
   description: string | null;
+  /** Preenchido quando a duplicata é a mesma parcela (X/Y) da mesma compra parcelada. */
+  installmentCurrent?: number;
+  installmentTotal?: number;
+  referenceMonth?: string;
+}
+
+/**
+ * Nome do estabelecimento sem a marcação de parcela ("PARC03/06", "Parcela 3/6", "03/06") e sem
+ * pontuação — a mesma compra parcelada muda só o número da parcela de uma fatura para a outra.
+ */
+function normalizeMerchant(description: string | null): string {
+  return (description ?? "")
+    .toLowerCase()
+    .replace(/parc(?:ela)?\s*\d{1,2}\s*\/\s*\d{1,2}/g, " ")
+    .replace(/\b\d{1,2}\s*\/\s*\d{1,2}\b/g, " ")
+    .replace(/[^a-z0-9à-ú]+/g, " ")
+    .trim();
+}
+
+function sameMerchant(a: string | null, b: string | null): boolean {
+  const x = normalizeMerchant(a);
+  const y = normalizeMerchant(b);
+  if (!x || !y) return false;
+  return x === y || (Math.min(x.length, y.length) >= 6 && (x.startsWith(y) || y.startsWith(x)));
 }
 
 const DUPLICATE_WINDOW_DAYS = 10;
@@ -597,7 +623,34 @@ export async function findPotentialDuplicates(
   candidates: DuplicateCandidate[]
 ): Promise<(DuplicateMatch | null)[]> {
   const datedCandidates = candidates.filter((c) => c.personId && c.registrationDate);
-  if (datedCandidates.length === 0) return candidates.map(() => null);
+  const installmentCandidates = candidates.filter((c) => c.personId && (c.installmentTotal ?? 1) > 1);
+  if (datedCandidates.length === 0 && installmentCandidates.length === 0) return candidates.map(() => null);
+
+  // Compra parcelada: a mesma parcela (X/Y) do mesmo estabelecimento e valor já pode existir — gerada pela
+  // fatura anterior, com data diferente da que aparece agora. Compara por estabelecimento + valor + parcela,
+  // sem olhar a data.
+  let installmentRows: {
+    id: string;
+    person_id: string;
+    amount: string;
+    registration_date: string;
+    reference_month: string;
+    description: string | null;
+    installment_current: number;
+    installment_total: number;
+  }[] = [];
+  if (installmentCandidates.length > 0) {
+    const { data: rows } = await createAdminClient()
+      .from("transactions")
+      .select("id, person_id, amount, registration_date, reference_month, description, installment_current, installment_total")
+      .is("deleted_at", null)
+      .gt("installment_total", 1)
+      .in("installment_total", [...new Set(installmentCandidates.map((c) => c.installmentTotal as number))]);
+    installmentRows = (rows ?? []) as typeof installmentRows;
+  }
+  if (datedCandidates.length === 0) {
+    return candidates.map((candidate) => matchInstallment(candidate, installmentRows));
+  }
 
   const times = datedCandidates.map((c) => new Date(c.registrationDate as string).getTime());
   const windowMs = DUPLICATE_WINDOW_DAYS * 86_400_000;
@@ -626,6 +679,8 @@ export async function findPotentialDuplicates(
   }[];
 
   return candidates.map((candidate) => {
+    const installmentMatch = matchInstallment(candidate, installmentRows);
+    if (installmentMatch) return installmentMatch;
     if (!candidate.personId || !candidate.registrationDate) return null;
     const candidateTime = new Date(candidate.registrationDate).getTime();
 
@@ -640,6 +695,40 @@ export async function findPotentialDuplicates(
       ? { transactionId: match.id, registrationDate: match.registration_date, description: match.description }
       : null;
   });
+}
+
+function matchInstallment(
+  candidate: DuplicateCandidate,
+  rows: {
+    id: string;
+    person_id: string;
+    amount: string;
+    registration_date: string;
+    reference_month: string;
+    description: string | null;
+    installment_current: number;
+    installment_total: number;
+  }[]
+): DuplicateMatch | null {
+  if (!candidate.personId || (candidate.installmentTotal ?? 1) <= 1) return null;
+  const found = rows.find(
+    (e) =>
+      e.person_id === candidate.personId &&
+      e.installment_total === candidate.installmentTotal &&
+      e.installment_current === candidate.installmentCurrent &&
+      Math.abs(reaisStringToCents(e.amount) - candidate.amountCents) <= 1 &&
+      sameMerchant(e.description, candidate.description)
+  );
+  return found
+    ? {
+        transactionId: found.id,
+        registrationDate: found.registration_date,
+        description: found.description,
+        installmentCurrent: found.installment_current,
+        installmentTotal: found.installment_total,
+        referenceMonth: found.reference_month,
+      }
+    : null;
 }
 
 /** Todos os lançamentos reais de todos os meses e pessoas — alimenta a tabela dinâmica, que nunca é filtrada por mês/origem. */

@@ -3,7 +3,7 @@
 import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { RecurrenceRule as RecurrenceRuleRow } from "@/types/db";
-import { RecurrenceRule, RecurrenceAmountVersion } from "@/types/domain";
+import { RecurrenceRule, RecurrenceAmountVersion, RecurrenceFrequency } from "@/types/domain";
 import { mapRecurrenceRuleRow, centsToReaisString, reaisStringToCents } from "./mappers";
 
 export interface RecurrenceRuleInput {
@@ -15,6 +15,7 @@ export interface RecurrenceRuleInput {
   amountCents: number;
   startDate: string;
   endDate: string | null;
+  frequency?: RecurrenceFrequency;
 }
 
 interface RecurrenceAmountVersionRow {
@@ -72,6 +73,7 @@ export async function createRecurrenceRule(
     amount: centsToReaisString(input.amountCents),
     start_date: input.startDate,
     end_date: input.endDate,
+    frequency: input.frequency ?? "monthly",
   });
   if (error) return { ok: false, error: "Não foi possível criar a recorrência." };
   revalidateTag("recurrence-rules");
@@ -134,6 +136,26 @@ export async function addRecurrenceAmountVersion(
     await supabase.from("recurrence_rules").update({ amount: latest.amount }).eq("id", ruleId);
   }
 
+  revalidateTag("recurrence-rules");
+  revalidateTag("analysis");
+  revalidatePath("/configuracoes");
+  revalidatePath("/cadastro");
+  revalidatePath("/analise");
+  revalidatePath("/simulacao");
+  return { ok: true };
+}
+
+/** Muda a frequência de uma recorrência fixa (mensal, bimestral, trimestral, semestral, anual). */
+export async function setRecurrenceFrequency(
+  ruleId: string,
+  frequency: RecurrenceFrequency
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("recurrence_rules").update({ frequency }).eq("id", ruleId);
+  if (error) {
+    console.error("setRecurrenceFrequency failed:", error);
+    return { ok: false, error: "Não foi possível salvar a frequência." };
+  }
   revalidateTag("recurrence-rules");
   revalidateTag("analysis");
   revalidatePath("/configuracoes");

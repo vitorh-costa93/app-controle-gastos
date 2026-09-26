@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { RecurrenceFrequency } from "@/types/domain";
+import { RECURRENCE_FREQUENCIES, frequencyLabel } from "@/lib/domain/recurrence";
 import { useRouter } from "next/navigation";
 import { X, Repeat, Pencil } from "lucide-react";
 import { RecurrenceRule } from "@/types/domain";
@@ -56,7 +58,7 @@ export function RecurrenceRulesEditor({
               <div>
                 <p className="text-sm font-medium">{rule.description}</p>
                 <p className="text-xs text-(--color-text-tertiary)">
-                  {peopleById.get(rule.personId) ?? "—"} · {formatCurrencyBRL(rule.amountCents)}/mês · desde{" "}
+                  {peopleById.get(rule.personId) ?? "—"} · {formatCurrencyBRL(rule.amountCents)} · {frequencyLabel(rule.frequency)} · desde{" "}
                   {formatDateBR(rule.startDate)}
                   {rule.endDate && <> · até {formatDateBR(rule.endDate)}</>}
                 </p>
@@ -133,6 +135,7 @@ function NewRecurrenceForm({
   const [amountCents, setAmountCents] = useState(0);
   const [startDate, setStartDate] = useState(toISODate(new Date()));
   const [endMonth, setEndMonth] = useState("");
+  const [frequency, setFrequency] = useState<RecurrenceFrequency>("monthly");
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -149,6 +152,7 @@ function NewRecurrenceForm({
         amountCents,
         startDate,
         endDate,
+        frequency,
       });
       if (!result.ok) {
         setError(result.error);
@@ -162,7 +166,7 @@ function NewRecurrenceForm({
         typeId: typeId || null,
         categoryId: categoryId || null,
         amountCents,
-        frequency: "monthly",
+        frequency,
         startDate,
         endDate,
         active: true,
@@ -178,7 +182,16 @@ function NewRecurrenceForm({
       <FieldGroup label="Descrição">
         <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Ex.: Internet" />
       </FieldGroup>
-      <FieldGroup label="Valor mensal">
+      <FieldGroup label="Frequência">
+        <Select value={frequency} onChange={(e) => setFrequency(e.target.value as RecurrenceFrequency)}>
+          {RECURRENCE_FREQUENCIES.map((f) => (
+            <option key={f.value} value={f.value}>
+              {f.label}
+            </option>
+          ))}
+        </Select>
+      </FieldGroup>
+      <FieldGroup label="Valor">
         <CurrencyInput valueCents={amountCents} onChange={setAmountCents} />
       </FieldGroup>
       <FieldGroup label="Origem">

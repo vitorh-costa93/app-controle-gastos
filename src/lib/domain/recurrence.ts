@@ -1,9 +1,34 @@
-import { Transaction, RecurrenceRule, MonthlyOccurrence } from "@/types/domain";
+import { Transaction, RecurrenceRule, RecurrenceFrequency, MonthlyOccurrence } from "@/types/domain";
 import { addMonths } from "@/lib/utils/format";
+
+export const RECURRENCE_FREQUENCIES: { value: RecurrenceFrequency; label: string; months: number }[] = [
+  { value: "monthly", label: "Mensal", months: 1 },
+  { value: "bimonthly", label: "Bimestral", months: 2 },
+  { value: "quarterly", label: "Trimestral", months: 3 },
+  { value: "semiannual", label: "Semestral", months: 6 },
+  { value: "annual", label: "Anual", months: 12 },
+];
+
+export function frequencyLabel(frequency: RecurrenceFrequency): string {
+  return RECURRENCE_FREQUENCIES.find((f) => f.value === frequency)?.label ?? "Mensal";
+}
+
+/** Quantos meses separam uma ocorrência da próxima. */
+function frequencyIntervalMonths(frequency: RecurrenceFrequency): number {
+  return RECURRENCE_FREQUENCIES.find((f) => f.value === frequency)?.months ?? 1;
+}
+
+function monthsBetween(fromMonth: string, toMonth: string): number {
+  const [fy, fm] = fromMonth.split("-").map(Number);
+  const [ty, tm] = toMonth.split("-").map(Number);
+  return (ty - fy) * 12 + (tm - fm);
+}
 
 function isRuleActiveInMonth(rule: RecurrenceRule, referenceMonth: string): boolean {
   const startMonth = rule.startDate.slice(0, 7);
   if (referenceMonth < startMonth) return false;
+  // Bimestral, trimestral etc.: só os meses que caem no ritmo a partir do mês inicial.
+  if (monthsBetween(startMonth, referenceMonth) % frequencyIntervalMonths(rule.frequency ?? "monthly") !== 0) return false;
   if (rule.endDate) {
     const endMonth = rule.endDate.slice(0, 7);
     if (referenceMonth > endMonth) return false;

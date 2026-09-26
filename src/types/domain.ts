@@ -28,6 +28,8 @@ export interface RecurrenceAmountVersion {
   amountCents: number;
 }
 
+export type RecurrenceFrequency = "monthly" | "bimonthly" | "quarterly" | "semiannual" | "annual";
+
 export interface RecurrenceRule {
   id: string;
   description: string;
@@ -37,7 +39,7 @@ export interface RecurrenceRule {
   categoryId: string | null;
   /** Valor mais recente conhecido — usado quando não há histórico de versões. */
   amountCents: number;
-  frequency: "monthly";
+  frequency: RecurrenceFrequency;
   startDate: string;
   endDate: string | null;
   active: boolean;

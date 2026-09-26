@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { RecurrenceRule } from "@/types/domain";
+import { RecurrenceRule, RecurrenceFrequency } from "@/types/domain";
+import { RECURRENCE_FREQUENCIES } from "@/lib/domain/recurrence";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import { FieldGroup, Input } from "@/components/ui/Field";
+import { FieldGroup, Input, Select } from "@/components/ui/Field";
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
-import { addRecurrenceAmountVersion, setRecurrenceMonthOverride, setRecurrenceEndDate } from "@/lib/data/recurrence";
+import { addRecurrenceAmountVersion, setRecurrenceMonthOverride, setRecurrenceEndDate, setRecurrenceFrequency } from "@/lib/data/recurrence";
 import { formatCurrencyBRL, formatReferenceMonthShort, toReferenceMonth } from "@/lib/utils/format";
 
 export function RecurrenceRuleEditModal({
@@ -34,6 +35,11 @@ export function RecurrenceRuleEditModal({
 
   const [history, setHistory] = useState(rule.amountHistory);
   const sortedHistory = [...history].sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom));
+
+  const [frequency, setFrequency] = useState<RecurrenceFrequency>(rule.frequency ?? "monthly");
+  const [isFrequencyPending, startFrequencyTransition] = useTransition();
+  const [frequencySaved, setFrequencySaved] = useState(false);
+  const [frequencyError, setFrequencyError] = useState<string | null>(null);
 
   const [endMonth, setEndMonth] = useState(rule.endDate ? rule.endDate.slice(0, 7) : "");
   const [isEndDatePending, startEndDateTransition] = useTransition();
@@ -65,6 +71,20 @@ export function RecurrenceRuleEditModal({
         return;
       }
       setSavedOverride(true);
+      onChanged();
+    });
+  }
+
+  function handleSaveFrequency() {
+    setFrequencyError(null);
+    setFrequencySaved(false);
+    startFrequencyTransition(async () => {
+      const result = await setRecurrenceFrequency(rule.id, frequency);
+      if (!result.ok) {
+        setFrequencyError(result.error);
+        return;
+      }
+      setFrequencySaved(true);
       onChanged();
     });
   }
@@ -139,6 +159,31 @@ export function RecurrenceRuleEditModal({
               Valor lançado. Edite ou remova em Cadastro se precisar corrigir.
             </p>
           )}
+        </section>
+
+        <section className="border-t border-(--color-border) pt-4">
+          <h4 className="mb-1 text-sm font-semibold">Frequência</h4>
+          <p className="mb-3 text-xs text-(--color-text-tertiary)">
+            A cada quantos meses o valor acontece, contando a partir do mês inicial da recorrência.
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_auto]">
+            <FieldGroup label="Ocorre">
+              <Select value={frequency} onChange={(e) => setFrequency(e.target.value as RecurrenceFrequency)}>
+                {RECURRENCE_FREQUENCIES.map((f) => (
+                  <option key={f.value} value={f.value}>
+                    {f.label}
+                  </option>
+                ))}
+              </Select>
+            </FieldGroup>
+            <div className="flex items-end">
+              <Button onClick={handleSaveFrequency} disabled={isFrequencyPending} type="button" variant="secondary">
+                Salvar
+              </Button>
+            </div>
+          </div>
+          {frequencyError && <p className="mt-2 text-xs text-(--color-negative)">{frequencyError}</p>}
+          {frequencySaved && <p className="mt-2 text-xs text-(--color-positive)">Frequência salva.</p>}
         </section>
 
         <section className="border-t border-(--color-border) pt-4">

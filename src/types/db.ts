@@ -43,7 +43,7 @@ export interface RecurrenceRule {
   type_id: string | null;
   category_id: string | null;
   amount: string; // numeric from postgres
-  frequency: "monthly";
+  frequency: "monthly" | "bimonthly" | "quarterly" | "semiannual" | "annual";
   start_date: string;
   end_date: string | null;
   active: boolean;

@@ -3,7 +3,7 @@
 import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { TransactionRow } from "@/types/db";
-import { Transaction } from "@/types/domain";
+import { Transaction, RecurrenceFrequency } from "@/types/domain";
 import { mapTransactionRow, centsToReaisString, reaisStringToCents } from "./mappers";
 import { addMonths, addMonthsToISODate } from "@/lib/utils/format";
 
@@ -125,6 +125,7 @@ interface RecurrenceFields {
   registrationDate: string;
   description: string | null;
   endDate: string | null;
+  frequency?: RecurrenceFrequency;
 }
 
 /**
@@ -148,6 +149,7 @@ async function linkFixedRecurrence(
       amount: centsToReaisString(fields.amountCents),
       start_date: fields.registrationDate,
       end_date: fields.endDate,
+      frequency: fields.frequency ?? "monthly",
     })
     .select("id")
     .single();
@@ -178,6 +180,7 @@ async function syncFixedRecurrence(
       category_id: fields.categoryId,
       amount: centsToReaisString(fields.amountCents),
       end_date: fields.endDate,
+      ...(fields.frequency ? { frequency: fields.frequency } : {}),
     })
     .eq("id", recurrenceRuleId);
 
@@ -227,6 +230,8 @@ export interface TransactionInput {
   source?: "manual" | "audio" | "photo" | "text" | "pdf" | "csv";
   /** Só usado quando fixedVariable === "fixed". null/undefined = reproduz indefinidamente. */
   fixedEndDate?: string | null;
+  /** Só usado quando fixedVariable === "fixed". Omitido = mantém a frequência da regra (ou mensal, se nova). */
+  fixedFrequency?: RecurrenceFrequency;
 }
 
 export async function listTransactions(
@@ -358,6 +363,7 @@ export async function createTransaction(
       registrationDate: input.registrationDate,
       description: input.description,
       endDate: input.fixedEndDate ?? null,
+      frequency: input.fixedFrequency,
     });
     if (ruleId) row.recurrence_rule_id = ruleId;
   }
@@ -409,6 +415,7 @@ export async function createTransactionsBatch(
         registrationDate: input.registrationDate,
         description: input.description,
         endDate: input.fixedEndDate ?? null,
+      frequency: input.fixedFrequency,
       });
     })
   );
@@ -487,6 +494,7 @@ export async function updateTransaction(
       registrationDate: input.registrationDate ?? before.registration_date,
       description: input.description !== undefined ? input.description : before.description,
       endDate: input.fixedEndDate !== undefined ? input.fixedEndDate : currentEndDate,
+      frequency: input.fixedFrequency,
     };
 
     if (finalFixedVariable === "fixed") {

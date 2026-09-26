@@ -368,7 +368,7 @@ export function AnaliseTransactionsTable({
                   setPage(1);
                 }}
               >
-                {[25, 50, 100].map((n) => (
+                {[10, 25, 50, 100].map((n) => (
                   <option key={n} value={n}>
                     {n}
                   </option>

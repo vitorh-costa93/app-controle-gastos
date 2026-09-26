@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { RecurrenceFrequency } from "@/types/domain";
+import { RECURRENCE_FREQUENCIES } from "@/lib/domain/recurrence";
 import { Person, Category, TransactionType } from "@/types/db";
 import { Transaction, RecurrenceRule } from "@/types/domain";
 import { createTransaction, updateTransaction, deleteTransaction, TransactionInput } from "@/lib/data/transactions";
@@ -62,6 +64,7 @@ export function TransactionEditor({
       description: form.description || null,
       considered: form.considered,
       fixedEndDate: form.fixedEndMonth ? `${form.fixedEndMonth}-01` : null,
+      fixedFrequency: form.fixedFrequency,
     };
 
     startTransition(async () => {
@@ -154,6 +157,21 @@ export function TransactionEditor({
             <option value="fixed">Fixo</option>
           </Select>
         </FieldGroup>
+
+        {form.fixedVariable === "fixed" && (
+          <FieldGroup label="Frequência">
+            <Select
+              value={form.fixedFrequency}
+              onChange={(e) => update("fixedFrequency", e.target.value as RecurrenceFrequency)}
+            >
+              {RECURRENCE_FREQUENCIES.map((f) => (
+                <option key={f.value} value={f.value}>
+                  {f.label}
+                </option>
+              ))}
+            </Select>
+          </FieldGroup>
+        )}
 
         {form.fixedVariable === "fixed" && (
           <FieldGroup label="Data de fim (opcional)">
@@ -297,6 +315,7 @@ function buildInitialForm(
       direction: transaction.direction,
       fixedVariable: transaction.fixedVariable,
       fixedEndMonth: linkedRule?.endDate ? linkedRule.endDate.slice(0, 7) : "",
+      fixedFrequency: (linkedRule?.frequency ?? "monthly") as RecurrenceFrequency,
       typeId: transaction.typeId ?? "",
       categoryId: transaction.categoryId ?? "",
       installmentCurrent: transaction.installmentCurrent,
@@ -314,6 +333,7 @@ function buildInitialForm(
     direction: "expense" as const,
     fixedVariable: "variable" as const,
     fixedEndMonth: "",
+    fixedFrequency: "monthly" as RecurrenceFrequency,
     typeId: "",
     categoryId: "",
     installmentCurrent: 1,

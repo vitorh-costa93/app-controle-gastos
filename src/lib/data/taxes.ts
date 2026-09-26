@@ -18,6 +18,9 @@ import { addMonths, toReferenceMonth, formatReferenceMonthShort } from "@/lib/ut
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
+/** Primeiro mês de faturamento (mês do app) com imposto do salário variável calculado. */
+const VARIABLE_TAX_HISTORY_START = "2025-11";
+
 /**
  * Cria (só se ainda não existir) os lançamentos de imposto do casal como transações
  * reais — assim eles aparecem em Análise (KPIs, flat table, pivot table) e Cadastro
@@ -50,7 +53,9 @@ export async function syncComputedTaxTransactions(): Promise<
 
   if (variablePerson) {
     const salaryEntries = await listEffectiveSalaryEntries(variablePerson.id);
-    for (const revenueMonth of windowMonths) {
+    // O imposto do salário variável também é calculado para o histórico (a partir de nov/2025),
+    // não só para a janela próxima — assim os meses já fechados refletem o valor de cada salário.
+    for (const revenueMonth of monthRange(VARIABLE_TAX_HISTORY_START, addMonths(currentMonth, 12))) {
       const gross = projectSalaryForMonth(salaryEntries, revenueMonth);
       if (gross <= 0) continue;
       const rbt12 = sumRevenueLast12Months(salaryEntries, revenueMonth);
@@ -201,8 +206,10 @@ async function insertTaxTransactionIfMissing(
     .eq("reference_month", params.referenceMonth)
     .eq("direction", "expense")
     .is("deleted_at", null)
-    .maybeSingle();
-  if (existing) return false;
+    .limit(1);
+  // limit(1) em vez de maybeSingle: com mais de um lançamento de imposto no mês, maybeSingle dá erro
+  // (data = null) e a checagem passava como "não existe", gerando lançamento duplicado.
+  if (existing && existing.length > 0) return false;
 
   const { error } = await supabase.from("transactions").insert({
     registration_date: `${params.referenceMonth}-01`,

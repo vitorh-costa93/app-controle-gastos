@@ -31,12 +31,39 @@ export function applyStatementDueDate(
 }
 
 // ---------------------------------------------------------------------------
-// Fatura em PDF: só a lista de lançamentos vai para a IA
+// Fatura em PDF: só a lista de lançamentos vai para a IA (qualquer banco)
 // ---------------------------------------------------------------------------
 
-const DUE_DATE_PATTERN = /Vencimento(?:\s+em)?\s*:?\s*(\d{2})[-/](\d{2})[-/](\d{4})/i;
-const LIST_PAGE_PATTERN = /Transa[çc][õo]es\s+Nacionais|Subtotal\s+dos\s+lan[çc]amentos|Data\s+Estabelecimento/i;
-const TRANSACTION_LINE = /^(\d{2})\/(\d{2})\s+(.+?)\s+(-?\d{1,3}(?:\.\d{3})*,\d{2})$/;
+const MONTH_ABBREVIATIONS: Record<string, string> = {
+  jan: "01", fev: "02", mar: "03", abr: "04", mai: "05", jun: "06",
+  jul: "07", ago: "08", set: "09", out: "10", nov: "11", dez: "12",
+};
+const MONTH_PATTERN = "jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez";
+
+// "Vencimento: 05-11-2025", "Data de vencimento 10/11/2025", "Vence em 05/11/2025", "VENCIMENTO 10 NOV 2025"
+const DUE_LABEL = "(?:data\\s+de\\s+)?(?:vencimento|vence(?:\\s+em)?)";
+const DUE_NUMERIC = new RegExp(DUE_LABEL + "\\s*(?:da\\s+fatura)?\\s*:?\\s*(\\d{2})[-/.](\\d{2})[-/.](\\d{4})", "i");
+const DUE_TEXTUAL = new RegExp(DUE_LABEL + "\\s*:?\\s*(\\d{1,2})\\s*(?:de\\s+)?(" + MONTH_PATTERN + ")[a-zç]*\\.?\\s*(?:de\\s+)?(\\d{4})", "i");
+
+/** Vencimento da fatura (YYYY-MM-DD) lido do texto: vale para qualquer banco que imprima "Vencimento ...". */
+export function detectDueDate(text: string): string | null {
+  const numeric = text.match(DUE_NUMERIC);
+  if (numeric) return `${numeric[3]}-${numeric[2]}-${numeric[1]}`;
+  const textual = text.match(DUE_TEXTUAL);
+  if (textual) {
+    const month = MONTH_ABBREVIATIONS[textual[2].toLowerCase()];
+    return `${textual[3]}-${month}-${textual[1].padStart(2, "0")}`;
+  }
+  return null;
+}
+
+// Linha de compra: data no início (DD/MM, DD/MM/AAAA ou "12 SET") e valor no fim (com ou sem R$, sinal antes/depois, CR).
+const LINE_START = new RegExp(
+  "^(?:(\\d{2})/(\\d{2})(?:/(?:\\d{4}|\\d{2}))?|(\\d{1,2})\\s+(" + MONTH_PATTERN + ")\\.?(?:\\s+\\d{4})?)\\s+",
+  "i"
+);
+const AMOUNT_END = /(-?\s*(?:R\$)?\s*-?\d{1,3}(?:\.\d{3})*,\d{2}\s*-?(?:\s*CR)?)\s*$/i;
+const NON_PURCHASE = /pagamento|pagto|pgto|saldo\s+anterior|total|subtotal|cr[eé]dito\s+de|estorno\s+de\s+pagamento/i;
 
 export interface PreparedStatement {
   /** Texto para a IA: só as linhas de compra (ou o texto original, se não parecer uma fatura). */
@@ -46,33 +73,58 @@ export interface PreparedStatement {
   isStatement: boolean;
 }
 
+interface StatementLine {
+  day: string;
+  month: string;
+  description: string;
+  amountText: string;
+  cents: number;
+}
+
+function parseStatementLine(rawLine: string): StatementLine | null {
+  const line = rawLine.trim();
+  const start = line.match(LINE_START);
+  const amount = line.match(AMOUNT_END);
+  if (!start || !amount) return null;
+  const description = line.slice(start[0].length, line.length - amount[0].length).trim();
+  if (!description) return null;
+
+  const day = (start[1] ?? start[3]).padStart(2, "0");
+  const month = start[2] ?? MONTH_ABBREVIATIONS[start[4].toLowerCase()];
+  const negative = /-|CR/i.test(amount[1]);
+  const digits = amount[1].match(/\d{1,3}(?:\.\d{3})*,\d{2}/)![0];
+  const cents = Math.round(parseFloat(digits.replace(/\./g, "").replace(",", ".")) * 100) * (negative ? -1 : 1);
+  return { day, month, description, amountText: digits, cents };
+}
+
 /**
- * Fatura de cartão em PDF (PicPay etc.): a lista de compras fica numa página específica (no PicPay,
- * depois do resumo e do boleto) — as demais páginas são resumo, boleto e avisos. Escolhe as páginas
- * pelo conteúdo ("Transações Nacionais", "Subtotal dos lançamentos"), não por número fixo, e monta um
- * texto limpo: uma linha por compra (dia/mês, estabelecimento, valor), sem pagamento da fatura anterior,
- * subtotais nem créditos/estornos (o estorno cancela a compra original de mesmo valor).
+ * Fatura de cartão em PDF (PicPay, Nubank, Inter, Itaú, C6, Santander...): a lista de compras fica em
+ * algumas páginas — as demais são resumo, boleto e avisos. Acha as páginas pelo conteúdo (várias linhas
+ * "data + estabelecimento + valor"), não por número fixo, e monta um texto limpo: uma linha por compra,
+ * sem pagamento da fatura anterior, saldo, subtotais e créditos/estornos (o estorno cancela a compra
+ * original de mesmo valor). Se o layout não for reconhecido, devolve o texto original e a IA se vira
+ * como antes — só o vencimento continua sendo lido do texto.
  */
 export function prepareStatementPdf(pages: { num: number; text: string }[], fullText: string): PreparedStatement {
-  const due = fullText.match(DUE_DATE_PATTERN);
-  const dueDate = due ? `${due[3]}-${due[2]}-${due[1]}` : null;
+  const dueDate = detectDueDate(fullText);
 
-  const listPages = pages.filter((p) => LIST_PAGE_PATTERN.test(p.text));
-  if (listPages.length === 0) return { text: fullText, dueDate, isStatement: false };
-
-  const charges: { day: string; month: string; description: string; amount: string; cents: number }[] = [];
-  const credits: { description: string; cents: number }[] = [];
-  for (const page of listPages) {
-    for (const rawLine of page.text.split(/\r?\n/)) {
-      const match = rawLine.trim().match(TRANSACTION_LINE);
-      if (!match) continue;
-      const [, day, month, description, amount] = match;
-      if (/PAGAMENTO\s+DE\s+FATURA|PAGAMENTO\s+RECEBIDO/i.test(description)) continue;
-      const cents = Math.round(parseFloat(amount.replace(/\./g, "").replace(",", ".")) * 100);
-      if (cents < 0) credits.push({ description, cents: Math.abs(cents) });
-      else charges.push({ day, month, description, amount, cents });
+  const charges: StatementLine[] = [];
+  const credits: StatementLine[] = [];
+  let listPageCount = 0;
+  for (const page of pages) {
+    const parsed = page.text
+      .split(/\r?\n/)
+      .map(parseStatementLine)
+      .filter((l): l is StatementLine => l !== null);
+    if (parsed.length < 3) continue; // página de resumo/boleto/avisos
+    listPageCount += 1;
+    for (const line of parsed) {
+      if (NON_PURCHASE.test(line.description)) continue;
+      if (line.cents < 0) credits.push({ ...line, cents: -line.cents });
+      else charges.push(line);
     }
   }
+  if (listPageCount === 0 || charges.length < 3) return { text: fullText, dueDate, isStatement: false };
 
   // Estorno: remove uma compra de mesmo estabelecimento e valor para cada crédito.
   for (const credit of credits) {
@@ -80,17 +132,20 @@ export function prepareStatementPdf(pages: { num: number; text: string }[], full
     if (i >= 0) charges.splice(i, 1);
   }
 
-  const holder = fullText.split(/\r?\n/).map((l) => l.trim()).find((l) => /^[A-Za-zÀ-ú ]+,$/.test(l));
+  const holder = fullText
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .find((l) => /^[A-Za-zÀ-ú ]+,$/.test(l));
   const header = [
     "Fatura de cartão de crédito. Todas as linhas abaixo são compras no cartão (direction: expense, type_name: Cartão de crédito).",
     dueDate ? `Vencimento da fatura: ${dueDate}.` : null,
     holder ? `Titular do cartão: ${holder.replace(/,$/, "")}.` : null,
-    "Formato de cada linha: DD/MM estabelecimento valor. \"PARC07/10\" no nome significa parcela 7 de 10.",
+    'Formato de cada linha: DD/MM estabelecimento valor. "PARC07/10" ou "Parcela 7/10" no nome significa parcela 7 de 10.',
   ]
     .filter(Boolean)
     .join("\n");
 
-  const lines = charges.map((c) => `${c.day}/${c.month} ${c.description} ${c.amount}`);
+  const lines = charges.map((c) => `${c.day}/${c.month} ${c.description} ${c.amountText}`);
   return { text: `${header}\n\n${lines.join("\n")}`, dueDate, isStatement: true };
 }
 

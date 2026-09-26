@@ -25,7 +25,8 @@ function toFieldConfidence(value: string | undefined): FieldConfidence {
 /** Resolve nomes sugeridos pela IA para ids reais do banco, sem nunca inventar. */
 export function resolveExtractedTransaction(
   raw: RawExtractedTransaction,
-  refs: { people: Person[]; categories: Category[]; types: TransactionType[] }
+  refs: { people: Person[]; categories: Category[]; types: TransactionType[] },
+  options?: { referenceMonth?: string | null }
 ): { data: ExtractedTransactionData; confidence: Record<string, FieldConfidence> } {
   const person = findPersonByName(refs.people, raw.person_name);
   const category = findByName(refs.categories, raw.category_name);
@@ -39,7 +40,8 @@ export function resolveExtractedTransaction(
   };
 
   const registrationDate = raw.registration_date;
-  const referenceMonth = registrationDate ? registrationDate.slice(0, 7) : null;
+  // Fatura de cartão: o mês de referência é o do vencimento da fatura, não o da data da compra.
+  const referenceMonth = options?.referenceMonth ?? (registrationDate ? registrationDate.slice(0, 7) : null);
 
   const data: ExtractedTransactionData = {
     registration_date: registrationDate,

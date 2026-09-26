@@ -77,6 +77,11 @@ export const RAW_EXTRACTION_SCHEMA = {
   type: "object",
   additionalProperties: false,
   properties: {
+    statement_due_date: {
+      type: ["string", "null"],
+      description:
+        "Somente para fatura de cartão de crédito: a data de VENCIMENTO da fatura, no formato YYYY-MM-DD (geralmente no canto superior direito). null se o documento não for uma fatura ou não mostrar o vencimento.",
+    },
     transactions: {
       type: "array",
       items: {
@@ -121,8 +126,14 @@ export const RAW_EXTRACTION_SCHEMA = {
       },
     },
   },
-  required: ["transactions"],
+  required: ["statement_due_date", "transactions"],
 } as const;
+
+export interface ExtractionResult {
+  transactions: RawExtractedTransaction[];
+  /** Vencimento da fatura (YYYY-MM-DD), quando o documento é uma fatura de cartão. */
+  statementDueDate: string | null;
+}
 
 export interface RawExtractedTransaction {
   registration_date: string | null;
@@ -148,6 +159,7 @@ Regras obrigatórias:
 - amount é sempre em reais (BRL), nunca em centavos.
 - direction: "expense" para gastos/saídas, "income" para receitas/entradas.
 - Use as pessoas, categorias e tipos existentes informados quando fizerem sentido; caso contrário, sugira o nome mais apropriado em texto livre.
+- FATURA DE CARTÃO (Nubank, PicPay, Inter, Itaú, C6 etc.): procure SEMPRE a data de VENCIMENTO da fatura ("Vencimento", "Vence em", "Data de vencimento" — geralmente no canto superior direito, mas confira o documento todo) e devolva em statement_due_date (YYYY-MM-DD). Ela é a data de referência da fatura: o mês e o ano do vencimento são o mês de referência de todos os lançamentos. Também observe a data de fechamento/período exibida perto do vencimento para confirmar o mês e o ano. As compras costumam aparecer só com dia e mês; devolva em registration_date a data da compra usando o ano do vencimento (se o mês da compra for posterior ao mês do vencimento, use o ano anterior). Compras parceladas mostram a data da compra original e "parcela X/Y": preencha installment_current e installment_total.
 - Se o texto vier em formato de tabela/CSV (colunas separadas por vírgula ou ponto e vírgula, com cabeçalho), use os nomes das colunas para identificar data, descrição, valor etc., e gere um lançamento por linha de dados (ignorando a linha de cabeçalho).`;
 
 function buildContextBlock(context: ExtractionContext): string {
@@ -167,7 +179,7 @@ export interface ExtractionContext {
 export async function extractTransactionsFromText(
   text: string,
   context: ExtractionContext
-): Promise<RawExtractedTransaction[]> {
+): Promise<ExtractionResult> {
   const openai = getOpenAIClient();
   const response = await openai.chat.completions.create({
     model: EXTRACTION_MODEL,
@@ -187,7 +199,7 @@ export async function extractTransactionsFromText(
 export async function extractTransactionsFromImage(
   imageDataUrls: string[],
   context: ExtractionContext
-): Promise<RawExtractedTransaction[]> {
+): Promise<ExtractionResult> {
   const openai = getOpenAIClient();
   const response = await openai.chat.completions.create({
     model: VISION_MODEL,
@@ -198,7 +210,7 @@ export async function extractTransactionsFromImage(
         content: [
           {
             type: "text",
-            text: `${buildContextBlock(context)}\n\nExtraia os lançamentos financeiros visíveis ${imageDataUrls.length > 1 ? `nestas ${imageDataUrls.length} imagens (várias páginas/prints de uma mesma fatura ou extrato)` : "nesta imagem"} (nota fiscal, cupom, recibo, comprovante ou anotação). Se as imagens forem páginas seguidas de uma mesma fatura, não repita o mesmo lançamento que aparecer em mais de uma página.`,
+            text: `${buildContextBlock(context)}\n\nExtraia os lançamentos financeiros visíveis ${imageDataUrls.length > 1 ? `nestas ${imageDataUrls.length} imagens (várias páginas/prints de uma mesma fatura ou extrato)` : "nesta imagem"} (nota fiscal, cupom, recibo, comprovante ou anotação). Se as imagens forem páginas seguidas de uma mesma fatura, não repita o mesmo lançamento que aparecer em mais de uma página. Se for fatura de cartão, procure a data de vencimento da fatura (em qualquer posição da página, geralmente no canto superior direito) e devolva em statement_due_date; se a imagem não mostrar o vencimento, deixe null.`,
           },
           ...imageDataUrls.map((url) => ({ type: "image_url" as const, image_url: { url } })),
         ],
@@ -223,13 +235,13 @@ export async function transcribeAudio(file: File): Promise<string> {
   return result.text;
 }
 
-function parseExtractionResponse(content: string | null | undefined): RawExtractedTransaction[] {
-  if (!content) return [];
+function parseExtractionResponse(content: string | null | undefined): ExtractionResult {
+  if (!content) return { transactions: [], statementDueDate: null };
   try {
-    const parsed = JSON.parse(content) as { transactions: RawExtractedTransaction[] };
-    return parsed.transactions ?? [];
+    const parsed = JSON.parse(content) as { statement_due_date?: string | null; transactions: RawExtractedTransaction[] };
+    return { transactions: parsed.transactions ?? [], statementDueDate: parsed.statement_due_date ?? null };
   } catch {
-    return [];
+    return { transactions: [], statementDueDate: null };
   }
 }
 

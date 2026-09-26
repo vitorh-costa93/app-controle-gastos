@@ -10,6 +10,8 @@ import {
   transcribeAudio,
 } from "@/lib/ai/openai";
 import { resolveExtractedTransaction } from "@/lib/ai/resolve";
+import { applyStatementDueDate } from "@/lib/ai/statement";
+import { RawExtractedTransaction } from "@/lib/ai/openai";
 import { listPeople, listCategories, listTransactionTypes } from "@/lib/data/reference";
 import { createTransactionsBatch, findPotentialDuplicates, TransactionInput } from "@/lib/data/transactions";
 import { AiExtractedTransactionRow, ExtractedTransactionData, FieldConfidence } from "@/types/db";
@@ -58,7 +60,8 @@ export async function submitIngest(
   let uploadedFileIds: string[] = [];
 
   try {
-    let rawItems;
+    let rawItems: RawExtractedTransaction[] = [];
+    let statementDueDate: string | null = null;
 
     if (method === "text") {
       const text = String(formData.get("text") ?? "");
@@ -71,7 +74,7 @@ export async function submitIngest(
         .single();
       uploadedFileId = uploadedFile?.id ?? null;
 
-      rawItems = await extractTransactionsFromText(text, context);
+      ({ transactions: rawItems, statementDueDate } = await extractTransactionsFromText(text, context));
     } else if (method === "photo") {
       const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
       if (files.length === 0) return { ok: false, error: "Selecione ao menos uma imagem." };
@@ -100,7 +103,9 @@ export async function submitIngest(
         batches.push(dataUrls.slice(i, i + IMAGE_BATCH_SIZE));
       }
       const batchResults = await Promise.all(batches.map((batch) => extractTransactionsFromImage(batch, context)));
-      rawItems = batchResults.flat();
+      rawItems = batchResults.flatMap((r) => r.transactions);
+      // O vencimento aparece só na primeira página da fatura — vale para todos os lotes.
+      statementDueDate = batchResults.map((r) => r.statementDueDate).find(Boolean) ?? null;
     } else {
       const file = formData.get("file") as File | null;
       if (!file || file.size === 0) return { ok: false, error: "Selecione um arquivo." };
@@ -118,20 +123,20 @@ export async function submitIngest(
         if (uploadedFileId) {
           await supabase.from("uploaded_files").update({ raw_text: transcript }).eq("id", uploadedFileId);
         }
-        rawItems = await extractTransactionsFromText(transcript, context);
+        ({ transactions: rawItems, statementDueDate } = await extractTransactionsFromText(transcript, context));
       } else if (method === "pdf") {
         const parsed = await extractPdfText(Buffer.from(await file.arrayBuffer()));
         if (uploadedFileId) {
           await supabase.from("uploaded_files").update({ raw_text: parsed.text }).eq("id", uploadedFileId);
         }
-        rawItems = await extractTransactionsFromText(parsed.text, context);
+        ({ transactions: rawItems, statementDueDate } = await extractTransactionsFromText(parsed.text, context));
       } else {
         // csv — texto puro, sem parsing: a IA lê as colunas e extrai um lançamento por linha.
         const csvText = await file.text();
         if (uploadedFileId) {
           await supabase.from("uploaded_files").update({ raw_text: csvText }).eq("id", uploadedFileId);
         }
-        rawItems = await extractTransactionsFromText(csvText, context);
+        ({ transactions: rawItems, statementDueDate } = await extractTransactionsFromText(csvText, context));
       }
     }
 
@@ -142,7 +147,11 @@ export async function submitIngest(
       .single();
     if (jobError || !job) throw new Error(jobError?.message ?? "Falha ao criar job de processamento.");
 
-    const resolved = rawItems.map((raw) => resolveExtractedTransaction(raw, { people, categories, types }));
+    // Fatura de cartão: mês de referência = mês do vencimento; o ano das compras vem do vencimento.
+    const statement = applyStatementDueDate(rawItems, statementDueDate);
+    const resolved = statement.rows.map((raw) =>
+      resolveExtractedTransaction(raw, { people, categories, types }, { referenceMonth: statement.referenceMonth })
+    );
 
     // Compara com lançamentos já existentes (mesma pessoa, valor e data próxima) para
     // avisar sobre possível duplicata — ex.: print parcial da fatura + fatura fechada

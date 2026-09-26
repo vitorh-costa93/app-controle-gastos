@@ -69,6 +69,7 @@ export async function syncComputedTaxTransactions(): Promise<
         referenceMonth: paymentMonth,
         amountCents: taxCents,
         description: `Imposto (DAS + INSS) referente a ${formatReferenceMonthShort(revenueMonth)}`,
+        onlyImpostoDescription: true,
       });
       if (inserted) created++;
     }
@@ -196,17 +197,23 @@ async function insertTaxTransactionIfMissing(
     referenceMonth: string;
     amountCents: number;
     description: string;
+    /**
+     * true = só conta como "já existe" um lançamento cuja descrição começa com "Imposto" — sem isso, um custo
+     * de tipo Imposto que não é o DAS/INSS (ex.: a mensalidade da Contabilizei) impedia o imposto do mês.
+     */
+    onlyImpostoDescription?: boolean;
   }
 ): Promise<boolean> {
-  const { data: existing } = await supabase
+  let existingQuery = supabase
     .from("transactions")
     .select("id")
     .eq("person_id", params.personId)
     .eq("type_id", params.typeId)
     .eq("reference_month", params.referenceMonth)
     .eq("direction", "expense")
-    .is("deleted_at", null)
-    .limit(1);
+    .is("deleted_at", null);
+  if (params.onlyImpostoDescription) existingQuery = existingQuery.ilike("description", "Imposto%");
+  const { data: existing } = await existingQuery.limit(1);
   // limit(1) em vez de maybeSingle: com mais de um lançamento de imposto no mês, maybeSingle dá erro
   // (data = null) e a checagem passava como "não existe", gerando lançamento duplicado.
   if (existing && existing.length > 0) return false;

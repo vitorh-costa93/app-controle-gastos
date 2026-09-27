@@ -241,7 +241,26 @@ export function PivotTable({
     return { perColumn: columnLabels.map((c) => buckets.get(c) ?? []), all: items };
   }
 
-  const valueColumnCount = columnLabels.length * measures.length + (showTotalColumn ? measures.length : 0);
+  /**
+   * Média só faz sentido "por total": média das somas de cada coluna (ou de cada linha), não a
+   * média dos lançamentos de cada célula. Só existe um lugar pra mostrar isso quando há uma
+   * coluna de Total — sem ela, Média cai de volta pro comportamento por célula.
+   */
+  const showAvgOnlyInTotal = measures.includes("avg") && showTotalColumn;
+  const regularMeasures = showAvgOnlyInTotal ? measures.filter((m) => m !== "avg") : measures;
+  const hasRegularCols = regularMeasures.length > 0;
+
+  /** Valor de uma medida na coluna Total: para Média, é a média das somas por coluna (não dos lançamentos). */
+  function totalCellValue(measure: MeasureKey, perColumn: Transaction[][], all: Transaction[]): number {
+    if (measure !== "avg" || !showAvgOnlyInTotal) return aggregate(all, measure);
+    if (perColumn.length === 0) return 0;
+    const sums = perColumn.map((bucket) => aggregate(bucket, "sum"));
+    const total = sums.reduce((s, v) => s + v, 0);
+    return Math.round(total / sums.length);
+  }
+
+  const valueColumnCount =
+    (hasRegularCols ? columnLabels.length * regularMeasures.length : 0) + (showTotalColumn ? measures.length : 0);
 
   // ---- Edição dos shelves (arrastar, clicar na lista ou remover pelo ×) ----
 
@@ -562,15 +581,16 @@ export function PivotTable({
                           >
                             {rowHeaderLabel}
                           </th>
-                          {columnLabels.map((c) => (
-                            <th
-                              key={c}
-                              colSpan={measures.length}
-                              className={cn("border-b px-3 py-2 text-center text-xs font-medium text-(--color-text-tertiary)", TONE.header, TONE.border)}
-                            >
-                              {c}
-                            </th>
-                          ))}
+                          {hasRegularCols &&
+                            columnLabels.map((c) => (
+                              <th
+                                key={c}
+                                colSpan={regularMeasures.length}
+                                className={cn("border-b px-3 py-2 text-center text-xs font-medium text-(--color-text-tertiary)", TONE.header, TONE.border)}
+                              >
+                                {c}
+                              </th>
+                            ))}
                           {showTotalColumn && (
                             <th
                               colSpan={measures.length}
@@ -581,7 +601,8 @@ export function PivotTable({
                           )}
                         </tr>
                         <tr>
-                          {[...columnLabels, ...(showTotalColumn ? ["__total__"] : [])].map((c) => measures.map((m) => measureTh(c, m)))}
+                          {hasRegularCols && columnLabels.map((c) => regularMeasures.map((m) => measureTh(c, m)))}
+                          {showTotalColumn && measures.map((m) => measureTh("__total__", m))}
                         </tr>
                       </>
                     ) : (
@@ -623,16 +644,17 @@ export function PivotTable({
                             )}
                             {node.label}
                           </td>
-                          {perColumn.map((bucket, ci) =>
-                            measures.map((m) => (
-                              <td
-                                key={`${ci}-${m}`}
-                                className={cn("border-b px-3 py-1.5 text-right tabular-nums", TONE.border)}
-                              >
-                                {formatValue(m, aggregate(bucket, m))}
-                              </td>
-                            ))
-                          )}
+                          {hasRegularCols &&
+                            perColumn.map((bucket, ci) =>
+                              regularMeasures.map((m) => (
+                                <td
+                                  key={`${ci}-${m}`}
+                                  className={cn("border-b px-3 py-1.5 text-right tabular-nums", TONE.border)}
+                                >
+                                  {formatValue(m, aggregate(bucket, m))}
+                                </td>
+                              ))
+                            )}
                           {showTotalColumn &&
                             measures.map((m) => (
                               <td
@@ -643,7 +665,7 @@ export function PivotTable({
                                   TONE.border
                                 )}
                               >
-                                {formatValue(m, aggregate(all, m))}
+                                {formatValue(m, totalCellValue(m, perColumn, all))}
                               </td>
                             ))}
                         </tr>
@@ -665,23 +687,24 @@ export function PivotTable({
                           const { perColumn, all } = cellsFor(filtered);
                           return (
                             <Fragment>
-                              {perColumn.map((bucket, ci) =>
-                                measures.map((m) => (
-                                  <td
-                                    key={`${ci}-${m}`}
-                                    className={cn("border-b px-3 py-2 text-right tabular-nums", TONE.header, TONE.border)}
-                                  >
-                                    {formatValue(m, aggregate(bucket, m))}
-                                  </td>
-                                ))
-                              )}
+                              {hasRegularCols &&
+                                perColumn.map((bucket, ci) =>
+                                  regularMeasures.map((m) => (
+                                    <td
+                                      key={`${ci}-${m}`}
+                                      className={cn("border-b px-3 py-2 text-right tabular-nums", TONE.header, TONE.border)}
+                                    >
+                                      {formatValue(m, aggregate(bucket, m))}
+                                    </td>
+                                  ))
+                                )}
                               {showTotalColumn &&
                                 measures.map((m) => (
                                   <td
                                     key={`t-${m}`}
                                     className={cn("border-b px-3 py-2 text-right tabular-nums", TONE.header, TONE.border)}
                                   >
-                                    {formatValue(m, aggregate(all, m))}
+                                    {formatValue(m, totalCellValue(m, perColumn, all))}
                                   </td>
                                 ))}
                             </Fragment>

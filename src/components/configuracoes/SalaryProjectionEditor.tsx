@@ -7,13 +7,22 @@ import { FieldGroup, Input } from "@/components/ui/Field";
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import { formatCurrencyBRL, formatReferenceMonthShort, addMonths, toReferenceMonth } from "@/lib/utils/format";
 import { upsertSalaryEntry, deleteSalaryEntry, SalaryEntry } from "@/lib/data/salary";
+import type { PsiRevenueBreakdown } from "@/lib/data/psi-revenue";
 import { syncComputedTaxTransactions } from "@/lib/data/taxes";
 import { projectSalaryForMonth, sumRevenueLast12Months, calcJaquelineTaxCents } from "@/lib/domain/salary";
 import { Person } from "@/types/db";
 
 const isFromPsi = (entry: SalaryEntry) => entry.id.startsWith("psi:");
 
-export function SalaryProjectionEditor({ entries: initialEntries, person }: { entries: SalaryEntry[]; person: Person }) {
+export function SalaryProjectionEditor({
+  entries: initialEntries,
+  person,
+  psiBreakdownByMonth,
+}: {
+  entries: SalaryEntry[];
+  person: Person;
+  psiBreakdownByMonth: Record<string, PsiRevenueBreakdown>;
+}) {
   const [entries, setEntries] = useState(initialEntries);
   const [month, setMonth] = useState(toReferenceMonth(new Date()));
   const [amountCents, setAmountCents] = useState(0);
@@ -112,24 +121,36 @@ export function SalaryProjectionEditor({ entries: initialEntries, person }: { en
         <div className="mt-4 border-t border-(--color-border) pt-3">
           <p className="mb-2 text-xs font-medium text-(--color-text-tertiary)">Histórico cadastrado</p>
           <ul className="space-y-1 text-sm">
-            {entries.map((e) => (
-              <li key={e.id} className="flex items-center justify-between">
-                <span>
-                  {formatReferenceMonthShort(e.referenceMonth)} — {formatCurrencyBRL(e.amountCents)}
-                </span>
-                {isFromPsi(e) ? (
-                  <span className="text-xs text-(--color-text-tertiary)">dashboard-psi</span>
-                ) : (
-                  <button
-                    type="button"
-                    className="text-xs text-(--color-text-tertiary) hover:text-(--color-negative)"
-                    onClick={() => handleDelete(e.id)}
-                  >
-                    remover
-                  </button>
-                )}
-              </li>
-            ))}
+            {entries.map((e) => {
+              const breakdown = isFromPsi(e) ? psiBreakdownByMonth[e.referenceMonth] : undefined;
+              return (
+                <li key={e.id} className="py-0.5">
+                  <div className="flex items-center justify-between">
+                    <span>
+                      {formatReferenceMonthShort(e.referenceMonth)} — {formatCurrencyBRL(e.amountCents)}
+                    </span>
+                    {isFromPsi(e) ? (
+                      <span className="text-xs text-(--color-text-tertiary)">dashboard-psi</span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="text-xs text-(--color-text-tertiary) hover:text-(--color-negative)"
+                        onClick={() => handleDelete(e.id)}
+                      >
+                        remover
+                      </button>
+                    )}
+                  </div>
+                  {breakdown && (
+                    <p className="text-xs text-(--color-text-tertiary)">
+                      sessões: {formatCurrencyBRL(breakdown.sessionsCents)} · wellz semanal:{" "}
+                      {formatCurrencyBRL(breakdown.wellzWeeklyCents)} · wellz histórico:{" "}
+                      {formatCurrencyBRL(breakdown.wellzHistoryCents)}
+                    </p>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}

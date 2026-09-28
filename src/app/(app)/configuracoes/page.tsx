@@ -9,8 +9,10 @@ import {
   createTransactionType,
 } from "@/lib/data/reference";
 import { listEffectiveSalaryEntries } from "@/lib/data/salary";
+import { getPsiMonthlyRevenueBreakdown } from "@/lib/data/psi-revenue";
 import { getStartingBalance, getFixedSalaryTaxAmountCents } from "@/lib/data/settings";
 import { findVariableSalaryPerson, findFixedSalaryPerson } from "@/lib/domain/salary";
+import { addMonths } from "@/lib/utils/format";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { ReferenceListEditor } from "@/components/configuracoes/ReferenceListEditor";
@@ -30,6 +32,12 @@ export default async function ConfiguracoesPage() {
   const variableSalaryPerson = findVariableSalaryPerson(people);
   const fixedSalaryPerson = findFixedSalaryPerson(people);
   const salaryEntries = variableSalaryPerson ? await listEffectiveSalaryEntries(variableSalaryPerson.id) : [];
+  const psiBreakdownByPsiMonth = variableSalaryPerson ? await getPsiMonthlyRevenueBreakdown() : {};
+  // Mesmo deslocamento de 1 mês do salário: o detalhamento do mês X no psi acompanha o
+  // lançamento que aparece aqui como X+1.
+  const psiBreakdownByReferenceMonth = Object.fromEntries(
+    Object.entries(psiBreakdownByPsiMonth).map(([psiMonth, breakdown]) => [addMonths(psiMonth, 1), breakdown])
+  );
 
   return (
     <div>
@@ -46,7 +54,11 @@ export default async function ConfiguracoesPage() {
         </div>
 
         {variableSalaryPerson && (
-          <SalaryProjectionEditor entries={salaryEntries} person={variableSalaryPerson} />
+          <SalaryProjectionEditor
+            entries={salaryEntries}
+            person={variableSalaryPerson}
+            psiBreakdownByMonth={psiBreakdownByReferenceMonth}
+          />
         )}
 
         <StartingBalanceEditor startingBalance={startingBalance} />

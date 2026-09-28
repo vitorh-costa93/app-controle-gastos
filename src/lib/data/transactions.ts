@@ -247,7 +247,7 @@ export async function listTransactions(
     .from("transactions")
     .select("*", { count: "exact" })
     .is("deleted_at", null)
-    .order("registration_date", { ascending: false })
+    .order("created_at", { ascending: false })
     .range(from, to);
 
   if (filters.referenceMonth) query = query.eq("reference_month", filters.referenceMonth);

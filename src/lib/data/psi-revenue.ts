@@ -56,7 +56,17 @@ async function fetchAllRows<T>(url: string, key: string, path: string, pageSize:
   return rows;
 }
 
-async function fetchMonthlyRevenueCents(): Promise<Record<string, number>> {
+export interface PsiRevenueBreakdown {
+  sessionsCents: number;
+  wellzWeeklyCents: number;
+  wellzHistoryCents: number;
+}
+
+const emptyBreakdown = (): PsiRevenueBreakdown => ({ sessionsCents: 0, wellzWeeklyCents: 0, wellzHistoryCents: 0 });
+
+/** Igual a fetchMonthlyRevenueCents, mas mantém os três totais por fonte separados — só para
+ *  comparar pedaço por pedaço com o dashboard-psi quando o total bate diferente. */
+async function fetchMonthlyRevenueBreakdown(): Promise<Record<string, PsiRevenueBreakdown>> {
   const url = process.env.PSI_SUPABASE_URL;
   const key = process.env.PSI_SUPABASE_SERVICE_KEY;
   if (!url || !key) return {};
@@ -72,9 +82,11 @@ async function fetchMonthlyRevenueCents(): Promise<Record<string, number>> {
     fetchAllRows<WellzHistoryRow>(url, key, "wellz_historico?select=*&order=mes.asc", 1000),
   ]);
 
-  const byMonth: Record<string, number> = {};
-  const add = (month: string, cents: number) => {
-    if (/^\d{4}-\d{2}$/.test(month)) byMonth[month] = (byMonth[month] ?? 0) + cents;
+  const byMonth: Record<string, PsiRevenueBreakdown> = {};
+  const add = (month: string, key: keyof PsiRevenueBreakdown, cents: number) => {
+    if (!/^\d{4}-\d{2}$/.test(month)) return;
+    const entry = byMonth[month] ?? (byMonth[month] = emptyBreakdown());
+    entry[key] += cents;
   };
 
   for (const row of sessions) {
@@ -83,16 +95,18 @@ async function fetchMonthlyRevenueCents(): Promise<Record<string, number>> {
     const finalValue = Number(row.valor_final ?? 0);
     // Mesmo fallback do dashboard-psi quando o valor da sessão não foi preenchido.
     const unit = sessionValue > 0 ? sessionValue : charged > 0 && finalValue > 0 ? finalValue / charged : sessionValue;
-    add(String(row.data_sessao ?? "").slice(0, 7), Math.round(charged * unit * 100));
+    add(String(row.data_sessao ?? "").slice(0, 7), "sessionsCents", Math.round(charged * unit * 100));
   }
   for (const week of weeks) {
     const cents = Object.entries(WELLZ_TARIFAS).reduce(
       (sum, [type, rate]) => sum + (Number(week[type]) || 0) * rate * 100,
       0
     );
-    add(String(week.semana_ref ?? "").slice(0, 7), cents);
+    add(String(week.semana_ref ?? "").slice(0, 7), "wellzWeeklyCents", cents);
   }
-  for (const row of history) add(String(row.mes ?? "").slice(0, 7), Math.round((Number(row.valor) || 0) * 100));
+  for (const row of history) {
+    add(String(row.mes ?? "").slice(0, 7), "wellzHistoryCents", Math.round((Number(row.valor) || 0) * 100));
+  }
 
   return byMonth;
 }
@@ -105,10 +119,26 @@ async function fetchMonthlyRevenueCents(): Promise<Record<string, number>> {
 export async function getPsiMonthlyRevenueCents(): Promise<Record<string, number>> {
   if (!isPsiRevenueConfigured()) return {};
   try {
-    const all = await fetchMonthlyRevenueCents();
-    return Object.fromEntries(Object.entries(all).filter(([, cents]) => cents > 0));
+    const all = await fetchMonthlyRevenueBreakdown();
+    return Object.fromEntries(
+      Object.entries(all)
+        .map(([month, b]) => [month, b.sessionsCents + b.wellzWeeklyCents + b.wellzHistoryCents] as const)
+        .filter(([, cents]) => cents > 0)
+    );
   } catch (error) {
     console.error("getPsiMonthlyRevenueCents failed:", error);
+    return {};
+  }
+}
+
+/** Mesmo dado de getPsiMonthlyRevenueCents, mas com o total de cada mês aberto por fonte
+ *  (sessões / Wellz semanal / Wellz histórico) — usado só para diagnosticar uma divergência. */
+export async function getPsiMonthlyRevenueBreakdown(): Promise<Record<string, PsiRevenueBreakdown>> {
+  if (!isPsiRevenueConfigured()) return {};
+  try {
+    return await fetchMonthlyRevenueBreakdown();
+  } catch (error) {
+    console.error("getPsiMonthlyRevenueBreakdown failed:", error);
     return {};
   }
 }

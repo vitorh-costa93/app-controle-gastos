@@ -5,9 +5,12 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { reaisStringToCents, centsToReaisString } from "./mappers";
 import { findVariableSalaryPerson, buildProjectedSalaryOccurrences } from "@/lib/domain/salary";
 import { getPsiMonthlyRevenueCents } from "./psi-revenue";
+import { listPeople } from "./reference";
 import { addMonths, toReferenceMonth } from "@/lib/utils/format";
 import { Person, TransactionType } from "@/types/db";
 import { Transaction, MonthlyOccurrence } from "@/types/domain";
+
+type AdminClient = ReturnType<typeof createAdminClient>;
 
 export interface SalaryEntry {
   id: string;
@@ -140,4 +143,114 @@ export async function getSalaryProjectionOccurrences(
     else map.set(occ.referenceMonth, [occ]);
   }
   return map;
+}
+
+// Sem revalidateTag aqui de propósito (ver comentário no fim de syncSalaryIncomeTransactions):
+// essa função também roda direto no render de Server Components, onde revalidate derruba a página.
+async function ensureSalaryTypeId(supabase: AdminClient): Promise<string | null> {
+  const { data: existing } = await supabase.from("transaction_types").select("id").ilike("name", "salário").maybeSingle();
+  if (existing?.id) return existing.id as string;
+  const { data: created, error } = await supabase.from("transaction_types").insert({ name: "Salário" }).select("id").single();
+  if (error || !created) {
+    console.error("ensureSalaryTypeId failed:", error);
+    return null;
+  }
+  return created.id as string;
+}
+
+async function ensureSalaryCategoryId(supabase: AdminClient): Promise<string | null> {
+  const { data: existing } = await supabase.from("categories").select("id").ilike("name", "salário").maybeSingle();
+  if (existing?.id) return existing.id as string;
+  const { data: created, error } = await supabase.from("categories").insert({ name: "Salário" }).select("id").single();
+  if (error || !created) {
+    console.error("ensureSalaryCategoryId failed:", error);
+    return null;
+  }
+  return created.id as string;
+}
+
+/**
+ * Mantém o lançamento real de "Salário" (entrada) da pessoa de salário variável sempre
+ * igual ao dashboard-psi, mês a mês — inclusive meses já fechados: o psi é a fonte de
+ * verdade (pedido explícito, 28/09/2026), então uma correção de lá (ex.: sessão lançada
+ * com atraso) precisa refletir aqui mesmo num mês antigo, sem esperar edição manual.
+ * Um mês com mais de um lançamento de Salário (caso ambíguo) fica intocado.
+ */
+export async function syncSalaryIncomeTransactions(): Promise<
+  { ok: true; created: number; updated: number } | { ok: false; error: string }
+> {
+  const supabase = createAdminClient();
+
+  const variablePerson = findVariableSalaryPerson(await listPeople());
+  if (!variablePerson) return { ok: true, created: 0, updated: 0 };
+
+  const psiByMonth = await getPsiMonthlyRevenueCents();
+  const shifted = Object.entries(psiByMonth).map(([month, cents]) => [addMonths(month, 1), cents] as const);
+  if (shifted.length === 0) return { ok: true, created: 0, updated: 0 };
+
+  const typeId = await ensureSalaryTypeId(supabase);
+  const categoryId = await ensureSalaryCategoryId(supabase);
+  if (!typeId || !categoryId) return { ok: false, error: "Não foi possível preparar o tipo/categoria Salário." };
+
+  const { data: existingRows, error: selectError } = await supabase
+    .from("transactions")
+    .select("id, reference_month, amount")
+    .eq("person_id", variablePerson.id)
+    .eq("direction", "income")
+    .eq("type_id", typeId)
+    .is("deleted_at", null);
+  if (selectError) return { ok: false, error: "Não foi possível ler os lançamentos de salário." };
+
+  const byMonth = new Map<string, { id: string; amountCents: number }[]>();
+  for (const row of (existingRows ?? []) as { id: string; reference_month: string; amount: string }[]) {
+    const arr = byMonth.get(row.reference_month) ?? [];
+    arr.push({ id: row.id, amountCents: reaisStringToCents(row.amount) });
+    byMonth.set(row.reference_month, arr);
+  }
+
+  const toInsert: Record<string, unknown>[] = [];
+  let updated = 0;
+
+  for (const [referenceMonth, cents] of shifted) {
+    const rows = byMonth.get(referenceMonth) ?? [];
+    if (rows.length === 0) {
+      toInsert.push({
+        registration_date: `${referenceMonth}-01`,
+        reference_month: referenceMonth,
+        person_id: variablePerson.id,
+        direction: "income",
+        fixed_variable: "variable",
+        type_id: typeId,
+        category_id: categoryId,
+        installment_current: 1,
+        installment_total: 1,
+        amount: centsToReaisString(cents),
+        description: "Salário (dashboard-psi)",
+        considered: true,
+        source: "manual",
+      });
+    } else if (rows.length === 1 && rows[0].amountCents !== cents) {
+      const { error: updateError } = await supabase
+        .from("transactions")
+        .update({ amount: centsToReaisString(cents) })
+        .eq("id", rows[0].id);
+      if (updateError) console.error("syncSalaryIncomeTransactions (update) failed:", updateError);
+      else updated++;
+    }
+  }
+
+  let created = 0;
+  if (toInsert.length > 0) {
+    const { error: insertError } = await supabase.from("transactions").insert(toInsert);
+    if (insertError) console.error("syncSalaryIncomeTransactions (insert) failed:", insertError);
+    else created = toInsert.length;
+  }
+
+  // Sem revalidatePath/revalidateTag aqui de propósito: essa função roda tanto a partir do
+  // client (SalaryProjectionEditor) quanto direto no render de páginas Server Component
+  // (analise/page.tsx, configuracoes/page.tsx) — chamar revalidate durante um render
+  // derruba a página ("used revalidatePath ... during render"). Como nenhuma leitura no
+  // caminho de Salário/Análise usa cache hoje, a escrita já fica visível na próxima leitura
+  // sem precisar revalidar.
+  return { ok: true, created, updated };
 }

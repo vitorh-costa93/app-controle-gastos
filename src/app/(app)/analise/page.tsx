@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { fetchAnalysisPageData, getMonthInsight } from "@/lib/data/analysis";
+import { syncSalaryIncomeTransactions } from "@/lib/data/salary";
 import { toReferenceMonth, addMonths } from "@/lib/utils/format";
 import { AnalisePageClient } from "@/components/analise/AnalisePageClient";
 
@@ -13,6 +14,11 @@ export default async function AnalisePage({
   // Painel abre por padrão no mês seguinte ao atual (ex.: hoje em setembro → outubro).
   const month = typeof sp.month === "string" ? sp.month : addMonths(toReferenceMonth(new Date()), 1);
   const personId = typeof sp.personId === "string" ? sp.personId : "";
+
+  // Antes de calcular os KPIs: reflete no lançamento real de Salário qualquer atualização
+  // do dashboard-psi, mesmo em mês já fechado — sem isso, a Análise prioriza o lançamento
+  // real e ele fica preso no valor de quando foi criado, ignorando o psi mudar depois.
+  await syncSalaryIncomeTransactions();
 
   const [{ data, transactions }, insight] = await Promise.all([
     fetchAnalysisPageData(month, personId || undefined),

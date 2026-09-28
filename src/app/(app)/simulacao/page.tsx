@@ -5,11 +5,15 @@ export const maxDuration = 60;
 import { listActiveSimulations } from "@/lib/data/simulations";
 import { getBaseMonthSummaries } from "@/lib/data/simulation-analysis";
 import { getStartingBalance } from "@/lib/data/settings";
+import { syncSalaryIncomeTransactions } from "@/lib/data/salary";
 import { getDefaultSimulationHorizon } from "@/lib/domain/horizon";
 import { SimulacaoPageClient } from "@/components/simulacao/SimulacaoPageClient";
 
 export default async function SimulacaoPage() {
   const horizon = getDefaultSimulationHorizon();
+  // Antes de calcular: reflete no lançamento real de Salário qualquer atualização do
+  // dashboard-psi (mesmo em mês já fechado).
+  await syncSalaryIncomeTransactions();
   const [simulations, baseSummariesMap, startingBalance] = await Promise.all([
     listActiveSimulations(),
     getBaseMonthSummaries(horizon),

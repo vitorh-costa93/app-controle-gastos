@@ -8,6 +8,7 @@ import { listPeople, listCategories, listTransactionTypes } from "@/lib/data/ref
 import { listActiveRecurrenceRules } from "@/lib/data/recurrence";
 import { listInstallmentGroups } from "@/lib/data/installments";
 import { getEstimatedExpenses } from "@/lib/data/estimates";
+import { syncSalaryIncomeTransactions } from "@/lib/data/salary";
 import { CadastroPageClient } from "@/components/cadastro/CadastroPageClient";
 import { RecorrenciasView } from "@/components/recorrencias/RecorrenciasView";
 
@@ -18,6 +19,11 @@ export default async function CadastroPage({
 }) {
   const sp = await searchParams;
   const page = Number(sp.page) || 1;
+
+  // Antes de listar: reflete no lançamento real de Salário qualquer atualização do
+  // dashboard-psi (mesmo em mês já fechado) — sem isso, a lista aqui ficava presa no
+  // valor de quando o lançamento foi criado.
+  await syncSalaryIncomeTransactions();
 
   const [people, categories, types, recurrenceRules] = await Promise.all([
     listPeople(),

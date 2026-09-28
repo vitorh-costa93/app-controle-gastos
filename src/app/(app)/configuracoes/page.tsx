@@ -8,7 +8,7 @@ import {
   createCategory,
   createTransactionType,
 } from "@/lib/data/reference";
-import { listEffectiveSalaryEntries } from "@/lib/data/salary";
+import { listEffectiveSalaryEntries, syncSalaryIncomeTransactions } from "@/lib/data/salary";
 import { getPsiMonthlyRevenueBreakdown } from "@/lib/data/psi-revenue";
 import { getStartingBalance, getFixedSalaryTaxAmountCents } from "@/lib/data/settings";
 import { findVariableSalaryPerson, findFixedSalaryPerson } from "@/lib/domain/salary";
@@ -21,6 +21,11 @@ import { StartingBalanceEditor } from "@/components/configuracoes/StartingBalanc
 import { TaxSettingsEditor } from "@/components/configuracoes/TaxSettingsEditor";
 
 export default async function ConfiguracoesPage() {
+  // Antes de ler pessoas/tipos/categorias: reflete no lançamento real de Salário qualquer
+  // atualização do dashboard-psi (inclusive em meses já fechados) — sem isso, a Análise
+  // continuava mostrando o valor antigo mesmo com o psi já correto aqui.
+  await syncSalaryIncomeTransactions();
+
   const [people, categories, types, startingBalance, fixedSalaryTaxAmountCents] = await Promise.all([
     listPeople(),
     listCategories(),

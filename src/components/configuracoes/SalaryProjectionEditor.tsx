@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { FieldGroup, Input } from "@/components/ui/Field";
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import { formatCurrencyBRL, formatReferenceMonthShort, addMonths, toReferenceMonth } from "@/lib/utils/format";
-import { upsertSalaryEntry, deleteSalaryEntry, SalaryEntry } from "@/lib/data/salary";
+import { upsertSalaryEntry, deleteSalaryEntry, syncSalaryIncomeTransactions, SalaryEntry } from "@/lib/data/salary";
 import type { PsiRevenueBreakdown } from "@/lib/data/psi-revenue";
 import { syncComputedTaxTransactions } from "@/lib/data/taxes";
 import { projectSalaryForMonth, sumRevenueLast12Months, calcJaquelineTaxCents } from "@/lib/domain/salary";
@@ -41,6 +41,7 @@ export function SalaryProjectionEditor({
               )
         );
         setAmountCents(0);
+        syncSalaryIncomeTransactions();
         syncComputedTaxTransactions();
       }
     });
@@ -51,6 +52,7 @@ export function SalaryProjectionEditor({
       const result = await deleteSalaryEntry(id);
       if (result.ok) {
         setEntries((prev) => prev.filter((e) => e.id !== id));
+        syncSalaryIncomeTransactions();
         syncComputedTaxTransactions();
       }
     });

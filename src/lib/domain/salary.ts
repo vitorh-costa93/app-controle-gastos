@@ -150,8 +150,9 @@ export function projectSalaryForMonth(entries: SalaryEntry[], targetMonth: strin
  * Gera lançamentos projetados de salário variável para os meses futuros que ainda não
  * têm um lançamento real registrado — sem isso, Análise e Simulação simplesmente não
  * enxergavam a receita da pessoa de salário variável nos meses que ela ainda não fechou.
- * O mês seguinte ao atual nunca é projetado: por acordo, esse mês é sempre digitado
- * manualmente antes de fechar, então não deve aparecer nenhum valor estimado nele.
+ * Uma estimativa "no escuro" (sem valor digitado nem vindo do dashboard-psi) nunca aparece
+ * para o mês seguinte ao atual — só depois que ele já tem um valor conhecido (psi ou
+ * digitado) é que ele entra aqui; antes disso, esse mês simplesmente não aparece nos KPIs.
  */
 export function buildProjectedSalaryOccurrences(params: {
   months: string[];
@@ -163,9 +164,10 @@ export function buildProjectedSalaryOccurrences(params: {
 }): MonthlyOccurrence[] {
   const { months, currentMonth, personId, typeId, salaryEntries, monthsWithRealIncome } = params;
   const firstProjectableMonth = addMonths(currentMonth, 2);
+  const hasEntry = (m: string) => salaryEntries.some((e) => e.referenceMonth === m);
 
   return months
-    .filter((m) => m >= firstProjectableMonth && !monthsWithRealIncome.has(m))
+    .filter((m) => (m >= firstProjectableMonth || hasEntry(m)) && !monthsWithRealIncome.has(m))
     .map((m) => ({
       id: `projected-salary:${personId}:${m}`,
       origin: "projected" as const,

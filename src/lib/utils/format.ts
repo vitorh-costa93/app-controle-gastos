@@ -46,6 +46,21 @@ export function formatDateBR(isoDate: string): string {
   return `${String(day).padStart(2, "0")}/${String(month).padStart(2, "0")}/${year}`;
 }
 
+/** Timestamp de banco (ex.: "2026-09-19T14:32:10.123Z") -> "19/09/2026 14:32", hora de Brasília. */
+export function formatDateTimeBR(isoTimestamp: string): string {
+  const date = new Date(isoTimestamp);
+  const parts = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).formatToParts(date);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("day")}/${get("month")}/${get("year")} ${get("hour")}:${get("minute")}`;
+}
+
 /** "2026-09-12" -> "09/2026" (reference month already stored as "2026-09") */
 export function formatReferenceMonthShort(referenceMonth: string): string {
   const [year, month] = referenceMonth.split("-");

@@ -6,7 +6,7 @@ import { Transaction } from "@/types/domain";
 import { Person, Category, TransactionType } from "@/types/db";
 import { Toggle } from "@/components/ui/Toggle";
 import { Badge } from "@/components/ui/Badge";
-import { formatCurrencyBRL, formatDateBR, formatReferenceMonthShort } from "@/lib/utils/format";
+import { formatCurrencyBRL, formatDateTimeBR, formatReferenceMonthShort } from "@/lib/utils/format";
 import { setTransactionConsidered, deleteTransaction } from "@/lib/data/transactions";
 
 export function TransactionTable({
@@ -33,7 +33,7 @@ export function TransactionTable({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-(--color-border) text-left text-xs text-(--color-text-tertiary)">
-              <th className="px-4 py-3 font-medium">Data cadastro</th>
+              <th className="px-4 py-3 font-medium">Criado em</th>
               <th className="px-4 py-3 font-medium">Mês ref.</th>
               <th className="px-4 py-3 font-medium">Origem</th>
               <th className="px-4 py-3 font-medium">Tipo</th>
@@ -94,8 +94,8 @@ function TransactionRow({
 
   return (
     <tr className="group border-b border-(--color-border) last:border-0 hover:bg-black/[0.015]">
-      <td className="cursor-pointer px-4 py-3 text-(--color-text-primary)" onClick={onEdit}>
-        {formatDateBR(transaction.registrationDate)}
+      <td className="cursor-pointer px-4 py-3 whitespace-nowrap text-(--color-text-primary)" onClick={onEdit}>
+        {formatDateTimeBR(transaction.createdAt)}
       </td>
       <td className="cursor-pointer px-4 py-3 text-(--color-text-secondary)" onClick={onEdit}>
         {formatReferenceMonthShort(transaction.referenceMonth)}
@@ -188,7 +188,7 @@ function MobileCard({
       <div className="flex flex-col gap-0.5">
         <span className="text-sm font-medium">{category?.name ?? transaction.description ?? "—"}</span>
         <span className="text-xs text-(--color-text-tertiary)">
-          {formatDateBR(transaction.registrationDate)} · {person?.name ?? "—"}
+          {formatDateTimeBR(transaction.createdAt)} · {person?.name ?? "—"}
         </span>
       </div>
       <div className="flex items-center gap-2">

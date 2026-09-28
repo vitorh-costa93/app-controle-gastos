@@ -1,5 +1,4 @@
 import "server-only";
-import { unstable_cache } from "next/cache";
 
 /**
  * "Valor Recebido" mensal do dashboard-psi (consultório da Jaqueline), lido direto do Supabase
@@ -98,16 +97,15 @@ async function fetchMonthlyRevenueCents(): Promise<Record<string, number>> {
   return byMonth;
 }
 
-const getCachedMonthlyRevenue = unstable_cache(fetchMonthlyRevenueCents, ["psi-monthly-revenue-v2"], {
-  tags: ["psi-revenue"],
-  revalidate: 300,
-});
-
-/** Valor recebido por mês ("YYYY-MM" → centavos), só meses com valor > 0. Falha silenciosa → {}. */
+/**
+ * Valor recebido por mês ("YYYY-MM" → centavos), só meses com valor > 0. Falha silenciosa → {}.
+ * Busca direto no Supabase do dashboard-psi a cada chamada (sem cache): atualizações de lá
+ * precisam aparecer aqui na hora, não só depois de alguns minutos.
+ */
 export async function getPsiMonthlyRevenueCents(): Promise<Record<string, number>> {
   if (!isPsiRevenueConfigured()) return {};
   try {
-    const all = await getCachedMonthlyRevenue();
+    const all = await fetchMonthlyRevenueCents();
     return Object.fromEntries(Object.entries(all).filter(([, cents]) => cents > 0));
   } catch (error) {
     console.error("getPsiMonthlyRevenueCents failed:", error);

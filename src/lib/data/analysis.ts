@@ -1,6 +1,5 @@
 "use server";
 
-import { unstable_cache } from "next/cache";
 import { listAllTransactions, listConsideredTransactionsInRange, listTransactionsForMonth } from "./transactions";
 import { listActiveRecurrenceRules } from "./recurrence";
 import { listPeople, listCategories, listTransactionTypes } from "./reference";
@@ -36,17 +35,13 @@ export interface AnalysisData {
 }
 
 /**
- * Trocar de mês em Análise refazia sempre 12 meses de consultas do zero — cacheado
- * por mês+pessoa (300s ou até uma mutação relevante invalidar a tag "analysis") pra
- * deixar a navegação entre meses instantânea na maioria das vezes.
+ * Sem cache de propósito: o salário variável vem do dashboard-psi (Supabase de outro projeto,
+ * fora do nosso controle de invalidação) e uma atualização de lá precisa aparecer aqui na hora,
+ * não só depois de até 5 minutos.
  */
-export const getAnalysisData = unstable_cache(
-  async (month: string, personId?: string): Promise<AnalysisData> => {
-    return computeAnalysisData(month, personId);
-  },
-  ["analysis-data-v3"],
-  { tags: ["analysis"], revalidate: 300 }
-);
+export async function getAnalysisData(month: string, personId?: string): Promise<AnalysisData> {
+  return computeAnalysisData(month, personId);
+}
 
 /** `personId` restringe tudo (KPIs, gráficos, breakdowns) a uma única pessoa — "ver o todo" quando omitido. */
 async function computeAnalysisData(month: string, personId?: string): Promise<AnalysisData> {

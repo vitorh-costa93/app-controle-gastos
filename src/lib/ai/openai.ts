@@ -1,5 +1,7 @@
 import "server-only";
 import OpenAI from "openai";
+import { modelFor, imageQuality, estimateCostUsd, type AiTask } from "./models";
+import { logAiUsage } from "./usage";
 
 let client: OpenAI | null = null;
 
@@ -15,13 +17,36 @@ export function getOpenAIClient(): OpenAI {
   return client;
 }
 
-export const EXTRACTION_MODEL = "gpt-4o-mini";
-export const VISION_MODEL = "gpt-4o-mini";
-export const TRANSCRIPTION_MODEL = "whisper-1";
-export const INSIGHT_MODEL = "gpt-4o-mini";
-// dall-e-3 é legado e vinha falhando em silêncio (só aparecia o ícone na Simulação).
-// gpt-image-1 é o modelo atual; dall-e-3 fica só como segunda tentativa.
-export const IMAGE_MODELS = ["gpt-image-1", "dall-e-3"] as const;
+// Modelos e custos vivem em ./models.ts; todo uso é registrado em ai_usage (./usage.ts).
+// Imagem: só gpt-image-2.5-flare em medium (decisão do usuário); sem fallback para outros modelos.
+
+/** chat.completions com modelo da tarefa + log de uso/custo (nunca quebra por causa do log). */
+async function chat(
+  task: AiTask,
+  params: Omit<OpenAI.Chat.ChatCompletionCreateParamsNonStreaming, "model">
+): Promise<OpenAI.Chat.ChatCompletion> {
+  const openai = getOpenAIClient();
+  const model = modelFor(task);
+  const t0 = Date.now();
+  try {
+    const response = await openai.chat.completions.create({ ...params, model });
+    const u = response.usage;
+    await logAiUsage({
+      task,
+      model,
+      ok: true,
+      inputTokens: u?.prompt_tokens,
+      cachedTokens: u?.prompt_tokens_details?.cached_tokens,
+      outputTokens: u?.completion_tokens,
+      reasoningTokens: u?.completion_tokens_details?.reasoning_tokens,
+      durationMs: Date.now() - t0,
+    });
+    return response;
+  } catch (error) {
+    await logAiUsage({ task, model, ok: false, durationMs: Date.now() - t0, error: String(error) });
+    throw error;
+  }
+}
 
 export interface GeneratedImage {
   data: Buffer;
@@ -38,35 +63,29 @@ export async function generateSimulationImage(description: string): Promise<Gene
   const openai = getOpenAIClient();
   const prompt = `Fotografia realista, bonita e bem iluminada representando: "${description}". Estilo foto de revista/banco de imagens, cores naturais, enquadramento horizontal, sem texto, sem letras, sem números, sem logotipos.`;
 
-  for (const model of IMAGE_MODELS) {
+  const quality = imageQuality();
+  for (const model of [modelFor("image")]) {
+    const t0 = Date.now();
     try {
-      const response =
-        model === "gpt-image-1"
-          ? await openai.images.generate({
-              model,
-              prompt,
-              size: "1536x1024",
-              quality: "medium",
-              output_format: "jpeg",
-              n: 1,
-            })
-          : await openai.images.generate({
-              model,
-              prompt,
-              size: "1792x1024",
-              response_format: "b64_json",
-              n: 1,
-            });
+      const response = await openai.images.generate({
+        model,
+        prompt,
+        size: "1536x1024",
+        quality,
+        output_format: "jpeg",
+        n: 1,
+      });
+      const u = response.usage;
+      const usage = { inputTokens: u?.input_tokens ?? 0, cachedTokens: 0, outputTokens: u?.output_tokens ?? 0 };
+      await logAiUsage({ task: "image", model, ok: true, ...usage, costUsd: u ? estimateCostUsd(model, usage) : null, durationMs: Date.now() - t0 });
       const b64 = response.data?.[0]?.b64_json;
       if (!b64) {
         console.error(`generateSimulationImage (${model}): resposta sem imagem`);
         continue;
       }
-      return {
-        data: Buffer.from(b64, "base64"),
-        contentType: model === "gpt-image-1" ? "image/jpeg" : "image/png",
-      };
+      return { data: Buffer.from(b64, "base64"), contentType: "image/jpeg" };
     } catch (error) {
+      await logAiUsage({ task: "image", model, ok: false, durationMs: Date.now() - t0, error: String(error) });
       console.error(`generateSimulationImage (${model}) failed:`, error);
     }
   }
@@ -181,9 +200,7 @@ export async function extractTransactionsFromText(
   text: string,
   context: ExtractionContext
 ): Promise<ExtractionResult> {
-  const openai = getOpenAIClient();
-  const response = await openai.chat.completions.create({
-    model: EXTRACTION_MODEL,
+  const response = await chat("extraction", {
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
       { role: "user", content: `${buildContextBlock(context)}\n\nTexto do usuário:\n${text}` },
@@ -201,9 +218,7 @@ export async function extractTransactionsFromImage(
   imageDataUrls: string[],
   context: ExtractionContext
 ): Promise<ExtractionResult> {
-  const openai = getOpenAIClient();
-  const response = await openai.chat.completions.create({
-    model: VISION_MODEL,
+  const response = await chat("vision", {
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
       {
@@ -228,12 +243,17 @@ export async function extractTransactionsFromImage(
 
 export async function transcribeAudio(file: File): Promise<string> {
   const openai = getOpenAIClient();
-  const result = await openai.audio.transcriptions.create({
-    model: TRANSCRIPTION_MODEL,
-    file,
-    language: "pt",
-  });
-  return result.text;
+  const model = modelFor("transcription");
+  const t0 = Date.now();
+  try {
+    const result = await openai.audio.transcriptions.create({ model, file, language: "pt" });
+    // Whisper cobra por minuto de áudio (não por token): registra a chamada sem custo estimado.
+    await logAiUsage({ task: "transcription", model, ok: true, costUsd: null, durationMs: Date.now() - t0 });
+    return result.text;
+  } catch (error) {
+    await logAiUsage({ task: "transcription", model, ok: false, durationMs: Date.now() - t0, error: String(error) });
+    throw error;
+  }
 }
 
 function parseExtractionResponse(content: string | null | undefined): ExtractionResult {
@@ -247,9 +267,7 @@ function parseExtractionResponse(content: string | null | undefined): Extraction
 }
 
 export async function generateMonthInsight(prompt: string): Promise<string> {
-  const openai = getOpenAIClient();
-  const response = await openai.chat.completions.create({
-    model: INSIGHT_MODEL,
+  const response = await chat("insight", {
     messages: [
       {
         role: "system",
@@ -263,9 +281,7 @@ export async function generateMonthInsight(prompt: string): Promise<string> {
 }
 
 export async function generateSimulationSummary(prompt: string): Promise<string> {
-  const openai = getOpenAIClient();
-  const response = await openai.chat.completions.create({
-    model: INSIGHT_MODEL,
+  const response = await chat("insight", {
     messages: [
       {
         role: "system",

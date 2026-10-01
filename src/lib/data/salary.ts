@@ -146,7 +146,7 @@ export async function getSalaryProjectionOccurrences(
 }
 
 /**
- * Salário variável ESTIMADO para os meses abertos (atual e seguintes), usado pela Simulação: mesmo mês do
+ * Salário variável ESTIMADO do mês seguinte ao atual em diante, usado pela Simulação: mesmo mês do
  * ano anterior × (1 + variação YoY acumulada no ano), calculado só com os meses já fechados. O valor real
  * (inclusive o que o psi já informou) só passa a valer quando o mês fecha.
  */
@@ -159,17 +159,17 @@ export async function getEstimatedSalaryOccurrences(
   if (!person) return { personId: null, byMonth: new Map() };
 
   const currentMonth = toReferenceMonth(new Date());
-  const closedEntries = (await listEffectiveSalaryEntries(person.id)).filter((e) => e.referenceMonth < currentMonth);
+  const closedEntries = (await listEffectiveSalaryEntries(person.id)).filter((e) => e.referenceMonth <= currentMonth);
   const typeId = types.find((t) => /sal[aá]rio/i.test(t.name))?.id ?? null;
 
   const occurrences = buildProjectedSalaryOccurrences({
-    months: months.filter((m) => m >= currentMonth),
+    months: months.filter((m) => m > currentMonth),
     currentMonth,
     personId: person.id,
     typeId,
     salaryEntries: closedEntries,
     monthsWithRealIncome: new Set(),
-    projectFromMonth: currentMonth,
+    projectFromMonth: addMonths(currentMonth, 1),
   });
 
   const byMonth = new Map<string, MonthlyOccurrence[]>();

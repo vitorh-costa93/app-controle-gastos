@@ -12,14 +12,14 @@ export interface MonthlyEstimate {
   amountCents: number;
 }
 
-/** Mês ainda não fechado: o mês atual e os seguintes. Só depois que ele fecha entra o valor real. */
+/** Mês estimado: do mês seguinte ao atual em diante. O mês atual segue Análise (dados já lançados). */
 export function isOpenMonth(month: string, currentMonth: string): boolean {
-  return month >= currentMonth;
+  return month > currentMonth;
 }
 
 /**
- * Ocorrências de um mês para a base da Simulação. Meses fechados usam só dados reais (como Análise).
- * Meses abertos mantêm o que já é compromisso (fixos/recorrências, parcelas, entradas) mas trocam o gasto
+ * Ocorrências de um mês para a base da Simulação. Mês atual e anteriores usam os mesmos dados de Análise.
+ * Meses futuros mantêm o que já é compromisso (fixos/recorrências, parcelas, entradas) mas trocam o gasto
  * variável avulso — que ainda está incompleto, ou zerado — pelo gasto estimado.
  */
 export function buildSimulationMonthOccurrences(args: {

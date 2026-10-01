@@ -19,6 +19,8 @@ import { ReferenceListEditor } from "@/components/configuracoes/ReferenceListEdi
 import { SalaryProjectionEditor } from "@/components/configuracoes/SalaryProjectionEditor";
 import { StartingBalanceEditor } from "@/components/configuracoes/StartingBalanceEditor";
 import { TaxSettingsEditor } from "@/components/configuracoes/TaxSettingsEditor";
+import { VehicleIpvaEditor } from "@/components/configuracoes/VehicleIpvaEditor";
+import { getVehicle } from "@/lib/data/vehicle";
 
 export default async function ConfiguracoesPage() {
   // Antes de ler pessoas/tipos/categorias: reflete no lançamento real de Salário qualquer
@@ -26,12 +28,13 @@ export default async function ConfiguracoesPage() {
   // continuava mostrando o valor antigo mesmo com o psi já correto aqui.
   await syncSalaryIncomeTransactions();
 
-  const [people, categories, types, startingBalance, fixedSalaryTaxAmountCents] = await Promise.all([
+  const [people, categories, types, startingBalance, fixedSalaryTaxAmountCents, vehicle] = await Promise.all([
     listPeople(),
     listCategories(),
     listTransactionTypes(),
     getStartingBalance(),
     getFixedSalaryTaxAmountCents(),
+    getVehicle(),
   ]);
 
   const variableSalaryPerson = findVariableSalaryPerson(people);
@@ -73,6 +76,8 @@ export default async function ConfiguracoesPage() {
           fixedSalaryTaxAmountCents={fixedSalaryTaxAmountCents}
           hasVariableSalaryPerson={Boolean(variableSalaryPerson)}
         />
+
+        <VehicleIpvaEditor vehicle={vehicle} people={people} categories={categories} types={types} />
 
         <Card className="p-5">
           <h3 className="mb-3 text-[15px] font-semibold">Preferências</h3>

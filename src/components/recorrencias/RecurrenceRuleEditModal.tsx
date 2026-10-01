@@ -14,12 +14,15 @@ export function RecurrenceRuleEditModal({
   rule,
   onClose,
   onChanged,
+  initialMonth,
 }: {
   rule: RecurrenceRule;
   onClose: () => void;
   onChanged: () => void;
+  /** Mês em contexto (ex.: o mês aberto no Cadastro) — pré-preenche "a partir de" e o mês do valor real. */
+  initialMonth?: string;
 }) {
-  const now = toReferenceMonth(new Date());
+  const now = initialMonth ?? toReferenceMonth(new Date());
 
   const [newAmountCents, setNewAmountCents] = useState(rule.amountCents);
   const [effectiveFrom, setEffectiveFrom] = useState(now);

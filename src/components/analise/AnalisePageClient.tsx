@@ -13,6 +13,8 @@ import { MonthlyEvolutionChart } from "./MonthlyEvolutionChart";
 import { SavingsRateCard } from "./SavingsRateCard";
 import { CompositionCard } from "./CompositionCard";
 import { CommitmentsChart } from "./CommitmentsChart";
+import { UnplannedCard } from "./UnplannedCard";
+import { cn } from "@/lib/utils/cn";
 import { CategoryChangesCard } from "./CategoryChangesCard";
 import { PersonComparisonCard } from "./PersonComparisonCard";
 import { TopExpensesCard } from "./TopExpensesCard";
@@ -40,6 +42,7 @@ export function AnalisePageClient({
   const [data, setData] = useState(initialData);
   const [monthTransactions, setMonthTransactions] = useState(initialTransactions);
   const [insight, setInsight] = useState(initialInsight);
+  const [commitmentView, setCommitmentView] = useState<"composition" | "commitments">("composition");
   const [isPending, startTransition] = useTransition();
   const [insightPending, startInsightTransition] = useTransition();
 
@@ -150,8 +153,37 @@ export function AnalisePageClient({
           </Card>
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <CompositionCard commitment={data.commitments[0]} />
-            <CommitmentsChart commitments={data.commitments} />
+            <div className="flex min-w-0 flex-col gap-3">
+              <div className="inline-flex w-fit rounded-(--radius-md) bg-black/5 p-1" role="group" aria-label="Visão">
+                {(
+                  [
+                    { key: "composition", label: "Fixo × variável" },
+                    { key: "commitments", label: "Compromissos" },
+                  ] as const
+                ).map((v) => (
+                  <button
+                    key={v.key}
+                    type="button"
+                    aria-pressed={commitmentView === v.key}
+                    onClick={() => setCommitmentView(v.key)}
+                    className={cn(
+                      "rounded-(--radius-sm) px-3.5 py-1.5 text-sm font-medium transition-colors",
+                      commitmentView === v.key
+                        ? "bg-(--color-surface) text-(--color-text-primary) shadow-(--shadow-sm)"
+                        : "text-(--color-text-secondary)"
+                    )}
+                  >
+                    {v.label}
+                  </button>
+                ))}
+              </div>
+              {commitmentView === "composition" ? (
+                <CompositionCard commitment={data.commitments[0]} />
+              ) : (
+                <CommitmentsChart commitments={data.commitments} />
+              )}
+            </div>
+            <UnplannedCard months={data.unplanned} byCategory={data.unplannedByCategory} categories={data.categories} />
           </div>
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

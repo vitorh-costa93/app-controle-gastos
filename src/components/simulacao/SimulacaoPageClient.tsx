@@ -13,21 +13,26 @@ import { ScenarioList } from "./ScenarioList";
 import { LeftoverComparisonChart, AccumulatedBalanceChart, BaseAccumulatedChart } from "./SimulationCharts";
 import { ImpactSummaryCard } from "./ImpactSummaryCard";
 import { generateScenarioAiSummary } from "@/lib/data/simulation-analysis";
-import { regenerateSimulationImage } from "@/lib/data/simulations";
+import { deleteSimulation, regenerateSimulationImage, restoreSimulation } from "@/lib/data/simulations";
+import { SimulationEditModal } from "./SimulationEditModal";
 import { formatMonthLabel } from "@/lib/utils/format";
 
 export function SimulacaoPageClient({
   initialSimulations,
+  initialArchived,
   baseSummaries,
   horizon,
   startingBalance,
 }: {
   initialSimulations: Simulation[];
+  initialArchived: Simulation[];
   baseSummaries: MonthSummary[];
   horizon: { from: string; to: string };
   startingBalance: StartingBalance | null;
 }) {
   const [simulations, setSimulations] = useState(initialSimulations);
+  const [archived, setArchived] = useState(initialArchived);
+  const [editing, setEditing] = useState<Simulation | null>(null);
   const [primaryId, setPrimaryId] = useState<string | null>(initialSimulations[0]?.id ?? null);
   const [includeOthers, setIncludeOthers] = useState(false);
   const [selectedOtherIds, setSelectedOtherIds] = useState<string[]>([]);
@@ -103,6 +108,32 @@ export function SimulacaoPageClient({
     generateImage(primary.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [primary?.id, primary?.imageUrl]);
+
+  async function handleDelete(sim: Simulation) {
+    const result = await deleteSimulation(sim.id);
+    if (!result.ok) {
+      window.alert(result.error);
+      return;
+    }
+    setSimulations((prev) => {
+      const next = prev.filter((s) => s.id !== sim.id);
+      if (primaryId === sim.id) setPrimaryId(next[0]?.id ?? null);
+      return next;
+    });
+    setSelectedOtherIds((prev) => prev.filter((id) => id !== sim.id));
+    setArchived((prev) => [{ ...sim, active: false }, ...prev]);
+  }
+
+  async function handleRestore(sim: Simulation) {
+    const result = await restoreSimulation(sim.id);
+    if (!result.ok) {
+      window.alert(result.error);
+      return;
+    }
+    setArchived((prev) => prev.filter((s) => s.id !== sim.id));
+    setSimulations((prev) => [{ ...sim, active: true }, ...prev]);
+    setPrimaryId((cur) => cur ?? sim.id);
+  }
 
   const aiSummary = aiState?.key === aiRequestKey ? aiState.summary : null;
   const aiLoading = Boolean(primary) && aiState?.key !== aiRequestKey;
@@ -203,9 +234,13 @@ export function SimulacaoPageClient({
             }}
           />
 
-          {simulations.length > 0 && (
+          {(simulations.length > 0 || archived.length > 0) && (
             <ScenarioList
               simulations={simulations}
+              archived={archived}
+              onEdit={setEditing}
+              onDelete={handleDelete}
+              onRestore={handleRestore}
               primaryId={primaryId}
               onSelectPrimary={setPrimaryId}
               includeOthers={includeOthers}
@@ -218,6 +253,17 @@ export function SimulacaoPageClient({
           )}
         </div>
       </div>
+
+      {editing && (
+        <SimulationEditModal
+          simulation={editing}
+          onClose={() => setEditing(null)}
+          onSaved={(saved) => {
+            setSimulations((prev) => prev.map((s) => (s.id === saved.id ? saved : s)));
+            setEditing(null);
+          }}
+        />
+      )}
     </div>
   );
 }

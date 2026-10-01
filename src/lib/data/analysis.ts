@@ -6,7 +6,15 @@ import { listPeople, listCategories, listTransactionTypes } from "./reference";
 import { getSalaryProjectionOccurrences } from "./salary";
 import { buildMonthOccurrences, monthRange } from "@/lib/domain/recurrence";
 import { summarizeMonth, breakdownByCategory, breakdownByKey } from "@/lib/domain/finance";
-import { computeCommitment, computeCategoryChanges, MonthCommitment, CategoryChange } from "@/lib/domain/insights";
+import {
+  computeCommitment,
+  computeCategoryChanges,
+  computeUnplanned,
+  isUnplannedExpense,
+  MonthCommitment,
+  MonthUnplanned,
+  CategoryChange,
+} from "@/lib/domain/insights";
 import { addMonths } from "@/lib/utils/format";
 import { isAiConfigured, generateMonthInsight } from "@/lib/ai/openai";
 import { MonthSummary, MonthlyOccurrence, Transaction } from "@/types/domain";
@@ -22,6 +30,10 @@ export interface AnalysisData {
   personBreakdown: { key: string | null; amountCents: number; percent: number }[];
   /** Renda × gastos fixos/parcelas/variáveis do mês selecionado e dos 5 seguintes (o primeiro item é o mês selecionado). */
   commitments: MonthCommitment[];
+  /** Gasto fora do planejado (nem parcelado, nem fixo) nos últimos 12 meses; o último item é o mês selecionado. */
+  unplanned: MonthUnplanned[];
+  /** Categorias do gasto fora do planejado no mês selecionado, da maior para a menor. */
+  unplannedByCategory: { categoryId: string | null; amountCents: number; percent: number }[];
   /** Categorias que mais subiram/caíram contra a média dos 3 meses anteriores (vazio sem histórico). */
   categoryChanges: CategoryChange[];
   /** Entradas e saídas do mês por pessoa. */
@@ -62,12 +74,15 @@ async function computeAnalysisData(month: string, personId?: string): Promise<An
   const salaryByMonth = await getSalaryProjectionOccurrences(months, people, types, allTransactions, personId);
   const withSalary = (m: string, occ: MonthlyOccurrence[]) => [...occ, ...(salaryByMonth.get(m) ?? [])];
 
-  const summaries = months.map((m) => summarizeMonth(m, withSalary(m, buildMonthOccurrences(m, transactions, rules))));
+  const occurrencesByMonth = months.map((m) => withSalary(m, buildMonthOccurrences(m, transactions, rules)));
+  const summaries = months.map((m, i) => summarizeMonth(m, occurrencesByMonth[i]));
+  const unplanned = months.map((m, i) => computeUnplanned(m, occurrencesByMonth[i]));
   const currentSummary = summaries[summaries.length - 1];
   const previousSummary = summaries.length > 1 ? summaries[summaries.length - 2] : null;
 
   const currentOccurrences = withSalary(month, buildMonthOccurrences(month, transactions, rules));
   const categoryBreakdown = breakdownByCategory(currentOccurrences, "expense");
+  const unplannedByCategory = breakdownByCategory(currentOccurrences.filter(isUnplannedExpense), "expense");
   const typeBreakdown = breakdownByKey(currentOccurrences, "typeId", "expense");
   const personBreakdown = breakdownByKey(currentOccurrences, "personId", "expense");
 
@@ -114,6 +129,8 @@ async function computeAnalysisData(month: string, personId?: string): Promise<An
     typeBreakdown,
     personBreakdown,
     commitments,
+    unplanned,
+    unplannedByCategory,
     categoryChanges,
     personSummaries,
     projectedOccurrences: currentOccurrences.filter((o) => o.origin === "projected"),

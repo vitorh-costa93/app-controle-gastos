@@ -6,6 +6,7 @@ import { TransactionRow } from "@/types/db";
 import { Transaction, RecurrenceFrequency } from "@/types/domain";
 import { mapTransactionRow, centsToReaisString, reaisStringToCents } from "./mappers";
 import { addMonths, addMonthsToISODate } from "@/lib/utils/format";
+import { sameMerchant, DUPLICATE_WINDOW_DAYS } from "@/lib/domain/duplicates";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -591,27 +592,6 @@ export interface DuplicateMatch {
   referenceMonth?: string;
 }
 
-/**
- * Nome do estabelecimento sem a marcação de parcela ("PARC03/06", "Parcela 3/6", "03/06") e sem
- * pontuação — a mesma compra parcelada muda só o número da parcela de uma fatura para a outra.
- */
-function normalizeMerchant(description: string | null): string {
-  return (description ?? "")
-    .toLowerCase()
-    .replace(/parc(?:ela)?\s*\d{1,2}\s*\/\s*\d{1,2}/g, " ")
-    .replace(/\b\d{1,2}\s*\/\s*\d{1,2}\b/g, " ")
-    .replace(/[^a-z0-9à-ú]+/g, " ")
-    .trim();
-}
-
-function sameMerchant(a: string | null, b: string | null): boolean {
-  const x = normalizeMerchant(a);
-  const y = normalizeMerchant(b);
-  if (!x || !y) return false;
-  return x === y || (Math.min(x.length, y.length) >= 6 && (x.startsWith(y) || y.startsWith(x)));
-}
-
-const DUPLICATE_WINDOW_DAYS = 10;
 
 /**
  * Para cada candidato (ex.: linhas extraídas de uma fatura), procura um lançamento

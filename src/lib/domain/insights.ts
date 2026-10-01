@@ -25,6 +25,35 @@ export function computeCommitment(referenceMonth: string, occurrences: MonthlyOc
   return { referenceMonth, incomeCents, fixedCents, installmentCents, variableCents };
 }
 
+/** Saída considerada que não é parcela nem fixa/recorrente — o gasto que não estava no planejamento. */
+export function isUnplannedExpense(o: MonthlyOccurrence): boolean {
+  return (
+    o.direction === "expense" &&
+    o.considered &&
+    o.installmentTotal <= 1 &&
+    o.fixedVariable !== "fixed" &&
+    !o.recurrenceRuleId
+  );
+}
+
+/** Gasto fora do planejado de um mês, contra a renda e as saídas totais dele. */
+export interface MonthUnplanned {
+  referenceMonth: string;
+  unplannedCents: number;
+  expenseCents: number;
+  incomeCents: number;
+}
+
+export function computeUnplanned(referenceMonth: string, occurrences: MonthlyOccurrence[]): MonthUnplanned {
+  const considered = occurrences.filter((o) => o.considered);
+  return {
+    referenceMonth,
+    unplannedCents: considered.filter(isUnplannedExpense).reduce((s, o) => s + o.amountCents, 0),
+    expenseCents: considered.filter((o) => o.direction === "expense").reduce((s, o) => s + o.amountCents, 0),
+    incomeCents: considered.filter((o) => o.direction === "income").reduce((s, o) => s + o.amountCents, 0),
+  };
+}
+
 export interface CategoryChange {
   categoryId: string | null;
   currentCents: number;

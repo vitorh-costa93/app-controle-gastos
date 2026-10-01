@@ -11,6 +11,9 @@ import { getEstimatedExpenses } from "@/lib/data/estimates";
 import { syncSalaryIncomeTransactions } from "@/lib/data/salary";
 import { CadastroPageClient } from "@/components/cadastro/CadastroPageClient";
 import { RecorrenciasView } from "@/components/recorrencias/RecorrenciasView";
+import { AtencaoView } from "@/components/atencao/AtencaoView";
+import { listDuplicatePairs } from "@/lib/data/duplicates";
+import { buildMonthRows } from "@/lib/domain/month-rows";
 
 export default async function CadastroPage({
   searchParams,
@@ -49,17 +52,42 @@ export default async function CadastroPage({
     );
   }
 
-  const { data: transactions, total } = await listTransactions({
-    referenceMonth: typeof sp.month === "string" ? sp.month : undefined,
-    personId: typeof sp.personId === "string" ? sp.personId : undefined,
-    direction:
-      sp.direction === "income" || sp.direction === "expense" ? sp.direction : undefined,
-    typeId: typeof sp.typeId === "string" ? sp.typeId : undefined,
+  if (sp.tab === "atencao") {
+    const pairs = await listDuplicatePairs();
+    return <AtencaoView pairs={pairs} people={people} categories={categories} />;
+  }
+
+  const month = typeof sp.month === "string" && /^\d{4}-\d{2}$/.test(sp.month) ? sp.month : undefined;
+  const filters = {
+    personId: typeof sp.personId === "string" && sp.personId ? sp.personId : undefined,
+    direction: sp.direction === "income" || sp.direction === "expense" ? sp.direction : undefined,
+    typeId: typeof sp.typeId === "string" && sp.typeId ? sp.typeId : undefined,
     fixedVariable:
       sp.fixedVariable === "fixed" || sp.fixedVariable === "variable" ? sp.fixedVariable : undefined,
-    page,
-    pageSize: 12,
-  });
+  } as const;
+
+  // Com um mês escolhido, a lista mostra tudo o que cai nele (inclusive recorrentes e parcelas
+  // cadastradas em outros meses); sem mês, continua a lista cronológica de lançamentos.
+  if (month) {
+    const { data: monthTransactions } = await listTransactions({ ...filters, referenceMonth: month, pageSize: 500 });
+    const allRows = buildMonthRows(month, monthTransactions, recurrenceRules, filters);
+    const pageSize = 20;
+    return (
+      <CadastroPageClient
+        transactions={[]}
+        monthRows={allRows.slice((page - 1) * pageSize, page * pageSize)}
+        total={allRows.length}
+        page={page}
+        pageSize={pageSize}
+        people={people}
+        categories={categories}
+        types={types}
+        recurrenceRules={recurrenceRules}
+      />
+    );
+  }
+
+  const { data: transactions, total } = await listTransactions({ ...filters, page, pageSize: 12 });
 
   return (
     <CadastroPageClient

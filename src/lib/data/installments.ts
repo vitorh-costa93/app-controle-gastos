@@ -2,7 +2,7 @@
 
 import { revalidatePath, revalidateTag } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { reaisStringToCents } from "./mappers";
+import { reaisStringToCents, centsToReaisString } from "./mappers";
 import { addMonths, addMonthsToISODate, toReferenceMonth } from "@/lib/utils/format";
 
 export interface InstallmentGroup {
@@ -87,6 +87,42 @@ export async function listInstallmentGroups(): Promise<InstallmentGroup[]> {
   }
 
   return groups.sort((a, b) => a.lastMonth.localeCompare(b.lastMonth));
+}
+
+export interface InstallmentGroupPatch {
+  description: string | null;
+  amountCents: number;
+  categoryId: string | null;
+  typeId: string | null;
+}
+
+/** Altera a compra parcelada a partir de `fromMonth` (inclusive): as parcelas anteriores ficam como estavam. */
+export async function updateInstallmentGroupFrom(
+  groupId: string,
+  fromMonth: string,
+  patch: InstallmentGroupPatch
+): Promise<{ ok: true; updated: number } | { ok: false; error: string }> {
+  if (patch.amountCents <= 0) return { ok: false, error: "Informe um valor maior que zero." };
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("transactions")
+    .update({
+      description: patch.description,
+      amount: centsToReaisString(patch.amountCents),
+      category_id: patch.categoryId,
+      type_id: patch.typeId,
+    })
+    .eq("installment_group_id", groupId)
+    .gte("reference_month", fromMonth)
+    .is("deleted_at", null)
+    .select("id");
+
+  if (error) {
+    console.error("updateInstallmentGroupFrom failed:", error);
+    return { ok: false, error: "Não foi possível atualizar a compra parcelada." };
+  }
+  revalidateAll();
+  return { ok: true, updated: data?.length ?? 0 };
 }
 
 /** Encerra uma compra parcelada: apaga as parcelas a partir de `fromMonth` (as já pagas ficam). */

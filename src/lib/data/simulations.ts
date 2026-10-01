@@ -13,6 +13,8 @@ export interface SimulationInput {
   totalAmountCents: number;
   installments: number;
   startDate: string;
+  /** Não gera a foto ilustrativa (que consome a API de imagens) — para simulações criadas automaticamente. */
+  skipImage?: boolean;
 }
 
 export async function listActiveSimulations(): Promise<Simulation[]> {
@@ -32,7 +34,7 @@ export async function createSimulation(
   const supabase = createAdminClient();
   // Gera a foto ilustrativa antes de salvar — se falhar, a simulação é criada sem imagem
   // mesmo assim (dá pra tentar de novo depois pelo botão "Gerar imagem").
-  const imageUrl = await generateAndStoreImage(input.description);
+  const imageUrl = input.skipImage ? null : await generateAndStoreImage(input.description);
   const { data, error } = await supabase
     .from("simulations")
     .insert({
@@ -75,6 +77,53 @@ export async function regenerateSimulationImage(
   if (error) return { ok: false, error: "A imagem foi gerada, mas não foi possível salvá-la." };
   revalidatePath("/simulacao");
   return { ok: true, imageUrl };
+}
+
+/** Simulações excluídas (soft-delete): ficam no banco e podem ser restauradas. */
+export async function listArchivedSimulations(): Promise<Simulation[]> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("simulations")
+    .select("*")
+    .eq("active", false)
+    .order("updated_at", { ascending: false });
+  if (error) return [];
+  return (data as SimulationRow[]).map(mapSimulationRow);
+}
+
+export async function restoreSimulation(
+  id: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("simulations").update({ active: true }).eq("id", id);
+  if (error) return { ok: false, error: "Não foi possível restaurar esta simulação." };
+  revalidatePath("/simulacao");
+  return { ok: true };
+}
+
+/** Edita descrição, valor, parcelas e data de início; a imagem e o resumo da IA são mantidos. */
+export async function updateSimulation(
+  id: string,
+  input: SimulationInput
+): Promise<{ ok: true; data: Simulation } | { ok: false; error: string }> {
+  if (!input.description.trim() || input.totalAmountCents <= 0 || input.installments < 1) {
+    return { ok: false, error: "Preencha descrição, valor e parcelas." };
+  }
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("simulations")
+    .update({
+      description: input.description.trim(),
+      total_amount: centsToReaisString(input.totalAmountCents),
+      installments: input.installments,
+      start_date: input.startDate,
+    })
+    .eq("id", id)
+    .select("*")
+    .single();
+  if (error || !data) return { ok: false, error: "Não foi possível salvar as alterações." };
+  revalidatePath("/simulacao");
+  return { ok: true, data: mapSimulationRow(data as SimulationRow) };
 }
 
 export async function deleteSimulation(

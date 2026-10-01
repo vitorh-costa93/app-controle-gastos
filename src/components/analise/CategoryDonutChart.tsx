@@ -78,7 +78,40 @@ export function CategoryDonutChart({
       .sort((a, b) => b.amountCents - a.amountCents);
   }, [occurrences, selectedKey, topCategoryKeys]);
 
+  // "Outros" agrega várias categorias: a lista abre quebrada por categoria real, com subtotal.
+  const othersGroups = useMemo(() => {
+    if (selectedKey !== OTHERS_KEY) return [];
+    const groups = new Map<string, { key: string; name: string; totalCents: number; items: MonthlyOccurrence[] }>();
+    for (const o of selectedItems) {
+      const key = o.categoryId ?? NO_CATEGORY_KEY;
+      const group = groups.get(key) ?? {
+        key,
+        name: o.categoryId ? categoriesById.get(o.categoryId) ?? "Categoria removida" : "Sem categoria",
+        totalCents: 0,
+        items: [],
+      };
+      group.totalCents += o.amountCents;
+      group.items.push(o);
+      groups.set(key, group);
+    }
+    return [...groups.values()].sort((a, b) => b.totalCents - a.totalCents);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedItems, selectedKey, categories]);
+
   const selected = items.find((i) => i.key === selectedKey) ?? null;
+
+  const renderOccurrence = (o: MonthlyOccurrence) => (
+    <li key={o.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+      <span className="min-w-0">
+        <span className="block truncate">{o.description ?? "Sem descrição"}</span>
+        <span className="block text-xs text-(--color-text-tertiary)">
+          {o.fixedVariable === "fixed" ? "Fixo" : "Variável"} · {peopleById.get(o.personId) ?? "—"}
+          {o.installmentTotal > 1 ? ` · parcela ${o.installmentCurrent}/${o.installmentTotal}` : ""}
+        </span>
+      </span>
+      <span className="shrink-0 font-medium tabular-nums">{formatCurrencyBRL(o.amountCents)}</span>
+    </li>
+  );
 
   function toggle(key: string) {
     setSelectedKey((cur) => (cur === key ? null : key));
@@ -178,20 +211,21 @@ export function CategoryDonutChart({
             <X size={16} />
           </button>
         </div>
-        <ul className="divide-y divide-(--color-border)">
-          {selectedItems.map((o) => (
-            <li key={o.id} className="flex items-center justify-between gap-3 py-2 text-sm">
-              <span className="min-w-0">
-                <span className="block truncate">{o.description ?? "Sem descrição"}</span>
-                <span className="block text-xs text-(--color-text-tertiary)">
-                  {o.fixedVariable === "fixed" ? "Fixo" : "Variável"} · {peopleById.get(o.personId) ?? "—"}
-                  {o.installmentTotal > 1 ? ` · parcela ${o.installmentCurrent}/${o.installmentTotal}` : ""}
-                </span>
-              </span>
-              <span className="shrink-0 font-medium tabular-nums">{formatCurrencyBRL(o.amountCents)}</span>
-            </li>
-          ))}
-        </ul>
+        {selectedKey === OTHERS_KEY ? (
+          <div className="space-y-3">
+            {othersGroups.map((g) => (
+              <section key={g.key}>
+                <div className="flex items-center justify-between border-b border-(--color-border) pb-1 text-sm font-semibold">
+                  <span>{g.name}</span>
+                  <span className="tabular-nums">{formatCurrencyBRL(g.totalCents)}</span>
+                </div>
+                <ul className="divide-y divide-(--color-border)">{g.items.map(renderOccurrence)}</ul>
+              </section>
+            ))}
+          </div>
+        ) : (
+          <ul className="divide-y divide-(--color-border)">{selectedItems.map(renderOccurrence)}</ul>
+        )}
       </div>
     )}
     </div>

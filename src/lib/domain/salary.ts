@@ -161,9 +161,11 @@ export function buildProjectedSalaryOccurrences(params: {
   typeId: string | null;
   salaryEntries: SalaryEntry[];
   monthsWithRealIncome: Set<string>;
+  /** Primeiro mês projetável. Padrão: mês atual + 2 (Análise espera o dado real do mês atual e do seguinte). */
+  projectFromMonth?: string;
 }): MonthlyOccurrence[] {
   const { months, currentMonth, personId, typeId, salaryEntries, monthsWithRealIncome } = params;
-  const firstProjectableMonth = addMonths(currentMonth, 2);
+  const firstProjectableMonth = params.projectFromMonth ?? addMonths(currentMonth, 2);
   const hasEntry = (m: string) => salaryEntries.some((e) => e.referenceMonth === m);
 
   return months

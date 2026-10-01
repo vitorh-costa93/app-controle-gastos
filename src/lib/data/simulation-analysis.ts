@@ -3,7 +3,7 @@
 import { listConsideredTransactionsInRange } from "./transactions";
 import { listActiveRecurrenceRules } from "./recurrence";
 import { listPeople, listTransactionTypes } from "./reference";
-import { getSalaryProjectionOccurrences } from "./salary";
+import { getEstimatedSalaryOccurrences, getSalaryProjectionOccurrences } from "./salary";
 import { getEstimatedExpenses } from "./estimates";
 import { monthRange } from "@/lib/domain/recurrence";
 import {
@@ -14,7 +14,7 @@ import {
 } from "@/lib/domain/simulation-baseline";
 import { summarizeMonth } from "@/lib/domain/finance";
 import { summarizeScenarioImpact, ScenarioComparisonMonth } from "@/lib/domain/simulation";
-import { MonthSummary, Simulation } from "@/types/domain";
+import { MonthSummary, MonthlyOccurrence, Simulation } from "@/types/domain";
 import { isAiConfigured, generateSimulationSummary } from "@/lib/ai/openai";
 import { addMonths, formatCurrencyBRL, formatMonthLabel, toReferenceMonth } from "@/lib/utils/format";
 
@@ -37,7 +37,16 @@ export async function getBaseMonthSummaries(
   // Mesma projeção de salário variável usada em Análise — o horizonte de Simulação é
   // majoritariamente futuro, então sem isso a receita da pessoa de salário variável
   // simplesmente sumia do saldo acumulado projetado a partir do mês seguinte.
-  const salaryByMonth = await getSalaryProjectionOccurrences(months, people, types, transactions);
+  // Meses abertos: salário variável ESTIMADO (mesmo mês do ano anterior × YoY acumulado); fechados: regra de Análise.
+  const closedMonths = months.filter((m) => !isOpenMonth(m, currentMonth));
+  const [estimatedSalary, closedSalaryByMonth] = await Promise.all([
+    getEstimatedSalaryOccurrences(months, people, types),
+    closedMonths.length > 0
+      ? getSalaryProjectionOccurrences(closedMonths, people, types, transactions)
+      : Promise.resolve(new Map<string, MonthlyOccurrence[]>()),
+  ]);
+  const salaryByMonth = new Map([...closedSalaryByMonth, ...estimatedSalary.byMonth]);
+  const keepExpenseTypeIds = new Set(types.filter((t) => /imposto/i.test(t.name)).map((t) => t.id));
 
   // Mês aberto (atual e seguintes) usa o gasto variável ESTIMADO, não o que já foi lançado: o real só
   // entra quando o mês fecha. Sem "Gastos estimados" configurados, usa a média dos 3 últimos meses fechados.
@@ -63,6 +72,8 @@ export async function getBaseMonthSummaries(
       rules,
       salaryOccurrences: salaryByMonth.get(month) ?? [],
       estimates,
+      estimatedSalaryPersonId: estimatedSalary.personId,
+      keepExpenseTypeIds,
     });
     map.set(month, summarizeMonth(month, occurrences));
   }

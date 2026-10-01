@@ -29,12 +29,22 @@ export function buildSimulationMonthOccurrences(args: {
   rules: RecurrenceRule[];
   salaryOccurrences: MonthlyOccurrence[];
   estimates: MonthlyEstimate[];
+  /** Pessoa de salário variável: nos meses abertos o salário real dela é trocado pela estimativa. */
+  estimatedSalaryPersonId?: string | null;
+  /** Tipos (ex.: Imposto) cujas saídas avulsas são compromisso, não gasto variável, e continuam valendo. */
+  keepExpenseTypeIds?: Set<string>;
 }): MonthlyOccurrence[] {
   const { month, currentMonth, transactions, rules, salaryOccurrences, estimates } = args;
   const occurrences = buildMonthOccurrences(month, transactions, rules);
   if (!isOpenMonth(month, currentMonth)) return [...occurrences, ...salaryOccurrences];
 
-  const committed = occurrences.filter((o) => !isUnplannedExpense(o));
+  const committed = occurrences.filter((o) => {
+    if (o.direction === "income" && args.estimatedSalaryPersonId && o.personId === args.estimatedSalaryPersonId) {
+      return false;
+    }
+    if (isUnplannedExpense(o) && !(o.typeId && args.keepExpenseTypeIds?.has(o.typeId))) return false;
+    return true;
+  });
   const estimated = estimates
     .filter((e) => e.amountCents > 0)
     .map<MonthlyOccurrence>((e) => ({

@@ -145,6 +145,42 @@ export async function getSalaryProjectionOccurrences(
   return map;
 }
 
+/**
+ * Salário variável ESTIMADO para os meses abertos (atual e seguintes), usado pela Simulação: mesmo mês do
+ * ano anterior × (1 + variação YoY acumulada no ano), calculado só com os meses já fechados. O valor real
+ * (inclusive o que o psi já informou) só passa a valer quando o mês fecha.
+ */
+export async function getEstimatedSalaryOccurrences(
+  months: string[],
+  people: Person[],
+  types: TransactionType[]
+): Promise<{ personId: string | null; byMonth: Map<string, MonthlyOccurrence[]> }> {
+  const person = findVariableSalaryPerson(people);
+  if (!person) return { personId: null, byMonth: new Map() };
+
+  const currentMonth = toReferenceMonth(new Date());
+  const closedEntries = (await listEffectiveSalaryEntries(person.id)).filter((e) => e.referenceMonth < currentMonth);
+  const typeId = types.find((t) => /sal[aá]rio/i.test(t.name))?.id ?? null;
+
+  const occurrences = buildProjectedSalaryOccurrences({
+    months: months.filter((m) => m >= currentMonth),
+    currentMonth,
+    personId: person.id,
+    typeId,
+    salaryEntries: closedEntries,
+    monthsWithRealIncome: new Set(),
+    projectFromMonth: currentMonth,
+  });
+
+  const byMonth = new Map<string, MonthlyOccurrence[]>();
+  for (const occ of occurrences) {
+    const arr = byMonth.get(occ.referenceMonth);
+    if (arr) arr.push(occ);
+    else byMonth.set(occ.referenceMonth, [occ]);
+  }
+  return { personId: person.id, byMonth };
+}
+
 // Sem revalidateTag aqui de propósito (ver comentário no fim de syncSalaryIncomeTransactions):
 // essa função também roda direto no render de Server Components, onde revalidate derruba a página.
 async function ensureSalaryTypeId(supabase: AdminClient): Promise<string | null> {

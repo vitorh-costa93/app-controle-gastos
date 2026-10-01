@@ -101,7 +101,45 @@ export function buildScenarioComparison(
   });
 }
 
+export interface SimulationPayback {
+  /** Meses, contados do início da simulação, até a sobra estimada acumulada cobrir o valor investido. */
+  months: number;
+  /** Mês em que isso acontece. */
+  referenceMonth: string;
+  /** true quando passou do horizonte e o prazo foi estendido pela sobra média mensal. */
+  extrapolated: boolean;
+}
+
+/**
+ * Payback: quanto tempo a sobra estimada do orçamento (sem a simulação) leva para repor o valor
+ * total gasto. Soma a sobra mês a mês a partir do início; se o horizonte acabar antes, estende pela
+ * média. null quando a sobra média não é positiva (o valor nunca volta).
+ */
+export function calcPayback(
+  totalAmountCents: number,
+  startMonth: string,
+  comparison: ScenarioComparisonMonth[]
+): SimulationPayback | null {
+  const fromStart = comparison.filter((m) => m.referenceMonth >= startMonth);
+  if (fromStart.length === 0 || totalAmountCents <= 0) return null;
+
+  let accumulated = 0;
+  for (let i = 0; i < fromStart.length; i++) {
+    accumulated += fromStart[i].leftoverWithoutCents;
+    if (accumulated >= totalAmountCents) {
+      return { months: i + 1, referenceMonth: fromStart[i].referenceMonth, extrapolated: false };
+    }
+  }
+
+  const average = accumulated / fromStart.length;
+  if (average <= 0) return null;
+  const extra = Math.ceil((totalAmountCents - accumulated) / average);
+  const months = fromStart.length + extra;
+  return { months, referenceMonth: addMonths(startMonth, months - 1), extrapolated: true };
+}
+
 export interface SimulationImpactSummary {
+  payback: SimulationPayback | null;
   totalAmountCents: number;
   installmentAmountCents: number;
   installments: number;
@@ -136,11 +174,14 @@ export function summarizeScenarioImpact(
     impactedMonths.reduce((sum, m) => sum + m.impactCents, 0) / totalMonthsWithImpact
   );
 
+  const startMonth = installments[0]?.referenceMonth ?? simulation.startDate.slice(0, 7);
+
   return {
+    payback: calcPayback(simulation.totalAmountCents, startMonth, comparison),
     totalAmountCents: simulation.totalAmountCents,
     installmentAmountCents: simulation.installmentAmountCents,
     installments: simulation.installments,
-    startMonth: installments[0]?.referenceMonth ?? simulation.startDate.slice(0, 7),
+    startMonth,
     endMonth: installments[installments.length - 1]?.referenceMonth ?? simulation.startDate.slice(0, 7),
     averageMonthlyImpactCents,
     lowestBalanceMonth: lowest

@@ -22,6 +22,18 @@ export function ImpactSummaryCard({ impact }: { impact: SimulationImpactSummary 
       label: "Mês de maior impacto",
       value: impact.mostImpactedMonth ? formatMonthLabel(impact.mostImpactedMonth.referenceMonth) : "—",
     },
+    {
+      label: "Payback (valor volta em)",
+      value: impact.payback
+        ? `${impact.payback.months} ${impact.payback.months === 1 ? "mês" : "meses"}`
+        : "Não volta com a sobra atual",
+    },
+    {
+      label: "Mês do payback",
+      value: impact.payback
+        ? `${formatMonthLabel(impact.payback.referenceMonth)}${impact.payback.extrapolated ? " (além do horizonte)" : ""}`
+        : "—",
+    },
   ];
 
   return (
@@ -35,6 +47,10 @@ export function ImpactSummaryCard({ impact }: { impact: SimulationImpactSummary 
           </div>
         ))}
       </div>
+      <p className="mt-4 text-xs text-(--color-text-tertiary)">
+        Payback: quantos meses a sobra estimada do orçamento (sem esta simulação) leva para repor o valor total.
+        Meses ainda abertos usam o gasto estimado; o real só entra quando o mês fecha.
+      </p>
     </Card>
   );
 }

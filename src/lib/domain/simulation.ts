@@ -67,8 +67,10 @@ export function buildScenarioComparison(
   const impactByMonth = combineSimulationImpacts(simulations);
   const months = monthRange(horizon.from, horizon.to);
 
-  let accWithout = baselineMonth ? 0 : startingBalanceCents;
-  let accWith = baselineMonth ? 0 : startingBalanceCents;
+  // Saldo ancorado num mês anterior ao primeiro do horizonte: já vale desde o início, e as sobras somam em cima.
+  const startsAfterBaseline = !baselineMonth || (months[0] !== undefined && months[0] > baselineMonth);
+  let accWithout = startsAfterBaseline ? startingBalanceCents : 0;
+  let accWith = startsAfterBaseline ? startingBalanceCents : 0;
 
   return months.map((month) => {
     const base = baseSummaries.get(month) ?? {

@@ -32,7 +32,9 @@ export function accumulateBalance(
   startingBalanceCents = 0,
   baselineMonth?: string
 ): { referenceMonth: string; accumulatedCents: number }[] {
-  let running = baselineMonth ? 0 : startingBalanceCents;
+  // Saldo ancorado num mês anterior ao primeiro da lista: já vale desde o início, e as sobras somam em cima.
+  const first = monthSummaries[0]?.referenceMonth;
+  let running = !baselineMonth || (first && first > baselineMonth) ? startingBalanceCents : 0;
   return monthSummaries.map((summary) => {
     if (summary.referenceMonth === baselineMonth) {
       running = startingBalanceCents;

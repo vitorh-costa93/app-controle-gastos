@@ -7,18 +7,23 @@ import { getBaseMonthSummaries } from "@/lib/data/simulation-analysis";
 import { getStartingBalance } from "@/lib/data/settings";
 import { syncSalaryIncomeTransactions } from "@/lib/data/salary";
 import { getDefaultSimulationHorizon } from "@/lib/domain/horizon";
+import { addMonths } from "@/lib/utils/format";
 import { SimulacaoPageClient } from "@/components/simulacao/SimulacaoPageClient";
 
 export default async function SimulacaoPage() {
-  const horizon = getDefaultSimulationHorizon();
+  const defaultHorizon = getDefaultSimulationHorizon();
   // Antes de calcular: reflete no lançamento real de Salário qualquer atualização do
   // dashboard-psi (mesmo em mês já fechado).
   await syncSalaryIncomeTransactions();
-  const [simulations, archived, baseSummariesMap, startingBalance] = await Promise.all([
+  const startingBalance = await getStartingBalance();
+  // O saldo inicial é o de um mês já fechado: o horizonte começa no mês seguinte a ele, para que os meses
+  // consolidados entre o saldo inicial e hoje (ex.: outubro) entrem com o valor real, e só depois os estimados.
+  const afterBaseline = startingBalance ? addMonths(startingBalance.month, 1) : defaultHorizon.from;
+  const horizon = { from: afterBaseline < defaultHorizon.from ? afterBaseline : defaultHorizon.from, to: defaultHorizon.to };
+  const [simulations, archived, baseSummariesMap] = await Promise.all([
     listActiveSimulations(),
     listArchivedSimulations(),
     getBaseMonthSummaries(horizon),
-    getStartingBalance(),
   ]);
 
   return (

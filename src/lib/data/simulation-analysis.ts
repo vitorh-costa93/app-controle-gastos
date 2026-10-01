@@ -4,19 +4,13 @@ import { listConsideredTransactionsInRange } from "./transactions";
 import { listActiveRecurrenceRules } from "./recurrence";
 import { listPeople, listTransactionTypes } from "./reference";
 import { getEstimatedSalaryOccurrences, getSalaryProjectionOccurrences } from "./salary";
-import { getEstimatedExpenses } from "./estimates";
 import { monthRange } from "@/lib/domain/recurrence";
-import {
-  MonthlyEstimate,
-  averageUnplannedCents,
-  buildSimulationMonthOccurrences,
-  isOpenMonth,
-} from "@/lib/domain/simulation-baseline";
+import { buildSimulationMonthOccurrences, isOpenMonth } from "@/lib/domain/simulation-baseline";
 import { summarizeMonth } from "@/lib/domain/finance";
 import { summarizeScenarioImpact, ScenarioComparisonMonth } from "@/lib/domain/simulation";
 import { MonthSummary, MonthlyOccurrence, Simulation } from "@/types/domain";
 import { isAiConfigured, generateSimulationSummary } from "@/lib/ai/openai";
-import { addMonths, formatCurrencyBRL, formatMonthLabel, toReferenceMonth } from "@/lib/utils/format";
+import { formatCurrencyBRL, formatMonthLabel, toReferenceMonth } from "@/lib/utils/format";
 
 import { SimulationHorizon } from "@/lib/domain/horizon";
 export type { SimulationHorizon } from "@/lib/domain/horizon";
@@ -25,43 +19,24 @@ export async function getBaseMonthSummaries(
   horizon: SimulationHorizon
 ): Promise<Map<string, MonthSummary>> {
   const currentMonth = toReferenceMonth(new Date());
-  const [rules, transactions, people, types, configuredEstimates] = await Promise.all([
+  const [rules, transactions, people, types] = await Promise.all([
     listActiveRecurrenceRules(),
     listConsideredTransactionsInRange(horizon.from, horizon.to),
     listPeople(),
     listTransactionTypes(),
-    getEstimatedExpenses(),
   ]);
 
   const months = monthRange(horizon.from, horizon.to);
-  // Mesma projeção de salário variável usada em Análise — o horizonte de Simulação é
-  // majoritariamente futuro, então sem isso a receita da pessoa de salário variável
-  // simplesmente sumia do saldo acumulado projetado a partir do mês seguinte.
-  // Meses abertos: salário variável ESTIMADO (mesmo mês do ano anterior × YoY acumulado); fechados: regra de Análise.
-  const closedMonths = months.filter((m) => !isOpenMonth(m, currentMonth));
-  const [estimatedSalary, closedSalaryByMonth] = await Promise.all([
+  // Gastos e entradas seguem exatamente Análise. Só o salário variável (Jaqueline) é estimado do mês
+  // seguinte em diante: mesmo mês do ano anterior × YoY acumulado. Até o mês atual vale a regra de Análise.
+  const currentOrPast = months.filter((m) => !isOpenMonth(m, currentMonth));
+  const [estimatedSalary, analysisSalaryByMonth] = await Promise.all([
     getEstimatedSalaryOccurrences(months, people, types),
-    closedMonths.length > 0
-      ? getSalaryProjectionOccurrences(closedMonths, people, types, transactions)
+    currentOrPast.length > 0
+      ? getSalaryProjectionOccurrences(currentOrPast, people, types, transactions)
       : Promise.resolve(new Map<string, MonthlyOccurrence[]>()),
   ]);
-  const salaryByMonth = new Map([...closedSalaryByMonth, ...estimatedSalary.byMonth]);
-  const keepExpenseTypeIds = new Set(types.filter((t) => /imposto/i.test(t.name)).map((t) => t.id));
-
-  // Mês aberto (atual e seguintes) usa o gasto variável ESTIMADO, não o que já foi lançado: o real só
-  // entra quando o mês fecha. Sem "Gastos estimados" configurados, usa a média dos 3 últimos meses fechados.
-  let estimates: MonthlyEstimate[] = configuredEstimates.filter((e) => e.amountCents > 0);
-  const fallbackPerson = people[0];
-  if (estimates.length === 0 && fallbackPerson && months.some((m) => isOpenMonth(m, currentMonth))) {
-    const recentMonths = monthRange(addMonths(currentMonth, -3), addMonths(currentMonth, -1));
-    const recent = await listConsideredTransactionsInRange(recentMonths[0], recentMonths[recentMonths.length - 1]);
-    const average = averageUnplannedCents(recent, recentMonths);
-    if (average > 0) {
-      estimates = [
-        { id: "media", label: "Gasto variável médio", personId: fallbackPerson.id, categoryId: null, typeId: null, amountCents: average },
-      ];
-    }
-  }
+  const salaryByMonth = new Map([...analysisSalaryByMonth, ...estimatedSalary.byMonth]);
 
   const map = new Map<string, MonthSummary>();
   for (const month of months) {
@@ -71,9 +46,7 @@ export async function getBaseMonthSummaries(
       transactions,
       rules,
       salaryOccurrences: salaryByMonth.get(month) ?? [],
-      estimates,
       estimatedSalaryPersonId: estimatedSalary.personId,
-      keepExpenseTypeIds,
     });
     map.set(month, summarizeMonth(month, occurrences));
   }

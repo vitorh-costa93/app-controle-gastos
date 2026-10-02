@@ -73,6 +73,7 @@ export function buildMonthOccurrences(
       description: t.description,
       considered: t.considered,
       recurrenceRuleId: t.recurrenceRuleId,
+      unplannedExcluded: t.unplannedExcluded,
     }));
 
   const rulesAlreadyMaterialized = new Set(

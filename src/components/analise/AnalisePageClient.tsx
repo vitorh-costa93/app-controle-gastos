@@ -78,6 +78,15 @@ export function AnalisePageClient({
     window.history.replaceState(null, "", `/analise?${params.toString()}`);
   }
 
+  // Recarrega o mês atual (ex.: depois de marcar lançamentos como planejados em "Fora do planejado").
+  async function refreshCurrent() {
+    const requestId = ++requestIdRef.current;
+    const { data: nextData, transactions: nextTransactions } = await fetchAnalysisPageData(month, personId || undefined);
+    if (requestIdRef.current !== requestId) return;
+    setData(nextData);
+    setMonthTransactions(nextTransactions);
+  }
+
   // Pré-aquece o cache dos meses vizinhos em segundo plano — assim, na maioria das
   // vezes, clicar em "anterior"/"próximo" acha o resultado já pronto no servidor.
   useEffect(() => {
@@ -187,11 +196,13 @@ export function AnalisePageClient({
               </div>
             </div>
             <UnplannedCard
+              key={`${month}|${personId}`}
               months={data.unplanned}
               byCategory={data.unplannedByCategory}
               categories={data.categories}
               occurrences={data.unplannedOccurrences}
               people={data.people}
+              onSaved={refreshCurrent}
             />
           </div>
 

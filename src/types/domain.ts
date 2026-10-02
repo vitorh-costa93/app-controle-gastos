@@ -19,6 +19,8 @@ export interface Transaction {
   aiConfidence: Record<string, FieldConfidence> | null;
   recurrenceRuleId: string | null;
   installmentGroupId: string | null;
+  /** Marcado manualmente como planejado/essencial: fica fora de "Fora do planejado" na Análise. */
+  unplannedExcluded: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -64,6 +66,8 @@ export interface MonthlyOccurrence {
   description: string | null;
   considered: boolean;
   recurrenceRuleId: string | null;
+  /** Só lançamentos reais: marcação manual de "não foi fora do planejado". */
+  unplannedExcluded?: boolean;
 }
 
 export interface MonthSummary {

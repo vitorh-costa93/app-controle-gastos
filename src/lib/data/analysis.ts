@@ -11,6 +11,7 @@ import {
   computeCategoryChanges,
   buildUnplannedExclusions,
   computeUnplanned,
+  isUnplannedCandidate,
   isUnplannedExpense,
   MonthCommitment,
   MonthUnplanned,
@@ -35,7 +36,10 @@ export interface AnalysisData {
   unplanned: MonthUnplanned[];
   /** Categorias do gasto fora do planejado no mês selecionado, da maior para a menor. */
   unplannedByCategory: { categoryId: string | null; amountCents: number; percent: number }[];
-  /** Os lançamentos do mês selecionado que compõem o gasto fora do planejado (base da lista ao clicar numa categoria). */
+  /**
+   * Candidatos a "fora do planejado" no mês selecionado (incluindo os que o usuário marcou como planejados, com
+   * `unplannedExcluded`): base da lista ao clicar numa categoria e do toggle de marcação.
+   */
   unplannedOccurrences: MonthlyOccurrence[];
   /** Categorias que mais subiram/caíram contra a média dos 3 meses anteriores (vazio sem histórico). */
   categoryChanges: CategoryChange[];
@@ -135,7 +139,7 @@ async function computeAnalysisData(month: string, personId?: string): Promise<An
     commitments,
     unplanned,
     unplannedByCategory,
-    unplannedOccurrences: currentOccurrences.filter((o) => isUnplannedExpense(o, unplannedExclusions)),
+    unplannedOccurrences: currentOccurrences.filter((o) => isUnplannedCandidate(o, unplannedExclusions)),
     categoryChanges,
     personSummaries,
     projectedOccurrences: currentOccurrences.filter((o) => o.origin === "projected"),
@@ -188,6 +192,7 @@ function buildMovementRows(real: Transaction[], projected: MonthlyOccurrence[]):
     description: t.description,
     considered: t.considered,
     recurrenceRuleId: t.recurrenceRuleId,
+    unplannedExcluded: t.unplannedExcluded,
   }));
   const projectedRows = projected.filter((o) => !o.recurrenceRuleId || !materializedRules.has(o.recurrenceRuleId));
   return [...realRows, ...projectedRows].sort((a, b) => b.registrationDate.localeCompare(a.registrationDate));

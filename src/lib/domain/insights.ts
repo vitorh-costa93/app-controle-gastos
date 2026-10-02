@@ -47,8 +47,8 @@ export function buildUnplannedExclusions(
   };
 }
 
-/** Saída considerada que não é parcela, fixa/recorrente nem custo essencial — o gasto que não estava no planejamento. */
-export function isUnplannedExpense(o: MonthlyOccurrence, excluded?: UnplannedExclusions): boolean {
+/** Saída considerada que, pela regra automática, não é parcela, fixa/recorrente nem custo essencial (ignora a marcação manual). */
+export function isUnplannedCandidate(o: MonthlyOccurrence, excluded?: UnplannedExclusions): boolean {
   if (excluded) {
     if (o.categoryId && excluded.categoryIds.has(o.categoryId)) return false;
     if (o.typeId && excluded.typeIds.has(o.typeId)) return false;
@@ -60,6 +60,11 @@ export function isUnplannedExpense(o: MonthlyOccurrence, excluded?: UnplannedExc
     o.fixedVariable !== "fixed" &&
     !o.recurrenceRuleId
   );
+}
+
+/** Gasto que não estava no planejamento: candidato pela regra automática e não marcado como planejado pelo usuário. */
+export function isUnplannedExpense(o: MonthlyOccurrence, excluded?: UnplannedExclusions): boolean {
+  return isUnplannedCandidate(o, excluded) && !o.unplannedExcluded;
 }
 
 /** Gasto fora do planejado de um mês, contra a renda e as saídas totais dele. */

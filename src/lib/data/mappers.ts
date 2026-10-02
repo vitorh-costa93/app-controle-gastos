@@ -34,6 +34,7 @@ export function mapTransactionRow(row: TransactionRow): Transaction {
     aiConfidence: row.ai_confidence,
     recurrenceRuleId: row.recurrence_rule_id,
     installmentGroupId: row.installment_group_id ?? null,
+    unplannedExcluded: row.unplanned_excluded ?? false,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

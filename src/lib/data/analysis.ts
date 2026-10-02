@@ -35,6 +35,8 @@ export interface AnalysisData {
   unplanned: MonthUnplanned[];
   /** Categorias do gasto fora do planejado no mês selecionado, da maior para a menor. */
   unplannedByCategory: { categoryId: string | null; amountCents: number; percent: number }[];
+  /** Os lançamentos do mês selecionado que compõem o gasto fora do planejado (base da lista ao clicar numa categoria). */
+  unplannedOccurrences: MonthlyOccurrence[];
   /** Categorias que mais subiram/caíram contra a média dos 3 meses anteriores (vazio sem histórico). */
   categoryChanges: CategoryChange[];
   /** Entradas e saídas do mês por pessoa. */
@@ -133,6 +135,7 @@ async function computeAnalysisData(month: string, personId?: string): Promise<An
     commitments,
     unplanned,
     unplannedByCategory,
+    unplannedOccurrences: currentOccurrences.filter((o) => isUnplannedExpense(o, unplannedExclusions)),
     categoryChanges,
     personSummaries,
     projectedOccurrences: currentOccurrences.filter((o) => o.origin === "projected"),

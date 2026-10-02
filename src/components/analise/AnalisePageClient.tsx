@@ -186,7 +186,13 @@ export function AnalisePageClient({
                 )}
               </div>
             </div>
-            <UnplannedCard months={data.unplanned} byCategory={data.unplannedByCategory} categories={data.categories} />
+            <UnplannedCard
+              months={data.unplanned}
+              byCategory={data.unplannedByCategory}
+              categories={data.categories}
+              occurrences={data.unplannedOccurrences}
+              people={data.people}
+            />
           </div>
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

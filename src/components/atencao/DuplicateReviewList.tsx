@@ -5,7 +5,7 @@ import { AlertTriangle, Check, Trash2 } from "lucide-react";
 import { Person, Category } from "@/types/db";
 import { Transaction } from "@/types/domain";
 import { DuplicatePair } from "@/lib/domain/duplicates";
-import { approveDuplicate, rejectDuplicate } from "@/lib/data/duplicates";
+import { approveDuplicate, approveDuplicateKeys, rejectDuplicate, rejectDuplicateGroup } from "@/lib/data/duplicates";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -29,17 +29,21 @@ export function DuplicateReviewList({
   const categoriesById = new Map(categories.map((c) => [c.id, c.name]));
 
   function resolve(pair: DuplicatePair, action: "approve" | "reject") {
-    if (
-      action === "reject" &&
-      !window.confirm(`Excluir o lançamento repetido "${pair.suspect.description ?? "sem descrição"}"?`)
-    ) {
+    const group = pair.group;
+    const confirmText = group
+      ? `Excluir a compra parcelada repetida "${pair.suspect.description ?? "sem descrição"}" (todas as parcelas do grupo repetido)?`
+      : `Excluir o lançamento repetido "${pair.suspect.description ?? "sem descrição"}"?`;
+    if (action === "reject" && !window.confirm(confirmText)) {
       return;
     }
     setError(null);
     setPendingKey(pair.key);
     startTransition(async () => {
-      const result =
-        action === "approve"
+      const result = group
+        ? action === "approve"
+          ? await approveDuplicateKeys(group.keys)
+          : await rejectDuplicateGroup(group.suspectGroupId)
+        : action === "approve"
           ? await approveDuplicate(pair.original.id, pair.suspect.id)
           : await rejectDuplicate(pair.suspect.id);
       setPendingKey(null);
@@ -49,7 +53,13 @@ export function DuplicateReviewList({
       }
       // Recusar tira o suspeito de qualquer outro par em que ele apareça.
       setPairs((prev) =>
-        prev.filter((p) => (action === "approve" ? p.key !== pair.key : p.suspect.id !== pair.suspect.id && p.original.id !== pair.suspect.id))
+        prev.filter((p) => {
+          if (group) {
+            if (action === "approve") return p.key !== pair.key && !group.keys.includes(p.key);
+            return p.suspect.installmentGroupId !== group.suspectGroupId && p.original.installmentGroupId !== group.suspectGroupId;
+          }
+          return action === "approve" ? p.key !== pair.key : p.suspect.id !== pair.suspect.id && p.original.id !== pair.suspect.id;
+        })
       );
     });
   }
@@ -83,6 +93,11 @@ export function DuplicateReviewList({
             <AlertTriangle size={16} />
             {pair.reason}
           </p>
+          {pair.group && (
+            <p className="-mt-2 mb-3 text-xs text-(--color-text-tertiary)">
+              Revise só esta primeira parcela: aprovar ou recusar vale para as {pair.group.installments} parcelas da compra.
+            </p>
+          )}
           <div className="flex flex-col gap-3 sm:flex-row">
             {renderTransaction("Original", pair.original)}
             {renderTransaction("Possível duplicado", pair.suspect)}

@@ -1,10 +1,16 @@
 "use client";
 
+import { useMemo, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { Card } from "@/components/ui/Card";
-import { Category } from "@/types/db";
+import { Category, Person } from "@/types/db";
+import { MonthlyOccurrence } from "@/types/domain";
+import { cn } from "@/lib/utils/cn";
 import { MonthUnplanned } from "@/lib/domain/insights";
-import { formatCurrencyBRL, formatMonthShort, formatMonthLabel } from "@/lib/utils/format";
+import { formatCurrencyBRL, formatDateBR, formatMonthShort, formatMonthLabel } from "@/lib/utils/format";
+
+const NONE_KEY = "__none__";
 
 const pct = (part: number, total: number) => (total > 0 ? (part / total) * 100 : 0);
 const fmtPct = (v: number) => `${v.toFixed(1).replace(".", ",")}%`;
@@ -14,11 +20,18 @@ export function UnplannedCard({
   months,
   byCategory,
   categories,
+  occurrences,
+  people,
 }: {
   months: MonthUnplanned[];
   byCategory: { categoryId: string | null; amountCents: number; percent: number }[];
   categories: Category[];
+  /** Lançamentos que compõem o gasto fora do planejado no mês selecionado. */
+  occurrences: MonthlyOccurrence[];
+  people: Person[];
 }) {
+  const [openKey, setOpenKey] = useState<string | null>(null);
+  const peopleById = useMemo(() => new Map(people.map((p) => [p.id, p.name])), [people]);
   const categoriesById = new Map(categories.map((c) => [c.id, c.name]));
   const current = months[months.length - 1];
   const previous = months.length > 1 ? months[months.length - 2] : null;
@@ -94,19 +107,50 @@ export function UnplannedCard({
         <ul className="space-y-2.5">
           {top.map((c) => (
             <li key={c.categoryId ?? "none"} className="text-sm">
-              <div className="flex items-center justify-between">
-                <span>{c.categoryId ? categoriesById.get(c.categoryId) ?? "Categoria removida" : "Sem categoria"}</span>
-                <span className="tabular-nums">
-                  <span className="font-medium">{formatCurrencyBRL(c.amountCents)}</span>
-                  <span className="ml-2 text-(--color-text-tertiary)">{fmtPct(c.percent)}</span>
-                </span>
-              </div>
-              <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-(--color-surface-secondary)">
-                <div
-                  className="h-full rounded-full"
-                  style={{ width: `${pct(c.amountCents, maxCents)}%`, backgroundColor: "var(--chart-2)" }}
-                />
-              </div>
+              <button
+                type="button"
+                aria-expanded={openKey === (c.categoryId ?? NONE_KEY)}
+                onClick={() => setOpenKey((cur) => (cur === (c.categoryId ?? NONE_KEY) ? null : c.categoryId ?? NONE_KEY))}
+                className="-mx-2 block w-[calc(100%+1rem)] rounded-md px-2 py-1 text-left hover:bg-(--color-surface-secondary)"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <ChevronDown
+                      size={14}
+                      className={cn("text-(--color-text-tertiary) transition-transform", openKey !== (c.categoryId ?? NONE_KEY) && "-rotate-90")}
+                    />
+                    {c.categoryId ? categoriesById.get(c.categoryId) ?? "Categoria removida" : "Sem categoria"}
+                  </span>
+                  <span className="tabular-nums">
+                    <span className="font-medium">{formatCurrencyBRL(c.amountCents)}</span>
+                    <span className="ml-2 text-(--color-text-tertiary)">{fmtPct(c.percent)}</span>
+                  </span>
+                </div>
+                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-(--color-surface-secondary)">
+                  <div
+                    className="h-full rounded-full"
+                    style={{ width: `${pct(c.amountCents, maxCents)}%`, backgroundColor: "var(--chart-2)" }}
+                  />
+                </div>
+              </button>
+              {openKey === (c.categoryId ?? NONE_KEY) && (
+                <ul className="mt-1.5 divide-y divide-(--color-border) rounded-(--radius-md) bg-(--color-surface-secondary) px-3">
+                  {occurrences
+                    .filter((o) => (o.categoryId ?? NONE_KEY) === (c.categoryId ?? NONE_KEY))
+                    .sort((a, b) => b.amountCents - a.amountCents)
+                    .map((o) => (
+                      <li key={o.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+                        <span className="min-w-0">
+                          <span className="block truncate">{o.description ?? "Sem descrição"}</span>
+                          <span className="block text-xs text-(--color-text-tertiary)">
+                            {formatDateBR(o.registrationDate)} · {peopleById.get(o.personId) ?? "—"}
+                          </span>
+                        </span>
+                        <span className="shrink-0 font-medium tabular-nums">{formatCurrencyBRL(o.amountCents)}</span>
+                      </li>
+                    ))}
+                </ul>
+              )}
             </li>
           ))}
         </ul>

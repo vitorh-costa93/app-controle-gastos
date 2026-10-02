@@ -12,10 +12,13 @@ import { NewSimulationForm } from "./NewSimulationForm";
 import { ScenarioList } from "./ScenarioList";
 import { LeftoverComparisonChart, AccumulatedBalanceChart, BaseAccumulatedChart } from "./SimulationCharts";
 import { ImpactSummaryCard } from "./ImpactSummaryCard";
+import { CashVsInstallmentSection, YieldParams, comparisonFor } from "./CashVsInstallmentSection";
+import { YieldAssumptionCard } from "./YieldAssumptionCard";
+import type { CdiRate } from "@/lib/data/cdi";
 import { generateScenarioAiSummary } from "@/lib/data/simulation-analysis";
 import { deleteSimulation, regenerateSimulationImage, restoreSimulation } from "@/lib/data/simulations";
 import { SimulationEditModal } from "./SimulationEditModal";
-import { formatMonthLabel } from "@/lib/utils/format";
+import { formatCurrencyBRL, formatMonthLabel } from "@/lib/utils/format";
 
 export function SimulacaoPageClient({
   initialSimulations,
@@ -23,12 +26,14 @@ export function SimulacaoPageClient({
   baseSummaries,
   horizon,
   startingBalance,
+  cdi,
 }: {
   initialSimulations: Simulation[];
   initialArchived: Simulation[];
   baseSummaries: MonthSummary[];
   horizon: { from: string; to: string };
   startingBalance: StartingBalance | null;
+  cdi: CdiRate;
 }) {
   const [simulations, setSimulations] = useState(initialSimulations);
   const [archived, setArchived] = useState(initialArchived);
@@ -36,6 +41,7 @@ export function SimulacaoPageClient({
   const [primaryId, setPrimaryId] = useState<string | null>(initialSimulations[0]?.id ?? null);
   const [includeOthers, setIncludeOthers] = useState(false);
   const [selectedOtherIds, setSelectedOtherIds] = useState<string[]>([]);
+  const [percentOfCdi, setPercentOfCdi] = useState(100);
   const [aiState, setAiState] = useState<{ key: string; summary: string } | null>(null);
 
   const baseMap = useMemo(() => new Map(baseSummaries.map((s) => [s.referenceMonth, s])), [baseSummaries]);
@@ -67,6 +73,22 @@ export function SimulacaoPageClient({
     if (!primary) return null;
     return summarizeScenarioImpact(primary, comparison);
   }, [primary, comparison]);
+
+  const yieldParams = useMemo<YieldParams>(
+    () => ({ cdiAnnualPercent: cdi.annualPercent, percentOfCdi }),
+    [cdi.annualPercent, percentOfCdi]
+  );
+
+  function verdictFor(sim: Simulation): { label: string; tone: "cash" | "installment" | "neutral" } | null {
+    if (sim.cashPriceCents == null) return null;
+    if (sim.installments <= 1) return { label: "Só à vista", tone: "neutral" };
+    const r = comparisonFor(sim, yieldParams);
+    if (!r) return null;
+    if (r.winner === "tie") return { label: "Tanto faz", tone: "neutral" };
+    return r.winner === "cash"
+      ? { label: `Parcelar custa +${formatCurrencyBRL(r.advantageCashCents)}`, tone: "cash" }
+      : { label: `Parcelar ganha ${formatCurrencyBRL(-r.advantageCashCents)}`, tone: "installment" };
+  }
 
   const aiRequestKey = primary
     ? `${primary.id}|${others.map((o) => o.id).join(",")}|${horizon.from}|${horizon.to}`
@@ -206,6 +228,12 @@ export function SimulacaoPageClient({
                 <AccumulatedBalanceChart comparison={comparison} />
               </Card>
 
+              <CashVsInstallmentSection
+                simulation={primary}
+                params={yieldParams}
+                lowestBalanceCents={impact?.lowestBalanceMonth?.accumulatedCents ?? null}
+              />
+
               {impact && <ImpactSummaryCard impact={impact} />}
 
               <Card className="flex gap-3 bg-(--color-primary-soft)/40 p-4">
@@ -227,7 +255,11 @@ export function SimulacaoPageClient({
         </div>
 
         <div className="flex flex-col gap-6">
+          <YieldAssumptionCard cdi={cdi} percentOfCdi={percentOfCdi} onChange={setPercentOfCdi} />
+
           <NewSimulationForm
+            cdiAnnualPercent={cdi.annualPercent}
+            percentOfCdi={percentOfCdi}
             onCreated={(sim) => {
               setSimulations((prev) => [sim, ...prev]);
               setPrimaryId(sim.id);
@@ -241,6 +273,7 @@ export function SimulacaoPageClient({
               onEdit={setEditing}
               onDelete={handleDelete}
               onRestore={handleRestore}
+              verdictFor={verdictFor}
               primaryId={primaryId}
               onSelectPrimary={setPrimaryId}
               includeOthers={includeOthers}
@@ -257,6 +290,8 @@ export function SimulacaoPageClient({
       {editing && (
         <SimulationEditModal
           simulation={editing}
+          cdiAnnualPercent={cdi.annualPercent}
+          percentOfCdi={percentOfCdi}
           onClose={() => setEditing(null)}
           onSaved={(saved) => {
             setSimulations((prev) => prev.map((s) => (s.id === saved.id ? saved : s)));

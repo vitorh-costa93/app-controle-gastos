@@ -3,32 +3,38 @@
 import { useState, useTransition } from "react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { FieldGroup, Input } from "@/components/ui/Field";
-import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import { createSimulation } from "@/lib/data/simulations";
 import { Simulation } from "@/types/domain";
-import { toISODate } from "@/lib/utils/format";
+import {
+  SimulationFormFields,
+  SimulationFormValue,
+  emptySimulationForm,
+  isSimulationFormValid,
+  simulationFormToInput,
+} from "./SimulationFormFields";
 
-export function NewSimulationForm({ onCreated }: { onCreated: (s: Simulation) => void }) {
-  const [description, setDescription] = useState("");
-  const [totalAmountCents, setTotalAmountCents] = useState(0);
-  const [installments, setInstallments] = useState(1);
-  const [startDate, setStartDate] = useState(toISODate(new Date()));
+export function NewSimulationForm({
+  onCreated,
+  cdiAnnualPercent,
+  percentOfCdi,
+}: {
+  onCreated: (s: Simulation) => void;
+  cdiAnnualPercent: number;
+  percentOfCdi: number;
+}) {
+  const [form, setForm] = useState<SimulationFormValue>(emptySimulationForm);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   function clear() {
-    setDescription("");
-    setTotalAmountCents(0);
-    setInstallments(1);
-    setStartDate(toISODate(new Date()));
+    setForm(emptySimulationForm());
     setError(null);
   }
 
   function handleAdd() {
     setError(null);
     startTransition(async () => {
-      const result = await createSimulation({ description, totalAmountCents, installments, startDate });
+      const result = await createSimulation(simulationFormToInput(form));
       if (!result.ok) {
         setError(result.error);
         return;
@@ -38,34 +44,15 @@ export function NewSimulationForm({ onCreated }: { onCreated: (s: Simulation) =>
     });
   }
 
-  const canSave = description.trim().length > 0 && totalAmountCents > 0 && installments >= 1;
-
   return (
     <Card className="p-5">
       <h3 className="mb-4 text-[15px] font-semibold">Nova simulação</h3>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <FieldGroup label="Descrição">
-          <Input
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Ex.: Viagem para Gramado"
-          />
-        </FieldGroup>
-        <FieldGroup label="Valor total">
-          <CurrencyInput valueCents={totalAmountCents} onChange={setTotalAmountCents} />
-        </FieldGroup>
-        <FieldGroup label="Parcelas">
-          <Input
-            type="number"
-            min={1}
-            value={installments}
-            onChange={(e) => setInstallments(Number(e.target.value) || 1)}
-          />
-        </FieldGroup>
-        <FieldGroup label="Data de início">
-          <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-        </FieldGroup>
-      </div>
+      <SimulationFormFields
+        value={form}
+        onChange={setForm}
+        cdiAnnualPercent={cdiAnnualPercent}
+        percentOfCdi={percentOfCdi}
+      />
 
       {error && <p className="mt-3 text-sm text-(--color-negative)">{error}</p>}
 
@@ -73,7 +60,7 @@ export function NewSimulationForm({ onCreated }: { onCreated: (s: Simulation) =>
         <Button variant="secondary" onClick={clear} type="button">
           Limpar
         </Button>
-        <Button onClick={handleAdd} disabled={!canSave || isPending} type="button">
+        <Button onClick={handleAdd} disabled={!isSimulationFormValid(form) || isPending} type="button">
           Adicionar
         </Button>
       </div>

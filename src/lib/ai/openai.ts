@@ -280,6 +280,21 @@ export async function generateMonthInsight(prompt: string): Promise<string> {
   return response.choices[0]?.message?.content?.trim() ?? "";
 }
 
+/** Análise financeira de compra à vista × parcelada, a partir de números já calculados (nunca inventa valores). */
+export async function generateCashVsInstallmentSummary(prompt: string): Promise<string> {
+  const response = await chat("insight", {
+    messages: [
+      {
+        role: "system",
+        content:
+          "Você compara pagar à vista com parcelar uma compra, usando exclusivamente os números calculados fornecidos (rendimento da Caixinha do Nubank, juros embutidos, IR já descontado). Diga qual opção custa menos do ponto de vista financeiro, explique o porquê com os valores, cite o ponto de equilíbrio e, se houver, o risco de saldo ficar apertado. Não é recomendação de investimento e não invente números. Máximo 4 frases curtas, em português do Brasil, sem listas.",
+      },
+      { role: "user", content: prompt },
+    ],
+  });
+  return response.choices[0]?.message?.content?.trim() ?? "";
+}
+
 export async function generateSimulationSummary(prompt: string): Promise<string> {
   const response = await chat("insight", {
     messages: [

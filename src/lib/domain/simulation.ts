@@ -8,6 +8,11 @@ export interface SimulationInstallmentImpact {
   installmentNumber: number;
 }
 
+/** Parcelado com preço à vista informado: a cobrança começa um mês depois da data de início. */
+export function hasDeferredFirstInstallment(simulation: Simulation): boolean {
+  return simulation.cashPriceCents != null && simulation.installments > 1;
+}
+
 /**
  * Calcula o impacto mensal de uma simulação parcelada, distribuindo o valor
  * total a partir do mês de início. A última parcela absorve o resto da divisão
@@ -16,7 +21,8 @@ export interface SimulationInstallmentImpact {
 export function calcSimulationInstallments(simulation: Simulation): SimulationInstallmentImpact[] {
   const baseInstallment = Math.floor(simulation.totalAmountCents / simulation.installments);
   const remainder = simulation.totalAmountCents - baseInstallment * simulation.installments;
-  const startMonth = simulation.startDate.slice(0, 7);
+  // Com preço à vista informado, a data de início é a da compra: a 1ª parcela cai 30 dias depois.
+  const startMonth = addMonths(simulation.startDate.slice(0, 7), hasDeferredFirstInstallment(simulation) ? 1 : 0);
 
   return Array.from({ length: simulation.installments }, (_, i) => {
     const isLast = i === simulation.installments - 1;

@@ -20,6 +20,7 @@ export function ScenarioList({
   onEdit,
   onDelete,
   onRestore,
+  verdictFor,
 }: {
   simulations: Simulation[];
   archived: Simulation[];
@@ -32,6 +33,7 @@ export function ScenarioList({
   onEdit: (sim: Simulation) => void;
   onDelete: (sim: Simulation) => Promise<void>;
   onRestore: (sim: Simulation) => Promise<void>;
+  verdictFor: (sim: Simulation) => { label: string; tone: "cash" | "installment" | "neutral" } | null;
 }) {
   const [, startTransition] = useTransition();
   const [menuId, setMenuId] = useState<string | null>(null);
@@ -98,6 +100,21 @@ export function ScenarioList({
                     </p>
                   </div>
                 </button>
+                {(() => {
+                  const verdict = verdictFor(sim);
+                  return verdict ? (
+                    <span
+                      className={cn(
+                        "shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold",
+                        verdict.tone === "cash" && "bg-(--color-negative-soft) text-(--color-negative)",
+                        verdict.tone === "installment" && "bg-(--color-primary-soft) text-(--color-primary)",
+                        verdict.tone === "neutral" && "bg-black/5 text-(--color-text-secondary)"
+                      )}
+                    >
+                      {verdict.label}
+                    </span>
+                  ) : null;
+                })()}
                 <div className="relative">
                   <button
                     className="rounded-full p-1.5 text-(--color-text-tertiary) hover:bg-black/5"

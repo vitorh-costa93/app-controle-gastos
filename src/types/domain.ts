@@ -76,7 +76,10 @@ export interface MonthSummary {
 export interface Simulation {
   id: string;
   description: string;
+  /** Total que impacta o orçamento (parcelado quando installments > 1). */
   totalAmountCents: number;
+  /** Preço à vista; null nas simulações antigas. */
+  cashPriceCents: number | null;
   installments: number;
   installmentAmountCents: number;
   startDate: string;

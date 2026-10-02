@@ -124,6 +124,7 @@ export interface SimulationRow {
   id: string;
   description: string;
   total_amount: string;
+  cash_price: string | null;
   installments: number;
   start_date: string;
   active: boolean;

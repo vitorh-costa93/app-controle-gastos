@@ -8,6 +8,7 @@ import { getStartingBalance } from "@/lib/data/settings";
 import { syncSalaryIncomeTransactions } from "@/lib/data/salary";
 import { getDefaultSimulationHorizon } from "@/lib/domain/horizon";
 import { addMonths } from "@/lib/utils/format";
+import { getCdiRate } from "@/lib/data/cdi";
 import { SimulacaoPageClient } from "@/components/simulacao/SimulacaoPageClient";
 
 export default async function SimulacaoPage() {
@@ -20,10 +21,11 @@ export default async function SimulacaoPage() {
   // consolidados entre o saldo inicial e hoje (ex.: outubro) entrem com o valor real, e só depois os estimados.
   const afterBaseline = startingBalance ? addMonths(startingBalance.month, 1) : defaultHorizon.from;
   const horizon = { from: afterBaseline < defaultHorizon.from ? afterBaseline : defaultHorizon.from, to: defaultHorizon.to };
-  const [simulations, archived, baseSummariesMap] = await Promise.all([
+  const [simulations, archived, baseSummariesMap, cdi] = await Promise.all([
     listActiveSimulations(),
     listArchivedSimulations(),
     getBaseMonthSummaries(horizon),
+    getCdiRate(),
   ]);
 
   return (
@@ -33,6 +35,7 @@ export default async function SimulacaoPage() {
       baseSummaries={Array.from(baseSummariesMap.values())}
       horizon={horizon}
       startingBalance={startingBalance}
+      cdi={cdi}
     />
   );
 }

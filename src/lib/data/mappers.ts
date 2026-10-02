@@ -62,6 +62,7 @@ export function mapSimulationRow(row: SimulationRow): Simulation {
     id: row.id,
     description: row.description,
     totalAmountCents,
+    cashPriceCents: row.cash_price == null ? null : reaisStringToCents(row.cash_price),
     installments: row.installments,
     installmentAmountCents: Math.round(totalAmountCents / row.installments),
     startDate: row.start_date,

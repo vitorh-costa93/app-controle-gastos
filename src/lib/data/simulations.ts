@@ -10,7 +10,10 @@ import { persistGeneratedImage } from "@/lib/supabase/storage";
 
 export interface SimulationInput {
   description: string;
+  /** Total que impacta o orçamento: o parcelado quando installments > 1, senão o preço à vista. */
   totalAmountCents: number;
+  /** Preço à vista (base do comparativo à vista × parcelado). Omitido em simulações automáticas. */
+  cashPriceCents?: number | null;
   installments: number;
   startDate: string;
   /** Não gera a foto ilustrativa (que consome a API de imagens) — para simulações criadas automaticamente. */
@@ -40,6 +43,7 @@ export async function createSimulation(
     .insert({
       description: input.description,
       total_amount: centsToReaisString(input.totalAmountCents),
+      cash_price: input.cashPriceCents ? centsToReaisString(input.cashPriceCents) : null,
       installments: input.installments,
       start_date: input.startDate,
       image_url: imageUrl,
@@ -101,7 +105,7 @@ export async function restoreSimulation(
   return { ok: true };
 }
 
-/** Edita descrição, valor, parcelas e data de início; a imagem e o resumo da IA são mantidos. */
+/** Edita descrição, preço à vista, valor parcelado, parcelas e data de início; a imagem e o resumo da IA são mantidos. */
 export async function updateSimulation(
   id: string,
   input: SimulationInput
@@ -115,6 +119,7 @@ export async function updateSimulation(
     .update({
       description: input.description.trim(),
       total_amount: centsToReaisString(input.totalAmountCents),
+      cash_price: input.cashPriceCents ? centsToReaisString(input.cashPriceCents) : null,
       installments: input.installments,
       start_date: input.startDate,
     })

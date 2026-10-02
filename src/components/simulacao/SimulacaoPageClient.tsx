@@ -12,7 +12,7 @@ import { NewSimulationForm } from "./NewSimulationForm";
 import { ScenarioList } from "./ScenarioList";
 import { LeftoverComparisonChart, AccumulatedBalanceChart, BaseAccumulatedChart } from "./SimulationCharts";
 import { ImpactSummaryCard } from "./ImpactSummaryCard";
-import { CashVsInstallmentSection, YieldParams, comparisonFor } from "./CashVsInstallmentSection";
+import { BaseBudget, CashVsInstallmentSection, YieldParams, analyzeSimulation } from "./CashVsInstallmentSection";
 import { YieldAssumptionCard } from "./YieldAssumptionCard";
 import type { CdiRate } from "@/lib/data/cdi";
 import { generateScenarioAiSummary } from "@/lib/data/simulation-analysis";
@@ -79,10 +79,15 @@ export function SimulacaoPageClient({
     [cdi.annualPercent, percentOfCdi]
   );
 
+  const base = useMemo<BaseBudget>(
+    () => ({ summaries: baseSummaries, accumulated: baseAccumulated }),
+    [baseSummaries, baseAccumulated]
+  );
+
   function verdictFor(sim: Simulation): { label: string; tone: "cash" | "installment" | "neutral" } | null {
     if (sim.cashPriceCents == null) return null;
     if (sim.installments <= 1) return { label: "Só à vista", tone: "neutral" };
-    const r = comparisonFor(sim, yieldParams);
+    const r = analyzeSimulation(sim, yieldParams, base)?.result.installment;
     if (!r) return null;
     if (r.winner === "tie") return { label: "Tanto faz", tone: "neutral" };
     return r.winner === "cash"
@@ -231,7 +236,7 @@ export function SimulacaoPageClient({
               <CashVsInstallmentSection
                 simulation={primary}
                 params={yieldParams}
-                lowestBalanceCents={impact?.lowestBalanceMonth?.accumulatedCents ?? null}
+                base={base}
               />
 
               {impact && <ImpactSummaryCard impact={impact} />}

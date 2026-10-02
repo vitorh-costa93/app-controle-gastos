@@ -10,7 +10,7 @@ import { summarizeMonth } from "@/lib/domain/finance";
 import { summarizeScenarioImpact, ScenarioComparisonMonth } from "@/lib/domain/simulation";
 import { MonthSummary, MonthlyOccurrence, Simulation } from "@/types/domain";
 import { isAiConfigured, generateSimulationSummary, generateCashVsInstallmentSummary } from "@/lib/ai/openai";
-import { compareCashVsInstallments } from "@/lib/domain/cash-vs-installments";
+import { compareCashVsInstallments, CashVsInstallmentInput } from "@/lib/domain/cash-vs-installments";
 import { formatCurrencyBRL, formatMonthLabel, toReferenceMonth } from "@/lib/utils/format";
 
 import { SimulationHorizon } from "@/lib/domain/horizon";
@@ -80,16 +80,7 @@ ${impact.payback ? `Payback (tempo para a sobra estimada repor o valor): ${impac
   }
 }
 
-export interface CashVsInstallmentAiInput {
-  description: string;
-  cashPriceCents: number;
-  installmentTotalCents: number;
-  installments: number;
-  cdiAnnualPercent: number;
-  percentOfCdi: number;
-  /** Menor saldo acumulado do orçamento pagando parcelado (opcional, para o alerta de caixa). */
-  lowestBalanceCents?: number | null;
-}
+export type CashVsInstallmentAiInput = CashVsInstallmentInput & { description: string };
 
 /** Recalcula os números no servidor (não confia no cliente) e pede à IA a leitura do comparativo. */
 export async function generateCashVsInstallmentAiSummary(input: CashVsInstallmentAiInput): Promise<string> {
@@ -97,17 +88,26 @@ export async function generateCashVsInstallmentAiSummary(input: CashVsInstallmen
     return "A análise por IA ainda não está configurada. Adicione uma chave de API para habilitar esse recurso.";
   }
   const r = compareCashVsInstallments(input);
+  const inst = r.installment;
+  if (!inst) return "";
   const pct = (v: number) => `${(v * 100).toFixed(2).replace(".", ",")}%`;
+  const brl = formatCurrencyBRL;
+  const warnings = [
+    r.cash.firstNegativeMonth !== null ? `À vista: o saldo acumulado do orçamento fica negativo (mínimo ${brl(r.cash.lowestBalanceCents)}).` : null,
+    inst.scenario.firstNegativeMonth !== null ? `Parcelado: o saldo acumulado do orçamento fica negativo (mínimo ${brl(inst.scenario.lowestBalanceCents)}).` : null,
+    r.cash.firstNegativeMonth === null && r.cash.lowestBalanceCents < inst.installmentCents ? `À vista: o saldo acumulado chega a só ${brl(r.cash.lowestBalanceCents)}, menos que uma parcela.` : null,
+  ].filter(Boolean);
+
   const prompt = `Compra: "${input.description}".
-Preço à vista: ${formatCurrencyBRL(input.cashPriceCents)}. Parcelado: ${input.installments}x de ${formatCurrencyBRL(Math.round(input.installmentTotalCents / input.installments))} (total ${formatCurrencyBRL(input.installmentTotalCents)}), primeira parcela 30 dias após a compra.
-Juros embutidos no parcelamento: ${formatCurrencyBRL(r.installment.interestCents)} (${pct(r.installment.impliedMonthlyRate)} ao mês, ${pct(r.installment.impliedAnnualRate)} ao ano).
-Rendimento da Caixinha do Nubank: ${input.percentOfCdi}% do CDI (CDI ${input.cdiAnnualPercent.toFixed(2).replace(".", ",")}% a.a.), cerca de ${pct(r.monthlyRate)} ao mês bruto.
-Se NÃO comprar nada e deixar ${formatCurrencyBRL(input.cashPriceCents)} aplicados por ${r.monthsHorizon} meses: rendimento líquido de IR ${formatCurrencyBRL(r.idle.netYieldCents)}.
-Se parcelar e manter o dinheiro aplicado enquanto paga as parcelas: rendimento líquido de IR ${formatCurrencyBRL(r.installment.netYieldCents)}.
-Custo real (dinheiro que sai + rendimento que deixa de ganhar): à vista ${formatCurrencyBRL(r.cash.realCostCents)}; parcelado ${formatCurrencyBRL(r.installment.realCostCents)}.
-Resultado: ${r.winner === "cash" ? `pagar à vista economiza ${formatCurrencyBRL(r.advantageCashCents)}` : r.winner === "installment" ? `parcelar economiza ${formatCurrencyBRL(-r.advantageCashCents)}` : "empate"}.
-Ponto de equilíbrio: parcelar só empata se o total for ${formatCurrencyBRL(r.breakEvenTotalCents)} (${input.installments}x de ${formatCurrencyBRL(r.breakEvenInstallmentCents)}).
-${input.lowestBalanceCents != null ? `Menor saldo acumulado do orçamento no horizonte pagando parcelado: ${formatCurrencyBRL(input.lowestBalanceCents)}.` : ""}`;
+Preço à vista: ${brl(input.cashPriceCents)}. Parcelado: ${input.installments}x de ${brl(inst.installmentCents)} (total ${brl(input.installmentTotalCents)}), primeira parcela 30 dias após a compra. Desconto à vista: ${pct(inst.cashDiscount)}.
+Juros embutidos no parcelamento: ${brl(inst.interestCents)} (${pct(inst.impliedMonthlyRate)} ao mês, ${pct(inst.impliedAnnualRate)} ao ano).
+Rendimento da Caixinha do Nubank: ${input.percentOfCdi}% do CDI (CDI ${input.cdiAnnualPercent.toFixed(2).replace(".", ",")}% a.a.): ${pct(r.monthlyRate)} ao mês bruto e ${pct(r.netMonthlyRate)} líquido de IR.
+Saldo acumulado do orçamento antes da compra: ${brl(input.openingBalanceCents)}, somando as sobras mensais, aplicado até o fim das parcelas.
+Rendimento líquido de IR no período: não comprar ${brl(r.none.netYieldCents)}; à vista ${brl(r.cash.netYieldCents)}; parcelado ${brl(inst.scenario.netYieldCents)} (${brl(inst.extraYieldCents)} a mais que o à vista).
+Saldo final: à vista ${brl(r.cash.finalNetCents)}; parcelado ${brl(inst.scenario.finalNetCents)}.
+Resultado: ${inst.winner === "cash" ? `pagar à vista deixa ${brl(inst.advantageCashCents)} a mais no saldo final` : inst.winner === "installment" ? `parcelar deixa ${brl(-inst.advantageCashCents)} a mais no saldo final` : "empate"}.
+Ponto de equilíbrio: parcelar só empata se o total for ${brl(inst.breakEvenTotalCents)} (${input.installments}x de ${brl(inst.breakEvenInstallmentCents)}).
+${warnings.join("\n")}`;
 
   try {
     return await generateCashVsInstallmentSummary(prompt);

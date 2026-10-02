@@ -5,7 +5,7 @@ import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import { Info } from "lucide-react";
 import { Simulation } from "@/types/domain";
 import type { SimulationInput } from "@/lib/data/simulations";
-import { compareCashVsInstallments } from "@/lib/domain/cash-vs-installments";
+import { impliedInstallmentRate, netMonthlyYieldRate } from "@/lib/domain/cash-vs-installments";
 import { addMonths, formatCurrencyBRL, formatMonthLabel, toISODate } from "@/lib/utils/format";
 
 /** Campos do formulário de simulação: preço à vista (padrão) e, opcionalmente, o parcelado. */
@@ -75,13 +75,10 @@ export function SimulationFormFields({
 
   const preview =
     value.useInstallments && value.cashPriceCents > 0 && value.installmentTotalCents > 0 && value.installments >= 2
-      ? compareCashVsInstallments({
-          cashPriceCents: value.cashPriceCents,
-          installmentTotalCents: value.installmentTotalCents,
-          installments: value.installments,
-          cdiAnnualPercent,
-          percentOfCdi,
-        })
+      ? {
+          impliedMonthlyRate: impliedInstallmentRate(value.cashPriceCents, value.installmentTotalCents, value.installments),
+          netMonthlyRate: netMonthlyYieldRate(cdiAnnualPercent, percentOfCdi, value.installments),
+        }
       : null;
   const extraCents = value.installmentTotalCents - value.cashPriceCents;
 
@@ -152,12 +149,12 @@ export function SimulationFormFields({
                   {extraCents > 0 ? (
                     <>
                       Parcelar custa <b>{formatCurrencyBRL(extraCents)} a mais</b> (juros implícitos de{" "}
-                      <b>{(preview.installment.impliedMonthlyRate * 100).toFixed(2).replace(".", ",")}% a.m.</b>).
+                      <b>{(preview.impliedMonthlyRate * 100).toFixed(2).replace(".", ",")}% a.m.</b>).
                     </>
                   ) : (
                     <>Parcelar não tem juros embutidos neste valor.</>
                   )}{" "}
-                  A Caixinha rende {(preview.monthlyRate * 100).toFixed(2).replace(".", ",")}% a.m.
+                  A Caixinha rende {(preview.netMonthlyRate * 100).toFixed(2).replace(".", ",")}% a.m. líquido de IR.
                 </span>
               </p>
             )}

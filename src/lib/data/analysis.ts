@@ -9,6 +9,7 @@ import { summarizeMonth, breakdownByCategory, breakdownByKey } from "@/lib/domai
 import {
   computeCommitment,
   computeCategoryChanges,
+  buildUnplannedExclusions,
   computeUnplanned,
   isUnplannedExpense,
   MonthCommitment,
@@ -76,13 +77,14 @@ async function computeAnalysisData(month: string, personId?: string): Promise<An
 
   const occurrencesByMonth = months.map((m) => withSalary(m, buildMonthOccurrences(m, transactions, rules)));
   const summaries = months.map((m, i) => summarizeMonth(m, occurrencesByMonth[i]));
-  const unplanned = months.map((m, i) => computeUnplanned(m, occurrencesByMonth[i]));
+  const unplannedExclusions = buildUnplannedExclusions(categories, types);
+  const unplanned = months.map((m, i) => computeUnplanned(m, occurrencesByMonth[i], unplannedExclusions));
   const currentSummary = summaries[summaries.length - 1];
   const previousSummary = summaries.length > 1 ? summaries[summaries.length - 2] : null;
 
   const currentOccurrences = withSalary(month, buildMonthOccurrences(month, transactions, rules));
   const categoryBreakdown = breakdownByCategory(currentOccurrences, "expense");
-  const unplannedByCategory = breakdownByCategory(currentOccurrences.filter(isUnplannedExpense), "expense");
+  const unplannedByCategory = breakdownByCategory(currentOccurrences.filter((o) => isUnplannedExpense(o, unplannedExclusions)), "expense");
   const typeBreakdown = breakdownByKey(currentOccurrences, "typeId", "expense");
   const personBreakdown = breakdownByKey(currentOccurrences, "personId", "expense");
 

@@ -25,8 +25,34 @@ export function computeCommitment(referenceMonth: string, occurrences: MonthlyOc
   return { referenceMonth, incomeCents, fixedCents, installmentCents, variableCents };
 }
 
-/** Saída considerada que não é parcela nem fixa/recorrente — o gasto que não estava no planejamento. */
-export function isUnplannedExpense(o: MonthlyOccurrence): boolean {
+/** Categorias e tipos que nunca contam como "fora do planejado" (custos essenciais: imposto e supermercado). */
+export interface UnplannedExclusions {
+  categoryIds: Set<string>;
+  typeIds: Set<string>;
+}
+
+const ESSENTIAL_CATEGORY_NAMES = ["imposto", "supermercado"];
+const ESSENTIAL_TYPE_NAMES = ["imposto"];
+
+const normalizeName = (name: string) => name.normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toLowerCase();
+
+/** Ids das categorias/tipos essenciais (imposto, supermercado) a tirar de "fora do planejado". */
+export function buildUnplannedExclusions(
+  categories: { id: string; name: string }[],
+  types: { id: string; name: string }[]
+): UnplannedExclusions {
+  return {
+    categoryIds: new Set(categories.filter((c) => ESSENTIAL_CATEGORY_NAMES.includes(normalizeName(c.name))).map((c) => c.id)),
+    typeIds: new Set(types.filter((t) => ESSENTIAL_TYPE_NAMES.includes(normalizeName(t.name))).map((t) => t.id)),
+  };
+}
+
+/** Saída considerada que não é parcela, fixa/recorrente nem custo essencial — o gasto que não estava no planejamento. */
+export function isUnplannedExpense(o: MonthlyOccurrence, excluded?: UnplannedExclusions): boolean {
+  if (excluded) {
+    if (o.categoryId && excluded.categoryIds.has(o.categoryId)) return false;
+    if (o.typeId && excluded.typeIds.has(o.typeId)) return false;
+  }
   return (
     o.direction === "expense" &&
     o.considered &&
@@ -44,11 +70,15 @@ export interface MonthUnplanned {
   incomeCents: number;
 }
 
-export function computeUnplanned(referenceMonth: string, occurrences: MonthlyOccurrence[]): MonthUnplanned {
+export function computeUnplanned(
+  referenceMonth: string,
+  occurrences: MonthlyOccurrence[],
+  excluded?: UnplannedExclusions
+): MonthUnplanned {
   const considered = occurrences.filter((o) => o.considered);
   return {
     referenceMonth,
-    unplannedCents: considered.filter(isUnplannedExpense).reduce((s, o) => s + o.amountCents, 0),
+    unplannedCents: considered.filter((o) => isUnplannedExpense(o, excluded)).reduce((s, o) => s + o.amountCents, 0),
     expenseCents: considered.filter((o) => o.direction === "expense").reduce((s, o) => s + o.amountCents, 0),
     incomeCents: considered.filter((o) => o.direction === "income").reduce((s, o) => s + o.amountCents, 0),
   };

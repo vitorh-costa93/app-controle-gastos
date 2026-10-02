@@ -177,11 +177,14 @@ export function AnalisePageClient({
                   </button>
                 ))}
               </div>
-              {commitmentView === "composition" ? (
-                <CompositionCard commitment={data.commitments[0]} />
-              ) : (
-                <CommitmentsChart commitments={data.commitments} />
-              )}
+              {/* O card cresce até o fim da linha, alinhando a base com "Fora do planejado". */}
+              <div className="flex flex-1 flex-col [&>*]:flex-1">
+                {commitmentView === "composition" ? (
+                  <CompositionCard commitment={data.commitments[0]} />
+                ) : (
+                  <CommitmentsChart commitments={data.commitments} />
+                )}
+              </div>
             </div>
             <UnplannedCard months={data.unplanned} byCategory={data.unplannedByCategory} categories={data.categories} />
           </div>

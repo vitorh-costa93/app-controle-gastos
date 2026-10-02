@@ -25,18 +25,20 @@ export function computeCommitment(referenceMonth: string, occurrences: MonthlyOc
   return { referenceMonth, incomeCents, fixedCents, installmentCents, variableCents };
 }
 
-/** Categorias e tipos que nunca contam como "fora do planejado" (custos essenciais: imposto e supermercado). */
+/** Categorias, tipos e descrições que nunca contam como "fora do planejado" (custos essenciais: imposto, supermercado, combustível, Wellhub). */
 export interface UnplannedExclusions {
   categoryIds: Set<string>;
   typeIds: Set<string>;
 }
 
-const ESSENTIAL_CATEGORY_NAMES = ["imposto", "supermercado"];
+const ESSENTIAL_CATEGORY_NAMES = ["imposto", "supermercado", "combustivel"];
+/** Trechos (sem acento, minúsculos) da descrição que tiram o lançamento de "fora do planejado", em qualquer categoria. */
+const ESSENTIAL_DESCRIPTION_PARTS = ["wellhub"];
 const ESSENTIAL_TYPE_NAMES = ["imposto"];
 
 const normalizeName = (name: string) => name.normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toLowerCase();
 
-/** Ids das categorias/tipos essenciais (imposto, supermercado) a tirar de "fora do planejado". */
+/** Ids das categorias/tipos essenciais (imposto, supermercado, combustível) a tirar de "fora do planejado". */
 export function buildUnplannedExclusions(
   categories: { id: string; name: string }[],
   types: { id: string; name: string }[]
@@ -49,6 +51,8 @@ export function buildUnplannedExclusions(
 
 /** Saída considerada que, pela regra automática, não é parcela, fixa/recorrente nem custo essencial (ignora a marcação manual). */
 export function isUnplannedCandidate(o: MonthlyOccurrence, excluded?: UnplannedExclusions): boolean {
+  const description = normalizeName(o.description ?? "");
+  if (ESSENTIAL_DESCRIPTION_PARTS.some((part) => description.includes(part))) return false;
   if (excluded) {
     if (o.categoryId && excluded.categoryIds.has(o.categoryId)) return false;
     if (o.typeId && excluded.typeIds.has(o.typeId)) return false;

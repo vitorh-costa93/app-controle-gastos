@@ -120,7 +120,7 @@ export function UnplannedCard({
     <Card className="p-5">
       <h3 className="mb-1 text-[15px] font-semibold">Fora do planejado</h3>
       <p className="mb-4 text-xs text-(--color-text-tertiary)">
-        Gastos do mês que não são parcelas, fixos nem custos essenciais (imposto e supermercado) — o que você decidiu gastar no dia a dia.
+        Gastos do mês que não são parcelas, fixos nem custos essenciais (imposto, supermercado, combustível e Wellhub) — o que você decidiu gastar no dia a dia.
       </p>
 
       <div className="mb-3 flex items-baseline gap-2">

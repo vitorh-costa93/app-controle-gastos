@@ -42,7 +42,7 @@ export function pairKey(aId: string, bId: string): string {
 const dayDiff = (a: string, b: string) => Math.abs(new Date(a).getTime() - new Date(b).getTime()) / 86_400_000;
 
 /**
- * Procura saídas que parecem duplicadas entre lançamentos já gravados: mesma pessoa e valor, e
+ * Procura saídas que parecem duplicadas entre lançamentos já gravados: mesmo valor e, para a mesma pessoa,
  * - compra parcelada: mesma parcela X/Y do mesmo estabelecimento (a data pode variar entre faturas);
  * - demais: mesmo estabelecimento (ou ambos sem descrição, na mesma data) em até 10 dias.
  * Lançamentos de recorrência fixa ficam de fora (repetem de propósito). Pares já aprovados são ignorados.
@@ -54,7 +54,8 @@ export function findDuplicatePairs(transactions: Transaction[], approvedKeys: Se
 
   const buckets = new Map<string, Transaction[]>();
   for (const t of candidates) {
-    const bucket = `${t.personId}|${t.amountCents}`;
+    // Só o valor agrupa: o mesmo gasto cadastrado na pessoa errada também é duplicado (veja `samePerson` abaixo).
+    const bucket = `${t.amountCents}`;
     const list = buckets.get(bucket);
     if (list) list.push(t);
     else buckets.set(bucket, [t]);
@@ -68,6 +69,11 @@ export function findDuplicatePairs(transactions: Transaction[], approvedKeys: Se
         const key = pairKey(a.id, b.id);
         if (approvedKeys.has(key)) continue;
 
+        // Pessoas diferentes só contam com o mesmo estabelecimento (e, fora de parcelas, na mesma data): o casal pode
+        // mesmo ter gastos parecidos, mas descrição, valor e data iguais costumam ser o mesmo gasto na pessoa errada.
+        const samePerson = a.personId === b.personId;
+        const peopleNote = samePerson ? "" : ", mas em pessoas diferentes";
+
         let reason: string | null = null;
         if (a.installmentTotal > 1 || b.installmentTotal > 1) {
           if (
@@ -75,7 +81,11 @@ export function findDuplicatePairs(transactions: Transaction[], approvedKeys: Se
             a.installmentCurrent === b.installmentCurrent &&
             sameMerchant(a.description, b.description)
           ) {
-            reason = `Mesma parcela ${a.installmentCurrent}/${a.installmentTotal} do mesmo estabelecimento e valor`;
+            reason = `Mesma parcela ${a.installmentCurrent}/${a.installmentTotal} do mesmo estabelecimento e valor${peopleNote}`;
+          }
+        } else if (!samePerson) {
+          if (a.registrationDate === b.registrationDate && sameMerchant(a.description, b.description)) {
+            reason = `Mesmo estabelecimento, valor e data${peopleNote}`;
           }
         } else if (dayDiff(a.registrationDate, b.registrationDate) <= DUPLICATE_WINDOW_DAYS) {
           const bothEmpty = !normalizeMerchant(a.description) && !normalizeMerchant(b.description);

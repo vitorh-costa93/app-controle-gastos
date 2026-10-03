@@ -3,7 +3,7 @@
 import { getEstimatedExpenseOccurrences } from "./estimates";
 import { listAllTransactions, listConsideredTransactionsInRange, listTransactionsForMonth } from "./transactions";
 import { listActiveRecurrenceRules } from "./recurrence";
-import { listPeople, listCategories, listTransactionTypes } from "./reference";
+import { listPeople, listCategories, listTransactionTypes, listAllCategories } from "./reference";
 import { getSalaryProjectionOccurrences } from "./salary";
 import { buildMonthOccurrences, monthRange } from "@/lib/domain/recurrence";
 import { summarizeMonth, breakdownByCategory, breakdownByKey } from "@/lib/domain/finance";
@@ -66,10 +66,11 @@ export async function getAnalysisData(month: string, personId?: string): Promise
 /** `personId` restringe tudo (KPIs, gráficos, breakdowns) a uma única pessoa — "ver o todo" quando omitido. */
 async function computeAnalysisData(month: string, personId?: string): Promise<AnalysisData> {
   const from12 = addMonths(month, -11);
-  const [allRules, people, categories, types] = await Promise.all([
+  const [allRules, people, categories, allCategories, types] = await Promise.all([
     listActiveRecurrenceRules(),
     listPeople(),
     listCategories(),
+    listAllCategories(),
     listTransactionTypes(),
   ]);
   const rules = personId ? allRules.filter((r) => r.personId === personId) : allRules;
@@ -141,6 +142,9 @@ async function computeAnalysisData(month: string, personId?: string): Promise<An
     return { personId: id, incomeCents: s.incomeCents, expenseCents: s.expenseCents };
   });
 
+  const usedCategoryIds = new Set(
+    [...allTransactions, ...futureAll].map((t) => t.categoryId).filter((id): id is string => Boolean(id))
+  );
   const monthsWithData = summaries.filter((s) => s.incomeCents > 0 || s.expenseCents > 0).length;
 
   return {
@@ -159,7 +163,8 @@ async function computeAnalysisData(month: string, personId?: string): Promise<An
     personSummaries,
     projectedOccurrences: currentOccurrences.filter((o) => o.origin === "projected"),
     people,
-    categories,
+    // Categorias ativas + as desativadas que ainda têm lançamentos: assim elas aparecem pelo nome, e não como "removida".
+    categories: allCategories.filter((c) => c.active || usedCategoryIds.has(c.id)),
     types,
     hasEnoughHistory: monthsWithData >= 2,
   };

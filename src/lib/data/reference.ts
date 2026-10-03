@@ -44,6 +44,21 @@ export const listCategories = unstable_cache(
   { tags: ["categories"], revalidate: CACHE_REVALIDATE_SECONDS }
 );
 
+/** Todas as categorias, inclusive as desativadas — para dar nome a lançamentos antigos que ainda apontam para elas. */
+export const listAllCategories = unstable_cache(
+  async (): Promise<Category[]> => {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase.from("categories").select("*").order("name");
+    if (error) {
+      console.error("listAllCategories failed:", error);
+      throw new Error("Não foi possível carregar as categorias.");
+    }
+    return data as Category[];
+  },
+  ["categories-all"],
+  { tags: ["categories"], revalidate: CACHE_REVALIDATE_SECONDS }
+);
+
 export const listTransactionTypes = unstable_cache(
   async (): Promise<TransactionType[]> => {
     const supabase = createAdminClient();

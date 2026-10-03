@@ -7,7 +7,8 @@ import { MonthRow, MonthRowKind } from "@/lib/domain/month-rows";
 import { Toggle } from "@/components/ui/Toggle";
 import { Badge } from "@/components/ui/Badge";
 import { formatCurrencyBRL, formatDateTimeBR, formatReferenceMonthShort } from "@/lib/utils/format";
-import { setTransactionConsidered, deleteTransaction } from "@/lib/data/transactions";
+import { setTransactionConsidered } from "@/lib/data/transactions";
+import { DeleteRecordDialog, DeleteTarget, deleteTargetFor } from "./DeleteRecordDialog";
 
 const KIND_LABEL: Record<MonthRowKind, string> = {
   pontual: "Pontual",
@@ -121,6 +122,8 @@ function MonthRowItem({
   const { transaction, occurrence: o } = row;
   const [considered, setConsidered] = useState(o.considered);
   const [isPending, startTransition] = useTransition();
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const target = deleteTargetFor(o, transaction);
 
   return (
     <tr className="group border-b border-(--color-border) last:border-0 hover:bg-black/[0.015]">
@@ -177,22 +180,18 @@ function MonthRowItem({
           >
             <Pencil size={15} />
           </button>
-          {transaction && row.kind !== "recorrente" && (
+          {target && (
             <button
               className="rounded-full p-1.5 text-(--color-text-tertiary) opacity-0 hover:bg-(--color-negative-soft) hover:text-(--color-negative) group-hover:opacity-100 focus-visible:opacity-100"
               aria-label="Excluir lançamento"
               title="Excluir"
               disabled={isPending}
-              onClick={() => {
-                if (!window.confirm(`Excluir "${o.description ?? "este lançamento"}"?`)) return;
-                startTransition(async () => {
-                  await deleteTransaction(transaction.id);
-                });
-              }}
+              onClick={() => setDeleteTarget(target)}
             >
               <Trash2 size={15} />
             </button>
           )}
+          <DeleteRecordDialog target={deleteTarget} onClose={() => setDeleteTarget(null)} />
         </div>
       </td>
     </tr>

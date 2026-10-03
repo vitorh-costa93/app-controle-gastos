@@ -7,7 +7,8 @@ import { Person, Category, TransactionType } from "@/types/db";
 import { Toggle } from "@/components/ui/Toggle";
 import { Badge } from "@/components/ui/Badge";
 import { formatCurrencyBRL, formatDateTimeBR, formatReferenceMonthShort } from "@/lib/utils/format";
-import { setTransactionConsidered, deleteTransaction } from "@/lib/data/transactions";
+import { setTransactionConsidered } from "@/lib/data/transactions";
+import { DeleteRecordDialog, DeleteTarget, deleteTargetFor } from "./DeleteRecordDialog";
 
 export function TransactionTable({
   transactions,
@@ -90,6 +91,7 @@ function TransactionRow({
 }) {
   const [considered, setConsidered] = useState(transaction.considered);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [isPending, startTransition] = useTransition();
 
   return (
@@ -158,15 +160,35 @@ function TransactionRow({
               className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-(--color-negative) hover:bg-(--color-negative-soft)"
               onClick={() => {
                 setMenuOpen(false);
-                startTransition(async () => {
-                  await deleteTransaction(transaction.id);
-                });
+                setDeleteTarget(
+                  deleteTargetFor(
+                    {
+                      id: transaction.id,
+                      origin: "real",
+                      registrationDate: transaction.registrationDate,
+                      referenceMonth: transaction.referenceMonth,
+                      personId: transaction.personId,
+                      direction: transaction.direction,
+                      fixedVariable: transaction.fixedVariable,
+                      typeId: transaction.typeId,
+                      categoryId: transaction.categoryId,
+                      installmentCurrent: transaction.installmentCurrent,
+                      installmentTotal: transaction.installmentTotal,
+                      amountCents: transaction.amountCents,
+                      description: transaction.description,
+                      considered: transaction.considered,
+                      recurrenceRuleId: transaction.recurrenceRuleId,
+                    },
+                    transaction
+                  )
+                );
               }}
             >
               <Trash2 size={14} /> Excluir
             </button>
           </div>
         )}
+        <DeleteRecordDialog target={deleteTarget} onClose={() => setDeleteTarget(null)} />
       </td>
     </tr>
   );

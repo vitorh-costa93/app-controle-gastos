@@ -249,3 +249,85 @@ export async function setRecurrenceMonthOverride(
   revalidatePath("/simulacao");
   return { ok: true };
 }
+
+export type RecurringDeleteScope = "month" | "following";
+
+/**
+ * Exclui um registro recorrente:
+ * - "month": só aquele mês — apaga o lançamento real do mês (se houver) e marca o mês como pulado na regra,
+ *   para a projeção não voltar; os outros meses seguem normais.
+ * - "following": aquele mês e todos os seguintes — apaga os lançamentos reais daí em diante e encerra a regra no
+ *   mês anterior (ou a desativa, se aquele era o primeiro mês dela).
+ */
+export async function deleteRecurringOccurrence(
+  ruleId: string,
+  referenceMonth: string,
+  scope: RecurringDeleteScope
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = createAdminClient();
+
+  const { data: rule, error: ruleError } = await supabase
+    .from("recurrence_rules")
+    .select("start_date, skipped_months")
+    .eq("id", ruleId)
+    .single();
+  if (ruleError || !rule) return { ok: false, error: "Recorrência não encontrada." };
+
+  const now = new Date().toISOString();
+
+  if (scope === "month") {
+    const skipped = new Set<string>((rule.skipped_months as string[] | null) ?? []);
+    skipped.add(referenceMonth);
+    const { error } = await supabase
+      .from("recurrence_rules")
+      .update({ skipped_months: [...skipped].sort() })
+      .eq("id", ruleId);
+    if (error) {
+      console.error("deleteRecurringOccurrence (skip) failed:", error);
+      return { ok: false, error: "Não foi possível excluir este mês." };
+    }
+    await supabase
+      .from("transactions")
+      .update({ deleted_at: now })
+      .eq("recurrence_rule_id", ruleId)
+      .eq("reference_month", referenceMonth)
+      .is("deleted_at", null);
+  } else {
+    const startMonth = (rule.start_date as string).slice(0, 7);
+    const previousMonth = addMonthsToReferenceMonth(referenceMonth, -1);
+    const patch =
+      referenceMonth <= startMonth
+        ? { active: false }
+        : { end_date: `${previousMonth}-${String(lastDayOfMonth(previousMonth)).padStart(2, "0")}` };
+    const { error } = await supabase.from("recurrence_rules").update(patch).eq("id", ruleId);
+    if (error) {
+      console.error("deleteRecurringOccurrence (end) failed:", error);
+      return { ok: false, error: "Não foi possível excluir este mês e os seguintes." };
+    }
+    await supabase
+      .from("transactions")
+      .update({ deleted_at: now })
+      .eq("recurrence_rule_id", ruleId)
+      .gte("reference_month", referenceMonth)
+      .is("deleted_at", null);
+  }
+
+  revalidateTag("recurrence-rules");
+  revalidateTag("analysis");
+  revalidatePath("/configuracoes");
+  revalidatePath("/cadastro");
+  revalidatePath("/analise");
+  revalidatePath("/simulacao");
+  return { ok: true };
+}
+
+function addMonthsToReferenceMonth(referenceMonth: string, count: number): string {
+  const [year, month] = referenceMonth.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1 + count, 1));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function lastDayOfMonth(referenceMonth: string): number {
+  const [year, month] = referenceMonth.split("-").map(Number);
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}

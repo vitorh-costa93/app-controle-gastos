@@ -7,7 +7,7 @@ import { listTransactions } from "@/lib/data/transactions";
 import { listPeople, listCategories, listTransactionTypes } from "@/lib/data/reference";
 import { listActiveRecurrenceRules } from "@/lib/data/recurrence";
 import { listInstallmentGroups } from "@/lib/data/installments";
-import { getEstimatedExpenses } from "@/lib/data/estimates";
+import { getEstimateAverages, getEstimatedExpenses } from "@/lib/data/estimates";
 import { syncSalaryIncomeTransactions } from "@/lib/data/salary";
 import { CadastroPageClient } from "@/components/cadastro/CadastroPageClient";
 import { RecorrenciasView } from "@/components/recorrencias/RecorrenciasView";
@@ -40,11 +40,13 @@ export default async function CadastroPage({
       listInstallmentGroups(),
       getEstimatedExpenses(),
     ]);
+    const estimateAverages = await getEstimateAverages(estimatedExpenses);
     return (
       <RecorrenciasView
         recurrenceRules={recurrenceRules}
         installmentGroups={installmentGroups}
         estimatedExpenses={estimatedExpenses}
+        estimateAverages={estimateAverages}
         people={people}
         categories={categories}
         types={types}

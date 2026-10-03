@@ -27,6 +27,7 @@ function monthsBetween(fromMonth: string, toMonth: string): number {
 function isRuleActiveInMonth(rule: RecurrenceRule, referenceMonth: string): boolean {
   const startMonth = rule.startDate.slice(0, 7);
   if (referenceMonth < startMonth) return false;
+  if (rule.skippedMonths?.includes(referenceMonth)) return false;
   // Bimestral, trimestral etc.: só os meses que caem no ritmo a partir do mês inicial.
   if (monthsBetween(startMonth, referenceMonth) % frequencyIntervalMonths(rule.frequency ?? "monthly") !== 0) return false;
   if (rule.endDate) {

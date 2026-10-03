@@ -45,6 +45,8 @@ export interface RecurrenceRule {
   startDate: string;
   endDate: string | null;
   active: boolean;
+  /** Meses em que a recorrência foi excluída só naquele mês (ela segue valendo nos outros). */
+  skippedMonths?: string[];
   /** Histórico de mudanças de valor, mais antigo primeiro. Vazio = nunca teve mudança de valor. */
   amountHistory: RecurrenceAmountVersion[];
 }

@@ -1,6 +1,7 @@
 "use server";
 
 import { listConsideredTransactionsInRange } from "./transactions";
+import { getEstimatedExpenseOccurrences } from "./estimates";
 import { listActiveRecurrenceRules } from "./recurrence";
 import { listPeople, listTransactionTypes } from "./reference";
 import { getEstimatedSalaryOccurrences, getSalaryProjectionOccurrences } from "./salary";
@@ -38,6 +39,8 @@ export async function getBaseMonthSummaries(
       : Promise.resolve(new Map<string, MonthlyOccurrence[]>()),
   ]);
   const salaryByMonth = new Map([...analysisSalaryByMonth, ...estimatedSalary.byMonth]);
+  // Gastos estimados (supermercado, combustível...): do mês seguinte em diante, o maior entre o real e a média dos 2 últimos meses fechados.
+  const estimatesByMonth = await getEstimatedExpenseOccurrences(months, "simulation", transactions);
 
   const map = new Map<string, MonthSummary>();
   for (const month of months) {
@@ -48,6 +51,7 @@ export async function getBaseMonthSummaries(
       rules,
       salaryOccurrences: salaryByMonth.get(month) ?? [],
       estimatedSalaryPersonId: estimatedSalary.personId,
+      estimateOccurrences: estimatesByMonth.get(month),
     });
     map.set(month, summarizeMonth(month, occurrences));
   }

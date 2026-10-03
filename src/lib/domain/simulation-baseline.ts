@@ -19,13 +19,16 @@ export function buildSimulationMonthOccurrences(args: {
   salaryOccurrences: MonthlyOccurrence[];
   /** Pessoa de salário variável, cuja entrada real é trocada pela estimativa nos meses seguintes. */
   estimatedSalaryPersonId?: string | null;
+  /** Gastos estimados do mês (média dos 2 últimos meses fechados), que completam o real até o maior entre os dois. */
+  estimateOccurrences?: MonthlyOccurrence[];
 }): MonthlyOccurrence[] {
   const { month, currentMonth, transactions, rules, salaryOccurrences, estimatedSalaryPersonId } = args;
+  const estimates = args.estimateOccurrences ?? [];
   const occurrences = buildMonthOccurrences(month, transactions, rules);
-  if (!isOpenMonth(month, currentMonth) || !estimatedSalaryPersonId) return [...occurrences, ...salaryOccurrences];
+  if (!isOpenMonth(month, currentMonth) || !estimatedSalaryPersonId) return [...occurrences, ...salaryOccurrences, ...estimates];
 
   const withoutRealSalary = occurrences.filter(
     (o) => !(o.direction === "income" && o.personId === estimatedSalaryPersonId)
   );
-  return [...withoutRealSalary, ...salaryOccurrences];
+  return [...withoutRealSalary, ...salaryOccurrences, ...estimates];
 }

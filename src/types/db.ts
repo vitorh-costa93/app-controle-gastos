@@ -47,6 +47,7 @@ export interface RecurrenceRule {
   start_date: string;
   end_date: string | null;
   active: boolean;
+  skipped_months?: string[] | null;
   created_at: string;
   updated_at: string;
 }

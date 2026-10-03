@@ -4,20 +4,22 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
 import { Person, Category, TransactionType } from "@/types/db";
-import { EstimatedExpense, setEstimatedExpenses } from "@/lib/data/estimates";
+import { EstimateAverage, EstimatedExpense, setEstimatedExpenses } from "@/lib/data/estimates";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { FieldGroup, Input, Select } from "@/components/ui/Field";
-import { CurrencyInput } from "@/components/ui/CurrencyInput";
-import { addMonths, formatMonthLabel, toReferenceMonth } from "@/lib/utils/format";
+import { addMonths, formatCurrencyBRL, formatMonthLabel, formatReferenceMonthShort, toReferenceMonth } from "@/lib/utils/format";
 
 export function EstimatedExpensesEditor({
   items: initialItems,
+  averages,
   people,
   categories,
   types,
 }: {
   items: EstimatedExpense[];
+  /** Média atual de cada item (dos 2 últimos meses fechados). */
+  averages: EstimateAverage[];
   people: Person[];
   categories: Category[];
   types: TransactionType[];
@@ -27,7 +29,9 @@ export function EstimatedExpensesEditor({
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const router = useRouter();
 
-  const firstEstimatedMonth = addMonths(toReferenceMonth(new Date()), 2);
+  const currentMonth = toReferenceMonth(new Date());
+  const nextMonth = addMonths(currentMonth, 1);
+  const averagesById = new Map(averages.map((a) => [a.itemId, a]));
 
   function updateItem(id: string, patch: Partial<EstimatedExpense>) {
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)));
@@ -49,7 +53,7 @@ export function EstimatedExpensesEditor({
 
   function handleSave() {
     setMessage(null);
-    const valid = items.filter((i) => i.label.trim() && i.personId && i.amountCents > 0);
+    const valid = items.filter((i) => i.label.trim() && i.personId && i.categoryId);
     startTransition(async () => {
       const result = await setEstimatedExpenses(valid.map((i) => ({ ...i, label: i.label.trim() })));
       if (!result.ok) {
@@ -57,7 +61,7 @@ export function EstimatedExpensesEditor({
         return;
       }
       setItems(valid);
-      setMessage({ tone: "ok", text: "Salvo. Os lançamentos estimados foram atualizados." });
+      setMessage({ tone: "ok", text: "Salvo. As estimativas foram atualizadas." });
       router.refresh();
     });
   }
@@ -66,9 +70,10 @@ export function EstimatedExpensesEditor({
     <Card className="p-5">
       <h3 className="mb-1 text-[15px] font-semibold">Gastos estimados</h3>
       <p className="mb-4 text-xs text-(--color-text-tertiary)">
-        Viram lançamentos no Cadastro a partir de {formatMonthLabel(firstEstimatedMonth)} (dois meses à frente). O mês
-        atual e o seguinte ficam só com os dados reais. Meses que já têm um lançamento dessa pessoa na mesma
-        categoria não recebem estimativa, e lançamentos estimados que você editou nunca são sobrescritos.
+        O valor é a média do gasto real dos dois últimos meses fechados na categoria. Em {formatMonthLabel(nextMonth)}{" "}
+        (mês em evolução) a estimativa vale só na Simulação; de {formatMonthLabel(addMonths(currentMonth, 2))} em diante vale
+        também na Análise. Em todos eles o mês usa o maior entre o que já foi gasto e a estimativa, e o valor real
+        assume quando o mês fecha. Nada é gravado no Cadastro.
       </p>
 
       <div className="space-y-3">
@@ -84,8 +89,20 @@ export function EstimatedExpensesEditor({
                 placeholder="Ex.: Supermercado"
               />
             </FieldGroup>
-            <FieldGroup label="Valor mensal">
-              <CurrencyInput valueCents={item.amountCents} onChange={(c) => updateItem(item.id, { amountCents: c })} />
+            <FieldGroup label="Estimativa atual">
+              {(() => {
+                const avg = averagesById.get(item.id);
+                return avg ? (
+                  <p className="flex h-10 flex-col justify-center text-sm leading-tight">
+                    <span className="font-semibold tabular-nums">{formatCurrencyBRL(avg.averageCents)}</span>
+                    <span className="text-[11px] text-(--color-text-tertiary)">
+                      média de {formatReferenceMonthShort(avg.months[0])} e {formatReferenceMonthShort(avg.months[1])}
+                    </span>
+                  </p>
+                ) : (
+                  <p className="flex h-10 items-center text-xs text-(--color-text-tertiary)">Calculada ao salvar</p>
+                );
+              })()}
             </FieldGroup>
             <FieldGroup label="Origem">
               <Select value={item.personId} onChange={(e) => updateItem(item.id, { personId: e.target.value })}>
@@ -101,7 +118,7 @@ export function EstimatedExpensesEditor({
                 value={item.categoryId ?? ""}
                 onChange={(e) => updateItem(item.id, { categoryId: e.target.value || null })}
               >
-                <option value="">Não identificado</option>
+                <option value="">Escolha a categoria</option>
                 {categories.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}

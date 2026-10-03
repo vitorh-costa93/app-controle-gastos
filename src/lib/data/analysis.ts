@@ -1,5 +1,6 @@
 "use server";
 
+import { getEstimatedExpenseOccurrences } from "./estimates";
 import { listAllTransactions, listConsideredTransactionsInRange, listTransactionsForMonth } from "./transactions";
 import { listActiveRecurrenceRules } from "./recurrence";
 import { listPeople, listCategories, listTransactionTypes } from "./reference";
@@ -79,7 +80,16 @@ async function computeAnalysisData(month: string, personId?: string): Promise<An
   // Preenche meses futuros sem lançamento real com o salário variável projetado
   // (dias úteis) — senão Análise simplesmente não via essa receita nesses meses.
   const salaryByMonth = await getSalaryProjectionOccurrences(months, people, types, allTransactions, personId);
-  const withSalary = (m: string, occ: MonthlyOccurrence[]) => [...occ, ...(salaryByMonth.get(m) ?? [])];
+  // Gastos estimados (média dos 2 últimos meses fechados): só de dois meses à frente em diante; o mês seguinte ao atual
+  // fica só com o real aqui (a estimativa dele vale só na Simulação).
+  const estimatesByMonth = await getEstimatedExpenseOccurrences(months, "analysis", allTransactions);
+  const estimatesFor = (estimates: Map<string, MonthlyOccurrence[]>, m: string) =>
+    (estimates.get(m) ?? []).filter((o) => !personId || o.personId === personId);
+  const withSalary = (m: string, occ: MonthlyOccurrence[]) => [
+    ...occ,
+    ...(salaryByMonth.get(m) ?? []),
+    ...estimatesFor(estimatesByMonth, m),
+  ];
 
   const occurrencesByMonth = months.map((m) => withSalary(m, buildMonthOccurrences(m, transactions, rules)));
   const summaries = months.map((m, i) => summarizeMonth(m, occurrencesByMonth[i]));
@@ -105,10 +115,15 @@ async function computeAnalysisData(month: string, personId?: string): Promise<An
     [...allTransactions, ...futureAll],
     personId
   );
+  const futureEstimates = await getEstimatedExpenseOccurrences(futureMonths, "analysis", futureAll);
   const commitments = [
     computeCommitment(month, currentOccurrences),
     ...futureMonths.map((m) =>
-      computeCommitment(m, [...buildMonthOccurrences(m, futureTransactions, rules), ...(futureSalary.get(m) ?? [])])
+      computeCommitment(m, [
+        ...buildMonthOccurrences(m, futureTransactions, rules),
+        ...(futureSalary.get(m) ?? []),
+        ...estimatesFor(futureEstimates, m),
+      ])
     ),
   ];
 

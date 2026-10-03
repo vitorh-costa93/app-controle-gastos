@@ -53,6 +53,7 @@ export function mapRecurrenceRuleRow(row: RecurrenceRuleRow, amountHistory: Recu
     startDate: row.start_date,
     endDate: row.end_date,
     active: row.active,
+    skippedMonths: row.skipped_months ?? [],
     amountHistory,
   };
 }

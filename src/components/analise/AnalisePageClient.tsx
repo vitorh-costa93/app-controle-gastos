@@ -243,6 +243,8 @@ export function AnalisePageClient({
             people={data.people}
             categories={data.categories}
             types={data.types}
+            recurrenceRules={data.recurrenceRules}
+            onChanged={refreshCurrent}
           />
 
           <PivotTable people={data.people} categories={data.categories} types={data.types} />

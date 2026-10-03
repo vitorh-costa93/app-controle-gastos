@@ -70,6 +70,8 @@ export interface MonthlyOccurrence {
   recurrenceRuleId: string | null;
   /** Só lançamentos reais: marcação manual de "não foi fora do planejado". */
   unplannedExcluded?: boolean;
+  /** Só lançamentos reais: grupo da compra parcelada a que a parcela pertence. */
+  installmentGroupId?: string | null;
 }
 
 export interface MonthSummary {

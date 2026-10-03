@@ -15,32 +15,53 @@ export type DeleteTarget =
   | { kind: "recurring"; ruleId: string; month: string; label: string }
   | { kind: "installment"; groupId: string; transactionId: string; month: string; current: number; total: number; label: string };
 
-/** Escolhe o tipo de exclusão pelo registro: recorrente (real ou projetado), parcela de compra parcelada ou pontual. */
-export function deleteTargetFor(occurrence: MonthlyOccurrence, transaction: Transaction | null): DeleteTarget | null {
+/**
+ * Escolhe o tipo de exclusão pelo registro: recorrente (real ou projetado), parcela de compra parcelada ou pontual.
+ * null quando não dá para excluir (valores calculados, como a estimativa e o salário projetado).
+ */
+export function deleteTargetFor(occurrence: MonthlyOccurrence, transaction?: Transaction | null): DeleteTarget | null {
   const label = occurrence.description ?? "este lançamento";
   if (occurrence.recurrenceRuleId) {
     return { kind: "recurring", ruleId: occurrence.recurrenceRuleId, month: occurrence.referenceMonth, label };
   }
-  if (!transaction) return null;
-  if (transaction.installmentGroupId && transaction.installmentTotal > 1) {
+  const transactionId = transaction?.id ?? (occurrence.origin === "real" ? occurrence.id : null);
+  if (!transactionId) return null;
+  const groupId = transaction?.installmentGroupId ?? occurrence.installmentGroupId ?? null;
+  if (groupId && occurrence.installmentTotal > 1) {
     return {
       kind: "installment",
-      groupId: transaction.installmentGroupId,
-      transactionId: transaction.id,
-      month: transaction.referenceMonth,
-      current: transaction.installmentCurrent,
-      total: transaction.installmentTotal,
+      groupId,
+      transactionId,
+      month: occurrence.referenceMonth,
+      current: occurrence.installmentCurrent,
+      total: occurrence.installmentTotal,
       label,
     };
   }
-  return { kind: "simple", transactionId: transaction.id, label };
+  return { kind: "simple", transactionId, label };
 }
 
-export function DeleteRecordDialog({ target, onClose }: { target: DeleteTarget | null; onClose: () => void }) {
+/** Texto que explica o que será excluído. */
+export function deleteQuestion(target: DeleteTarget): string {
+  if (target.kind === "recurring") return `${target.label} é recorrente. O que você quer excluir?`;
+  if (target.kind === "installment") {
+    return `${target.label} é a parcela ${target.current}/${target.total} de uma compra parcelada. O que você quer excluir?`;
+  }
+  return `${target.label} será excluído.`;
+}
+
+/** Os botões de exclusão de cada tipo de registro (só este mês / este e os seguintes, etc.). */
+export function DeleteActions({
+  target,
+  onDone,
+  onCancel,
+}: {
+  target: DeleteTarget;
+  onDone: () => void;
+  onCancel?: () => void;
+}) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-
-  if (!target) return null;
 
   function run(action: () => Promise<{ ok: boolean; error?: string }>) {
     setError(null);
@@ -50,7 +71,7 @@ export function DeleteRecordDialog({ target, onClose }: { target: DeleteTarget |
         setError(result.error ?? "Não foi possível excluir.");
         return;
       }
-      onClose();
+      onDone();
     });
   }
 
@@ -58,52 +79,72 @@ export function DeleteRecordDialog({ target, onClose }: { target: DeleteTarget |
   const monthLabel = t.kind === "simple" ? "" : formatMonthLabel(t.month);
 
   return (
-    <Modal open onClose={onClose} title="Excluir registro" size="sm">
-      <p className="mb-4 text-sm text-(--color-text-secondary)">
-        <span className="font-medium text-(--color-text-primary)">{t.label}</span>
-        {t.kind === "recurring" && " é recorrente. O que você quer excluir?"}
-        {t.kind === "installment" && ` é a parcela ${t.current}/${t.total} de uma compra parcelada. O que você quer excluir?`}
-        {t.kind === "simple" && " será excluído."}
-      </p>
-      {error && <p className="mb-3 text-sm text-(--color-negative)">{error}</p>}
-      <div className="flex flex-col gap-2">
-        {t.kind === "recurring" && (
-          <>
-            <Button
-              variant="secondary"
-              disabled={isPending}
-              onClick={() => run(() => deleteRecurringOccurrence(t.ruleId, t.month, "month"))}
-            >
-              Só {monthLabel}
-            </Button>
-            <Button
-              variant="danger"
-              disabled={isPending}
-              onClick={() => run(() => deleteRecurringOccurrence(t.ruleId, t.month, "following"))}
-            >
-              {monthLabel} e todos os seguintes
-            </Button>
-          </>
-        )}
-        {t.kind === "installment" && (
-          <>
-            <Button variant="secondary" disabled={isPending} onClick={() => run(() => deleteTransaction(t.transactionId))}>
-              Só esta parcela ({t.current}/{t.total})
-            </Button>
-            <Button variant="danger" disabled={isPending} onClick={() => run(() => cancelInstallmentGroup(t.groupId, t.month))}>
-              Esta e as seguintes
-            </Button>
-          </>
-        )}
-        {t.kind === "simple" && (
-          <Button variant="danger" disabled={isPending} onClick={() => run(() => deleteTransaction(t.transactionId))}>
-            Excluir
+    <div className="flex flex-col gap-2">
+      {error && <p className="text-sm text-(--color-negative)">{error}</p>}
+      {t.kind === "recurring" && (
+        <>
+          <Button
+            variant="secondary"
+            disabled={isPending}
+            onClick={() => run(() => deleteRecurringOccurrence(t.ruleId, t.month, "month"))}
+          >
+            Excluir só em {monthLabel}
           </Button>
-        )}
-        <Button variant="ghost" disabled={isPending} onClick={onClose}>
+          <Button
+            variant="danger"
+            disabled={isPending}
+            onClick={() => run(() => deleteRecurringOccurrence(t.ruleId, t.month, "following"))}
+          >
+            Excluir de {monthLabel} em diante
+          </Button>
+        </>
+      )}
+      {t.kind === "installment" && (
+        <>
+          <Button variant="secondary" disabled={isPending} onClick={() => run(() => deleteTransaction(t.transactionId))}>
+            Excluir só esta parcela ({t.current}/{t.total})
+          </Button>
+          <Button variant="danger" disabled={isPending} onClick={() => run(() => cancelInstallmentGroup(t.groupId, t.month))}>
+            Excluir esta e as seguintes
+          </Button>
+        </>
+      )}
+      {t.kind === "simple" && (
+        <Button variant="danger" disabled={isPending} onClick={() => run(() => deleteTransaction(t.transactionId))}>
+          Excluir
+        </Button>
+      )}
+      {onCancel && (
+        <Button variant="ghost" disabled={isPending} onClick={onCancel}>
           Cancelar
         </Button>
-      </div>
+      )}
+    </div>
+  );
+}
+
+export function DeleteRecordDialog({
+  target,
+  onClose,
+  onDeleted,
+}: {
+  target: DeleteTarget | null;
+  onClose: () => void;
+  /** Chamado depois de excluir (ex.: para recarregar a tela). */
+  onDeleted?: () => void;
+}) {
+  if (!target) return null;
+  return (
+    <Modal open onClose={onClose} title="Excluir registro" size="sm">
+      <p className="mb-4 text-sm text-(--color-text-secondary)">{deleteQuestion(target)}</p>
+      <DeleteActions
+        target={target}
+        onCancel={onClose}
+        onDone={() => {
+          onDeleted?.();
+          onClose();
+        }}
+      />
     </Modal>
   );
 }

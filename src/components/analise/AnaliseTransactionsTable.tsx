@@ -1,14 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
-import { MonthlyOccurrence } from "@/types/domain";
+import { ArrowDown, ArrowUp, ArrowUpDown, Pencil } from "lucide-react";
+import { MonthlyOccurrence, RecurrenceRule } from "@/types/domain";
 import { Person, Category, TransactionType } from "@/types/db";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { formatCurrencyBRL, formatDateBR, formatReferenceMonthShort } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/cn";
 import { ClearRow, FilterButton, ValuesFilter } from "./filter-popup";
+import { MovementDetailsDialog } from "./MovementDetailsDialog";
 
 type ColumnKey =
   | "date"
@@ -59,12 +60,18 @@ export function AnaliseTransactionsTable({
   people,
   categories,
   types,
+  recurrenceRules,
+  onChanged,
 }: {
   transactions: MonthlyOccurrence[];
   people: Person[];
   categories: Category[];
   types: TransactionType[];
+  recurrenceRules: RecurrenceRule[];
+  /** Recarrega a Análise depois de excluir um lançamento pelo popup. */
+  onChanged: () => void;
 }) {
+  const [selected, setSelected] = useState<MonthlyOccurrence | null>(null);
   // Filtros de valores: coluna → conjunto de valores marcados (vazio = sem filtro naquela coluna).
   const [valueFilters, setValueFilters] = useState<Partial<Record<ColumnKey, Set<string>>>>({});
   const [description, setDescription] = useState("");
@@ -283,6 +290,7 @@ export function AnaliseTransactionsTable({
                   </th>
                 );
               })}
+              <th className="w-10 px-3 py-2" aria-label="Detalhes" />
             </tr>
           </thead>
           <tbody>
@@ -338,12 +346,23 @@ export function AnaliseTransactionsTable({
                       <span className="text-(--color-text-tertiary)">Não</span>
                     )}
                   </td>
+                  <td className="px-2 py-2 text-center">
+                    <button
+                      type="button"
+                      onClick={() => setSelected(t)}
+                      aria-label={`Ver detalhes e excluir: ${t.description ?? "lançamento"}`}
+                      title="Detalhes e exclusão"
+                      className="rounded-full p-1.5 text-(--color-text-secondary) hover:bg-black/5"
+                    >
+                      <Pencil size={15} />
+                    </button>
+                  </td>
                 </tr>
               );
             })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={COLUMNS.length} className="px-3 py-8 text-center text-(--color-text-tertiary)">
+                <td colSpan={COLUMNS.length + 1} className="px-3 py-8 text-center text-(--color-text-tertiary)">
                   Nenhuma movimentação encontrada com esses filtros.
                 </td>
               </tr>
@@ -396,6 +415,17 @@ export function AnaliseTransactionsTable({
             </button>
           </div>
         </div>
+      )}
+      {selected && (
+        <MovementDetailsDialog
+          occurrence={selected}
+          rule={recurrenceRules.find((r) => r.id === selected.recurrenceRuleId)}
+          people={people}
+          categories={categories}
+          types={types}
+          onClose={() => setSelected(null)}
+          onChanged={onChanged}
+        />
       )}
     </Card>
   );

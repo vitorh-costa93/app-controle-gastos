@@ -20,7 +20,7 @@ import {
 } from "@/lib/domain/insights";
 import { addMonths } from "@/lib/utils/format";
 import { isAiConfigured, generateMonthInsight } from "@/lib/ai/openai";
-import { MonthSummary, MonthlyOccurrence, Transaction } from "@/types/domain";
+import { MonthSummary, MonthlyOccurrence, Transaction, RecurrenceRule } from "@/types/domain";
 import { Person, Category, TransactionType } from "@/types/db";
 
 export interface AnalysisData {
@@ -50,6 +50,8 @@ export interface AnalysisData {
   projectedOccurrences: MonthlyOccurrence[];
   people: Person[];
   categories: Category[];
+  /** Recorrências ativas: frequência e período mostrados no popup de cada lançamento. */
+  recurrenceRules: RecurrenceRule[];
   types: TransactionType[];
   hasEnoughHistory: boolean;
 }
@@ -165,6 +167,7 @@ async function computeAnalysisData(month: string, personId?: string): Promise<An
     people,
     // Categorias ativas + as desativadas que ainda têm lançamentos: assim elas aparecem pelo nome, e não como "removida".
     categories: allCategories.filter((c) => c.active || usedCategoryIds.has(c.id)),
+    recurrenceRules: allRules,
     types,
     hasEnoughHistory: monthsWithData >= 2,
   };
@@ -213,6 +216,7 @@ function buildMovementRows(real: Transaction[], projected: MonthlyOccurrence[]):
     considered: t.considered,
     recurrenceRuleId: t.recurrenceRuleId,
     unplannedExcluded: t.unplannedExcluded,
+    installmentGroupId: t.installmentGroupId,
   }));
   const projectedRows = projected.filter((o) => !o.recurrenceRuleId || !materializedRules.has(o.recurrenceRuleId));
   return [...realRows, ...projectedRows].sort((a, b) => b.registrationDate.localeCompare(a.registrationDate));

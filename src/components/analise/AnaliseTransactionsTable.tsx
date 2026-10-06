@@ -418,6 +418,7 @@ export function AnaliseTransactionsTable({
       )}
       {selected && (
         <MovementDetailsDialog
+          key={selected.id}
           occurrence={selected}
           rule={recurrenceRules.find((r) => r.id === selected.recurrenceRuleId)}
           people={people}

@@ -55,23 +55,32 @@ export function DeleteActions({
   target,
   onDone,
   onCancel,
+  onBusyChange,
 }: {
   target: DeleteTarget;
   onDone: () => void;
   onCancel?: () => void;
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   function run(action: () => Promise<{ ok: boolean; error?: string }>) {
     setError(null);
+    onBusyChange?.(true);
     startTransition(async () => {
-      const result = await action();
-      if (!result.ok) {
-        setError(result.error ?? "Não foi possível excluir.");
-        return;
+      try {
+        const result = await action();
+        if (!result.ok) {
+          setError(result.error ?? "Não foi possível excluir.");
+          return;
+        }
+        onDone();
+      } catch {
+        setError("Não foi possível excluir. Tente novamente.");
+      } finally {
+        onBusyChange?.(false);
       }
-      onDone();
     });
   }
 

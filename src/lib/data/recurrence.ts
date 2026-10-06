@@ -210,13 +210,15 @@ export async function setRecurrenceMonthOverride(
     .single();
   if (ruleError || !rule) return { ok: false, error: "Recorrência não encontrada." };
 
-  const { data: existing } = await supabase
+  const { data: existing, error: existingError } = await supabase
     .from("transactions")
     .select("id")
     .eq("recurrence_rule_id", ruleId)
     .eq("reference_month", referenceMonth)
     .is("deleted_at", null)
     .maybeSingle();
+
+  if (existingError) return { ok: false, error: "Não foi possível consultar o lançamento deste mês." };
 
   const amount = centsToReaisString(amountCents);
 

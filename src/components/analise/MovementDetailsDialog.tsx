@@ -1,5 +1,9 @@
 "use client";
 
+import { useState, useTransition } from "react";
+import { Button } from "@/components/ui/Button";
+import { CurrencyInput } from "@/components/ui/CurrencyInput";
+import { saveMovementAmount } from "@/lib/data/movement-edit";
 import { Modal } from "@/components/ui/Modal";
 import { Person, Category, TransactionType } from "@/types/db";
 import { MonthlyOccurrence, RecurrenceRule } from "@/types/domain";
@@ -37,13 +41,37 @@ export function MovementDetailsDialog({
   categories: Category[];
   types: TransactionType[];
   onClose: () => void;
-  /** Chamado depois de excluir, para recarregar a Análise. */
+  /** Chamado depois de salvar ou excluir, para recarregar a Análise. */
   onChanged: () => void;
 }) {
   const person = people.find((p) => p.id === o.personId);
   const category = categories.find((c) => c.id === o.categoryId);
   const type = types.find((t) => t.id === o.typeId);
   const target = deleteTargetFor(o);
+  const [amountCents, setAmountCents] = useState(o.amountCents);
+  const [scope, setScope] = useState<"month" | "following">("month");
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const [isDeleting, setIsDeleting] = useState(false);
+  const isBusy = isPending || isDeleting;
+  const monthLabel = formatMonthLabel(o.referenceMonth);
+
+  function save() {
+    setError(null);
+    startTransition(async () => {
+      try {
+        const result = await saveMovementAmount(o.id, o.recurrenceRuleId, o.referenceMonth, amountCents, scope);
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        onChanged();
+        onClose();
+      } catch {
+        setError("Não foi possível salvar. Tente novamente.");
+      }
+    });
+  }
 
   const details: [string, string][] = [
     ["Descrição", o.description ?? "—"],
@@ -60,7 +88,7 @@ export function MovementDetailsDialog({
   ];
 
   return (
-    <Modal open onClose={onClose} title="Detalhes do lançamento" size="sm">
+    <Modal open onClose={() => { if (!isBusy) onClose(); }} title="Detalhes do lançamento" size="sm">
       <dl className="mb-5 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
         {details.map(([label, value]) => (
           <div key={label} className="contents">
@@ -70,13 +98,49 @@ export function MovementDetailsDialog({
         ))}
       </dl>
 
-      <div className="border-t border-(--color-border) pt-4">
+      {target && (
+        <section className="mb-5 border-t border-(--color-border) pt-4">
+          <h3 className="mb-3 text-sm font-semibold">Editar valor</h3>
+          <fieldset disabled={isBusy} className="space-y-3">
+            <div>
+              <label htmlFor="movement-amount" className="mb-1.5 block text-xs font-medium">Novo valor</label>
+              <CurrencyInput id="movement-amount" valueCents={amountCents} onChange={setAmountCents} />
+            </div>
+            {o.recurrenceRuleId ? (
+              <div className="space-y-2 text-sm">
+                <label className="flex items-center gap-2">
+                  <input type="radio" name="movement-scope" checked={scope === "month"} onChange={() => setScope("month")} />
+                  Só em {monthLabel}
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="radio" name="movement-scope" checked={scope === "following"} onChange={() => setScope("following")} />
+                  De {monthLabel} em diante
+                </label>
+                <p className="text-xs text-(--color-text-secondary)">
+                  {scope === "month"
+                    ? "Os outros meses mantêm seus valores."
+                    : "Atualiza este mês e todos os seguintes, inclusive valores já registrados e alterações futuras. Os meses anteriores são preservados."}
+                </p>
+              </div>
+            ) : (
+              <p className="text-xs text-(--color-text-secondary)">Altera somente este lançamento{ o.installmentTotal > 1 ? " (esta parcela)" : ""}.</p>
+            )}
+            <Button type="button" className="w-full" onClick={save} disabled={isBusy || amountCents <= 0}>
+              {isPending ? "Salvando..." : "Salvar valor"}
+            </Button>
+          </fieldset>
+          {error && <p role="alert" className="mt-2 text-xs text-(--color-negative)">{error}</p>}
+        </section>
+      )}
+
+      <fieldset disabled={isPending} className="border-t border-(--color-border) pt-4">
         <h3 className="mb-1 text-sm font-semibold">Excluir</h3>
         {target ? (
           <>
             <p className="mb-3 text-xs text-(--color-text-secondary)">{deleteQuestion(target)}</p>
             <DeleteActions
               target={target}
+              onBusyChange={setIsDeleting}
               onDone={() => {
                 onChanged();
                 onClose();
@@ -90,7 +154,7 @@ export function MovementDetailsDialog({
               : "Este valor é calculado automaticamente e não pode ser excluído por aqui."}
           </p>
         )}
-      </div>
+      </fieldset>
     </Modal>
   );
 }

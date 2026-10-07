@@ -2,7 +2,7 @@
 
 import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { TransactionRow } from "@/types/db";
+import { Bank, TransactionRow } from "@/types/db";
 import { Transaction, RecurrenceFrequency } from "@/types/domain";
 import { mapTransactionRow, centsToReaisString, reaisStringToCents } from "./mappers";
 import { addMonths, addMonthsToISODate } from "@/lib/utils/format";
@@ -11,6 +11,7 @@ import { sameMerchant, DUPLICATE_WINDOW_DAYS } from "@/lib/domain/duplicates";
 type AdminClient = ReturnType<typeof createAdminClient>;
 
 type TransactionInsertRow = {
+  bank: Bank | null;
   registration_date: string;
   reference_month: string;
   person_id: string;
@@ -29,6 +30,7 @@ type TransactionInsertRow = {
 
 function toInsertRow(input: TransactionInput): TransactionInsertRow {
   return {
+    bank: input.bank ?? null,
     registration_date: input.registrationDate,
     reference_month: input.referenceMonth,
     person_id: input.personId,
@@ -71,7 +73,7 @@ async function expandInstallments(
   if (!isInstallmentPurchase(input)) return { rows: [base], replaceIds: [] };
 
   const anchor = addMonths(input.referenceMonth, -input.installmentCurrent);
-  const { data: candidates } = await supabase
+  let candidatesQuery = supabase
     .from("transactions")
     .select("id, installment_group_id, installment_current, reference_month")
     .eq("person_id", input.personId)
@@ -79,6 +81,8 @@ async function expandInstallments(
     .eq("amount", base.amount)
     .not("installment_group_id", "is", null)
     .is("deleted_at", null);
+  candidatesQuery = input.bank ? candidatesQuery.eq("bank", input.bank) : candidatesQuery.is("bank", null);
+  const { data: candidates } = await candidatesQuery;
 
   const sameGroup = ((candidates ?? []) as {
     id: string;
@@ -118,6 +122,7 @@ async function softDelete(supabase: AdminClient, ids: string[]): Promise<void> {
 }
 
 interface RecurrenceFields {
+  bank: Bank | null;
   personId: string;
   direction: "income" | "expense";
   typeId: string | null;
@@ -142,6 +147,7 @@ async function linkFixedRecurrence(
   const { data: rule, error } = await supabase
     .from("recurrence_rules")
     .insert({
+      bank: fields.bank,
       description: fields.description || "Lançamento fixo",
       person_id: fields.personId,
       direction: fields.direction,
@@ -174,6 +180,7 @@ async function syncFixedRecurrence(
   const { error } = await supabase
     .from("recurrence_rules")
     .update({
+      bank: fields.bank,
       description: fields.description || "Lançamento fixo",
       person_id: fields.personId,
       direction: fields.direction,
@@ -216,6 +223,7 @@ export interface TransactionFilters {
 }
 
 export interface TransactionInput {
+  bank?: Bank | null;
   registrationDate: string;
   referenceMonth: string;
   personId: string;
@@ -356,6 +364,7 @@ export async function createTransaction(
     ) ?? inserted[0];
   if (input.fixedVariable === "fixed") {
     const ruleId = await linkFixedRecurrence(supabase, row.id, {
+      bank: input.bank ?? null,
       personId: input.personId,
       direction: input.direction,
       typeId: input.typeId,
@@ -408,6 +417,7 @@ export async function createTransactionsBatch(
       const input = inputs[i];
       if (row.fixed_variable !== "fixed") return null;
       return linkFixedRecurrence(supabase, row.id, {
+        bank: input.bank ?? null,
         personId: input.personId,
         direction: input.direction,
         typeId: input.typeId,
@@ -436,11 +446,12 @@ export async function updateTransaction(
 
   const { data: before } = await supabase
     .from("transactions")
-    .select("fixed_variable, recurrence_rule_id, person_id, direction, type_id, category_id, amount, registration_date, description")
+    .select("bank, fixed_variable, recurrence_rule_id, person_id, direction, type_id, category_id, amount, registration_date, description")
     .eq("id", id)
     .single();
 
   const patch: Record<string, unknown> = {};
+  if (input.bank !== undefined) patch.bank = input.bank;
   if (input.registrationDate !== undefined) patch.registration_date = input.registrationDate;
   if (input.referenceMonth !== undefined) patch.reference_month = input.referenceMonth;
   if (input.personId !== undefined) patch.person_id = input.personId;
@@ -487,6 +498,7 @@ export async function updateTransaction(
     }
 
     const recurrenceFields: RecurrenceFields = {
+      bank: input.bank !== undefined ? input.bank : before.bank ?? null,
       personId: input.personId ?? before.person_id,
       direction: input.direction ?? before.direction,
       typeId: input.typeId !== undefined ? input.typeId : before.type_id,

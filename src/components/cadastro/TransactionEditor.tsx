@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { RecurrenceFrequency } from "@/types/domain";
 import { RECURRENCE_FREQUENCIES } from "@/lib/domain/recurrence";
-import { Person, Category, TransactionType } from "@/types/db";
+import { Bank, Person, Category, TransactionType } from "@/types/db";
 import { Transaction, RecurrenceRule } from "@/types/domain";
 import { createTransaction, updateTransaction, deleteTransaction, TransactionInput } from "@/lib/data/transactions";
 import { Modal } from "@/components/ui/Modal";
@@ -51,6 +51,7 @@ export function TransactionEditor({
     setErrorMessage(null);
 
     const input: TransactionInput = {
+      bank: form.bank || null,
       registrationDate: form.registrationDate,
       referenceMonth: form.referenceMonth,
       personId: form.personId,
@@ -106,6 +107,13 @@ export function TransactionEditor({
   return (
     <Modal open={open} onClose={onClose} title={transaction ? "Editar lançamento" : "Novo lançamento"}>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FieldGroup label="Cartão">
+          <Select value={form.bank} onChange={(e) => update("bank", e.target.value as Bank | "")}>
+            <option value="">Não informado</option>
+            <option value="picpay">PicPay</option>
+            <option value="nubank">Nubank</option>
+          </Select>
+        </FieldGroup>
         <FieldGroup label="Data de cadastro">
           <Input
             type="date"
@@ -309,6 +317,7 @@ function buildInitialForm(
       ? recurrenceRules.find((r) => r.id === transaction.recurrenceRuleId)
       : undefined;
     return {
+      bank: (transaction.bank ?? "") as Bank | "",
       registrationDate: transaction.registrationDate,
       referenceMonth: transaction.referenceMonth,
       personId: transaction.personId,
@@ -327,6 +336,7 @@ function buildInitialForm(
   }
 
   return {
+    bank: "" as Bank | "",
     registrationDate: toISODate(today),
     referenceMonth: toReferenceMonth(today),
     personId: people[0]?.id ?? "",

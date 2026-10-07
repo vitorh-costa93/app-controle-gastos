@@ -201,48 +201,9 @@ export async function setRecurrenceMonthOverride(
   referenceMonth: string,
   amountCents: number
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const supabase = createAdminClient();
-
-  const { data: rule, error: ruleError } = await supabase
-    .from("recurrence_rules")
-    .select("person_id, direction, type_id, category_id, description")
-    .eq("id", ruleId)
-    .single();
-  if (ruleError || !rule) return { ok: false, error: "Recorrência não encontrada." };
-
-  const { data: existing, error: existingError } = await supabase
-    .from("transactions")
-    .select("id")
-    .eq("recurrence_rule_id", ruleId)
-    .eq("reference_month", referenceMonth)
-    .is("deleted_at", null)
-    .maybeSingle();
-
-  if (existingError) return { ok: false, error: "Não foi possível consultar o lançamento deste mês." };
-
-  const amount = centsToReaisString(amountCents);
-
-  if (existing) {
-    const { error } = await supabase.from("transactions").update({ amount }).eq("id", existing.id);
-    if (error) return { ok: false, error: "Não foi possível atualizar o valor deste mês." };
-  } else {
-    const { error } = await supabase.from("transactions").insert({
-      registration_date: `${referenceMonth}-01`,
-      reference_month: referenceMonth,
-      person_id: rule.person_id,
-      direction: rule.direction,
-      fixed_variable: "fixed",
-      type_id: rule.type_id,
-      category_id: rule.category_id,
-      installment_current: 1,
-      installment_total: 1,
-      amount,
-      description: rule.description,
-      considered: true,
-      source: "manual",
-      recurrence_rule_id: ruleId,
-    });
-    if (error) return { ok: false, error: "Não foi possível lançar o valor deste mês." };
+  const { error } = await createAdminClient().rpc("set_recurrence_month_override", { p_rule_id: ruleId, p_month: referenceMonth, p_amount: centsToReaisString(amountCents) });
+  if (error) {
+    return { ok: false, error: error.message.startsWith("Lote:") ? error.message.slice(5).trim() : "Não foi possível concluir a operação. Nenhum registro foi alterado." };
   }
 
   revalidateTag("analysis");
@@ -266,52 +227,9 @@ export async function deleteRecurringOccurrence(
   referenceMonth: string,
   scope: RecurringDeleteScope
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const supabase = createAdminClient();
-
-  const { data: rule, error: ruleError } = await supabase
-    .from("recurrence_rules")
-    .select("start_date, skipped_months")
-    .eq("id", ruleId)
-    .single();
-  if (ruleError || !rule) return { ok: false, error: "Recorrência não encontrada." };
-
-  const now = new Date().toISOString();
-
-  if (scope === "month") {
-    const skipped = new Set<string>((rule.skipped_months as string[] | null) ?? []);
-    skipped.add(referenceMonth);
-    const { error } = await supabase
-      .from("recurrence_rules")
-      .update({ skipped_months: [...skipped].sort() })
-      .eq("id", ruleId);
-    if (error) {
-      console.error("deleteRecurringOccurrence (skip) failed:", error);
-      return { ok: false, error: "Não foi possível excluir este mês." };
-    }
-    await supabase
-      .from("transactions")
-      .update({ deleted_at: now })
-      .eq("recurrence_rule_id", ruleId)
-      .eq("reference_month", referenceMonth)
-      .is("deleted_at", null);
-  } else {
-    const startMonth = (rule.start_date as string).slice(0, 7);
-    const previousMonth = addMonthsToReferenceMonth(referenceMonth, -1);
-    const patch =
-      referenceMonth <= startMonth
-        ? { active: false }
-        : { end_date: `${previousMonth}-${String(lastDayOfMonth(previousMonth)).padStart(2, "0")}` };
-    const { error } = await supabase.from("recurrence_rules").update(patch).eq("id", ruleId);
-    if (error) {
-      console.error("deleteRecurringOccurrence (end) failed:", error);
-      return { ok: false, error: "Não foi possível excluir este mês e os seguintes." };
-    }
-    await supabase
-      .from("transactions")
-      .update({ deleted_at: now })
-      .eq("recurrence_rule_id", ruleId)
-      .gte("reference_month", referenceMonth)
-      .is("deleted_at", null);
+  const { error } = await createAdminClient().rpc("delete_recurring_occurrence", { p_rule_id: ruleId, p_month: referenceMonth, p_scope: scope });
+  if (error) {
+    return { ok: false, error: error.message.startsWith("Lote:") ? error.message.slice(5).trim() : "Não foi possível concluir a operação. Nenhum registro foi alterado." };
   }
 
   revalidateTag("recurrence-rules");
@@ -321,15 +239,4 @@ export async function deleteRecurringOccurrence(
   revalidatePath("/analise");
   revalidatePath("/simulacao");
   return { ok: true };
-}
-
-function addMonthsToReferenceMonth(referenceMonth: string, count: number): string {
-  const [year, month] = referenceMonth.split("-").map(Number);
-  const date = new Date(Date.UTC(year, month - 1 + count, 1));
-  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
-}
-
-function lastDayOfMonth(referenceMonth: string): number {
-  const [year, month] = referenceMonth.split("-").map(Number);
-  return new Date(Date.UTC(year, month, 0)).getUTCDate();
 }

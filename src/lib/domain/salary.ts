@@ -172,6 +172,7 @@ export function buildProjectedSalaryOccurrences(params: {
     .filter((m) => (m >= firstProjectableMonth || hasEntry(m)) && !monthsWithRealIncome.has(m))
     .map((m) => ({
       id: `projected-salary:${personId}:${m}`,
+      bank: null,
       origin: "projected" as const,
       registrationDate: `${m}-01`,
       referenceMonth: m,

@@ -1,7 +1,8 @@
-import { Direction, FieldConfidence, FixedVariable, TransactionSource } from "./db";
+import { Bank, Direction, FieldConfidence, FixedVariable, TransactionSource } from "./db";
 
 /** Representação de app: valores sempre em centavos (inteiro), nunca float de reais. */
 export interface Transaction {
+  bank: Bank | null;
   id: string;
   registrationDate: string; // ISO date
   referenceMonth: string; // "YYYY-MM"
@@ -33,6 +34,7 @@ export interface RecurrenceAmountVersion {
 export type RecurrenceFrequency = "monthly" | "bimonthly" | "quarterly" | "semiannual" | "annual";
 
 export interface RecurrenceRule {
+  bank: Bank | null;
   id: string;
   description: string;
   personId: string;
@@ -53,6 +55,7 @@ export interface RecurrenceRule {
 
 /** Uma ocorrência (real ou projetada) de um lançamento dentro de um mês. */
 export interface MonthlyOccurrence {
+  bank: Bank | null;
   id: string;
   origin: "real" | "projected";
   registrationDate: string;

@@ -208,6 +208,7 @@ function buildMovementRows(real: Transaction[], projected: MonthlyOccurrence[]):
     direction: t.direction,
     fixedVariable: t.fixedVariable,
     typeId: t.typeId,
+    bank: t.bank,
     categoryId: t.categoryId,
     installmentCurrent: t.installmentCurrent,
     installmentTotal: t.installmentTotal,

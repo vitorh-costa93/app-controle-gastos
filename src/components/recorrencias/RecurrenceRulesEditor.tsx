@@ -159,6 +159,7 @@ function NewRecurrenceForm({
         return;
       }
       onCreated({
+        bank: null,
         id: crypto.randomUUID(),
         description,
         personId,

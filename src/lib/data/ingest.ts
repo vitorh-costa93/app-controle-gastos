@@ -14,7 +14,7 @@ import { applyStatementDueDate, applyInstallmentHints, prepareStatementPdf } fro
 import { RawExtractedTransaction } from "@/lib/ai/openai";
 import { listPeople, listCategories, listTransactionTypes } from "@/lib/data/reference";
 import { createTransactionsBatch, findPotentialDuplicates, TransactionInput } from "@/lib/data/transactions";
-import { AiExtractedTransactionRow, ExtractedTransactionData, FieldConfidence } from "@/types/db";
+import { Bank, AiExtractedTransactionRow, ExtractedTransactionData, FieldConfidence } from "@/types/db";
 import { toISODate, toReferenceMonth, formatDateBR, formatReferenceMonthShort } from "@/lib/utils/format";
 
 export type IngestMethod = "audio" | "photo" | "text" | "pdf" | "csv";
@@ -233,8 +233,12 @@ export async function confirmExtractedRows(
   jobId: string,
   rows: ConfirmRowInput[],
   defaultPersonId: string,
-  source: IngestMethod
+  source: IngestMethod,
+  bank: Bank | null = null
 ): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+  if ((bank !== null && bank !== "picpay" && bank !== "nubank") || (source !== "text" && bank === null)) {
+    return { ok: false, error: "Selecione o cartão PicPay ou Nubank para todos os lançamentos." };
+  }
   const supabase = createAdminClient();
   const included = rows.filter((r) => r.included);
 
@@ -246,6 +250,7 @@ export async function confirmExtractedRows(
       const installmentCurrent = r.data.installment_current || 1;
       const installmentTotal = r.data.installment_total || 1;
       const base = {
+        bank,
         personId: r.data.person_id ?? defaultPersonId,
         direction: r.data.direction ?? "expense",
         fixedVariable: r.data.fixed_variable ?? "variable",
@@ -279,7 +284,7 @@ export async function confirmExtractedRows(
     rows.map((r) =>
       supabase
         .from("ai_extracted_transactions")
-        .update({ included: r.included, reviewed: true, extracted_data: r.data })
+        .update({ included: r.included, reviewed: true, extracted_data: { ...r.data, bank } })
         .eq("id", r.id)
     )
   );

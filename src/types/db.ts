@@ -1,3 +1,4 @@
+export type Bank = "picpay" | "nubank";
 export type Direction = "income" | "expense";
 export type FixedVariable = "fixed" | "variable";
 export type TransactionSource = "manual" | "audio" | "photo" | "text" | "pdf" | "csv";
@@ -36,6 +37,7 @@ export interface TransactionType {
 }
 
 export interface RecurrenceRule {
+  bank?: Bank | null;
   id: string;
   description: string;
   person_id: string;
@@ -53,6 +55,7 @@ export interface RecurrenceRule {
 }
 
 export interface TransactionRow {
+  bank?: Bank | null;
   id: string;
   registration_date: string;
   reference_month: string; // "YYYY-MM"
@@ -106,6 +109,7 @@ export interface AiExtractedTransactionRow {
 }
 
 export interface ExtractedTransactionData {
+  bank?: Bank | null;
   registration_date: string | null;
   reference_month: string | null;
   person_id: string | null;

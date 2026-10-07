@@ -164,6 +164,7 @@ function TransactionRow({
                   deleteTargetFor(
                     {
                       id: transaction.id,
+                      bank: transaction.bank,
                       origin: "real",
                       registrationDate: transaction.registrationDate,
                       referenceMonth: transaction.referenceMonth,

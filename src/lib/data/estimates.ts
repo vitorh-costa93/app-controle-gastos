@@ -164,6 +164,7 @@ export async function getEstimatedExpenseOccurrences(
       if (topUp <= 0) continue;
       occurrences.push({
         id: `estimate:${item.id}:${month}`,
+        bank: null,
         origin: "projected",
         registrationDate: `${month}-01`,
         referenceMonth: month,

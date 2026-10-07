@@ -33,34 +33,14 @@ export function buildMonthRows(
   month: string,
   realTransactions: Transaction[],
   activeRules: RecurrenceRule[],
-  filters: MonthRowFilters
+  filters: MonthRowFilters,
+  materializedTransactions: Transaction[] = realTransactions
 ): MonthRow[] {
   const materializedRules = new Set(
-    realTransactions.map((t) => t.recurrenceRuleId).filter((id): id is string => Boolean(id))
+    materializedTransactions.map((t) => t.recurrenceRuleId).filter((id): id is string => Boolean(id))
   );
 
-  const realRows = realTransactions.map<MonthRow>((t) => ({
-    key: t.id,
-    kind: rowKind(t),
-    transaction: t,
-    occurrence: {
-      id: t.id,
-      origin: "real",
-      registrationDate: t.registrationDate,
-      referenceMonth: t.referenceMonth,
-      personId: t.personId,
-      direction: t.direction,
-      fixedVariable: t.fixedVariable,
-      typeId: t.typeId,
-      categoryId: t.categoryId,
-      installmentCurrent: t.installmentCurrent,
-      installmentTotal: t.installmentTotal,
-      amountCents: t.amountCents,
-      description: t.description,
-      considered: t.considered,
-      recurrenceRuleId: t.recurrenceRuleId,
-    },
-  }));
+  const realRows = realTransactions.map(transactionMonthRow);
 
   const projectedRows = buildMonthOccurrences(month, [], activeRules)
     .filter((o) => o.recurrenceRuleId && !materializedRules.has(o.recurrenceRuleId))
@@ -75,4 +55,32 @@ export function buildMonthRows(
 
   // Reais primeiro (mais recentemente cadastrados no topo, como já era), projeções depois.
   return [...realRows, ...projectedRows];
+}
+
+export function transactionMonthRow(t: Transaction): MonthRow {
+  return {
+    key: t.id,
+    kind: rowKind(t),
+    transaction: t,
+    occurrence: {
+      id: t.id,
+      origin: "real",
+      registrationDate: t.registrationDate,
+      referenceMonth: t.referenceMonth,
+      personId: t.personId,
+      direction: t.direction,
+      fixedVariable: t.fixedVariable,
+      typeId: t.typeId,
+      bank: t.bank,
+      categoryId: t.categoryId,
+      installmentCurrent: t.installmentCurrent,
+      installmentTotal: t.installmentTotal,
+      amountCents: t.amountCents,
+      description: t.description,
+      considered: t.considered,
+      recurrenceRuleId: t.recurrenceRuleId,
+      installmentGroupId: t.installmentGroupId,
+      unplannedExcluded: t.unplannedExcluded,
+    },
+  };
 }

@@ -23,7 +23,15 @@ let failTable;
 let failOperation;
 let invalidations;
 let requests;
-const client = { from(table) {
+const client = { async rpc(name, args) {
+  assert.equal(name, "set_recurrence_month_override");
+  const rule = tables.recurrence_rules.find((r) => r.id === args.p_rule_id);
+  if (!rule || !rule.active || failTable === "transactions") return { error: { message: "Falha simulada" } };
+  const existing = tables.transactions.find((t) => t.recurrence_rule_id === args.p_rule_id && t.reference_month === args.p_month && t.deleted_at === null);
+  if (existing) existing.amount = args.p_amount;
+  else tables.transactions.push({ id: "override", recurrence_rule_id: args.p_rule_id, reference_month: args.p_month, amount: args.p_amount, deleted_at: null });
+  return { error: null };
+}, from(table) {
   requests++;
   const filters = [];
   let operation = "select", patch, single = false, optional = false;

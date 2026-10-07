@@ -10,6 +10,8 @@ import { formatCurrencyBRL, formatDateBR, formatReferenceMonthShort } from "@/li
 import { cn } from "@/lib/utils/cn";
 import { ClearRow, FilterButton, ValuesFilter } from "./filter-popup";
 import { MovementDetailsDialog } from "./MovementDetailsDialog";
+import { BulkEditDialog } from "@/components/cadastro/BulkEditDialog";
+import { Button } from "@/components/ui/Button";
 
 type ColumnKey =
   | "date"
@@ -17,6 +19,7 @@ type ColumnKey =
   | "direction"
   | "fixedVariable"
   | "type"
+  | "bank"
   | "category"
   | "description"
   | "installment"
@@ -38,6 +41,7 @@ const COLUMNS: ColumnDef[] = [
   { key: "direction", label: "Direção", filter: "values" },
   { key: "fixedVariable", label: "Fixo/Variável", filter: "values" },
   { key: "type", label: "Tipo", filter: "values" },
+  { key: "bank", label: "Banco", filter: "values" },
   { key: "category", label: "Categoria", filter: "values" },
   { key: "description", label: "Descrição", filter: "text" },
   { key: "installment", label: "Parcela", filter: null },
@@ -72,6 +76,17 @@ export function AnaliseTransactionsTable({
   onChanged: () => void;
 }) {
   const [selected, setSelected] = useState<MonthlyOccurrence | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const eligible = (t: MonthlyOccurrence) => t.origin === "real" || Boolean(t.recurrenceRuleId);
+  const selectedOccurrences = transactions.filter((t) => selectedIds.has(t.id) && eligible(t));
+  function toggleSelected(id: string) {
+    setSelectedIds((previous) => {
+      const next = new Set(previous);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
   // Filtros de valores: coluna → conjunto de valores marcados (vazio = sem filtro naquela coluna).
   const [valueFilters, setValueFilters] = useState<Partial<Record<ColumnKey, Set<string>>>>({});
   const [description, setDescription] = useState("");
@@ -96,6 +111,8 @@ export function AnaliseTransactionsTable({
         return t.fixedVariable === "fixed" ? "Fixo" : "Variável";
       case "type":
         return (t.typeId && typesById.get(t.typeId)?.name) || "—";
+      case "bank":
+        return t.bank === "picpay" ? "PicPay" : t.bank === "nubank" ? "Nubank" : "—";
       case "category":
         return (t.categoryId && categoriesById.get(t.categoryId)?.name) || "—";
       case "considered":
@@ -156,6 +173,8 @@ export function AnaliseTransactionsTable({
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const pageRows = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const eligiblePage = pageRows.filter(eligible);
+  const allPageSelected = eligiblePage.length > 0 && eligiblePage.every((t) => selectedIds.has(t.id));
 
   function toggleSort(key: ColumnKey) {
     setPage(1);
@@ -216,10 +235,24 @@ export function AnaliseTransactionsTable({
         </div>
       </div>
 
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <span className="text-sm">{selectedOccurrences.length} selecionados</span>
+        <Button size="sm" variant="secondary" disabled={selectedOccurrences.length === 0} onClick={() => setBulkOpen(true)}>Editar selecionados</Button>
+        <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set(filtered.filter(eligible).map((t) => t.id)))}>Selecionar todos os filtrados</Button>
+        {selectedOccurrences.length > 0 && <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>Limpar seleção</Button>}
+        <span className="text-xs text-(--color-text-tertiary)">Valores calculados automaticamente não são editáveis em lote.</span>
+      </div>
       <div className="min-w-0 overflow-x-auto">
         <table className="w-full min-w-[900px] text-sm">
           <thead>
             <tr className="border-b border-(--color-border) text-left text-xs text-(--color-text-tertiary)">
+              <th className="px-3 py-2">
+                <input type="checkbox" aria-label="Selecionar lançamentos desta página" checked={allPageSelected} disabled={eligiblePage.length === 0} onChange={() => setSelectedIds((previous) => {
+                  const next = new Set(previous);
+                  for (const t of eligiblePage) { if (allPageSelected) next.delete(t.id); else next.add(t.id); }
+                  return next;
+                })} />
+              </th>
               {COLUMNS.map((col) => {
                 const sortedHere = sort?.key === col.key;
                 const SortIcon = !sortedHere ? ArrowUpDown : sort.dir === "asc" ? ArrowUp : ArrowDown;
@@ -300,6 +333,9 @@ export function AnaliseTransactionsTable({
               const type = t.typeId ? typesById.get(t.typeId) : undefined;
               return (
                 <tr key={t.id} className="border-b border-(--color-border) last:border-0">
+                  <td className="px-3 py-2">
+                    <input type="checkbox" aria-label={`Selecionar ${t.description ?? "lançamento"}`} disabled={!eligible(t)} checked={selectedIds.has(t.id)} onChange={() => toggleSelected(t.id)} />
+                  </td>
                   <td className="px-3 py-2 whitespace-nowrap">
                     {formatDateBR(t.registrationDate)}
                     <span className="ml-1 text-(--color-text-tertiary)">
@@ -324,6 +360,7 @@ export function AnaliseTransactionsTable({
                     {t.fixedVariable === "fixed" ? "Fixo" : "Variável"}
                   </td>
                   <td className="px-3 py-2 text-(--color-text-secondary)">{type?.name ?? "—"}</td>
+                  <td className="px-3 py-2 text-(--color-text-secondary)">{labelOf("bank", t)}</td>
                   <td className="px-3 py-2 text-(--color-text-secondary)">{category?.name ?? "—"}</td>
                   <td className="max-w-[220px] truncate px-3 py-2 text-(--color-text-secondary)" title={t.description ?? ""}>
                     {t.description ?? "—"}
@@ -362,7 +399,7 @@ export function AnaliseTransactionsTable({
             })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={COLUMNS.length + 1} className="px-3 py-8 text-center text-(--color-text-tertiary)">
+                <td colSpan={COLUMNS.length + 2} className="px-3 py-8 text-center text-(--color-text-tertiary)">
                   Nenhuma movimentação encontrada com esses filtros.
                 </td>
               </tr>
@@ -415,6 +452,10 @@ export function AnaliseTransactionsTable({
             </button>
           </div>
         </div>
+      )}
+      {bulkOpen && selectedOccurrences.length > 0 && (
+        <BulkEditDialog occurrences={selectedOccurrences} people={people} categories={categories} types={types}
+          onClose={() => setBulkOpen(false)} onSaved={() => { setBulkOpen(false); setSelectedIds(new Set()); onChanged(); }} />
       )}
       {selected && (
         <MovementDetailsDialog

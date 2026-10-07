@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Person, Category, TransactionType, ExtractedTransactionData, FieldConfidence } from "@/types/db";
+import { Bank, Person, Category, TransactionType, ExtractedTransactionData, FieldConfidence } from "@/types/db";
 import { IngestResultRow, confirmExtractedRows, IngestMethod } from "@/lib/data/ingest";
 import { Toggle } from "@/components/ui/Toggle";
 import { Button } from "@/components/ui/Button";
@@ -56,16 +56,23 @@ export function AIReviewTable({
   // onChange e as outras linhas ficavam com o mês extraído por elas mesmas (a data),
   // não com o mês do lote. Agora todas partem já normalizadas pro mesmo mês.
   const [rows, setRows] = useState<IngestResultRow[]>(() =>
-    initialRows.map((r) => ({ ...r, data: { ...r.data, reference_month: initialBatchMonth } }))
+    initialRows.map((r) => ({ ...r, data: { ...r.data, reference_month: initialBatchMonth, bank: null } }))
   );
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [confirmedCount, setConfirmedCount] = useState<number | null>(null);
   const [batchMonth, setBatchMonth] = useState(initialBatchMonth);
+  const [batchBank, setBatchBank] = useState<Bank | "">("");
+  const bankRequired = source !== "text";
+
+  function applyBatchBank(bank: Bank | "") {
+    setBatchBank(bank);
+    setRows((prev) => prev.map((r) => ({ ...r, data: { ...r.data, bank: bank || null } })));
+  }
 
   function updateRow(id: string, patch: Partial<ExtractedTransactionData>) {
     setRows((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, data: { ...r.data, ...patch } } : r))
+      prev.map((r) => (r.id === id ? { ...r, data: { ...r.data, ...patch, reference_month: batchMonth, bank: batchBank || null } } : r))
     );
   }
 
@@ -93,12 +100,17 @@ export function AIReviewTable({
 
   function handleConfirm() {
     setError(null);
+    if (bankRequired && !batchBank) {
+      setError("Selecione o cartão PicPay ou Nubank para todos os lançamentos.");
+      return;
+    }
     startTransition(async () => {
       const result = await confirmExtractedRows(
         jobId,
         rows.map((r) => ({ id: r.id, included: r.included, data: r.data })),
         people[0]?.id,
-        source
+        source,
+        batchBank || null
       );
       if (!result.ok) {
         setError(result.error);
@@ -162,6 +174,20 @@ export function AIReviewTable({
             </option>
           ))}
         </select>
+        <label className="flex items-center gap-2 text-xs font-medium text-(--color-text-secondary)">
+          Cartão para todos os lançamentos{bankRequired ? " (obrigatório)" : ""}
+          <select
+            aria-label="Cartão para todos os lançamentos"
+            required={bankRequired}
+            value={batchBank}
+            onChange={(e) => applyBatchBank(e.target.value as Bank | "")}
+            className="rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-2 py-1.5 text-sm"
+          >
+            <option value="">Selecione o cartão</option>
+            <option value="picpay">PicPay</option>
+            <option value="nubank">Nubank</option>
+          </select>
+        </label>
       </div>
 
       <div className="flex flex-col gap-3">
@@ -189,7 +215,7 @@ export function AIReviewTable({
           <Button variant="secondary" onClick={onDone} type="button">
             Cancelar
           </Button>
-          <Button onClick={handleConfirm} disabled={includedCount === 0 || isPending} type="button">
+          <Button onClick={handleConfirm} disabled={includedCount === 0 || isPending || (bankRequired && !batchBank)} type="button">
             Adicionar lançamentos
           </Button>
         </div>
@@ -247,10 +273,7 @@ function ReviewRow({
             type="date"
             value={data.registration_date ?? ""}
             onChange={(e) =>
-              onUpdate({
-                registration_date: e.target.value,
-                reference_month: e.target.value ? e.target.value.slice(0, 7) : null,
-              })
+              onUpdate({ registration_date: e.target.value })
             }
           />
         </LabeledField>

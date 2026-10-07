@@ -17,6 +17,7 @@ export function centsToReaisString(cents: number): string {
 
 export function mapTransactionRow(row: TransactionRow): Transaction {
   return {
+    bank: row.bank ?? null,
     id: row.id,
     registrationDate: row.registration_date,
     referenceMonth: row.reference_month,
@@ -53,6 +54,7 @@ export function mapRecurrenceRuleRow(row: RecurrenceRuleRow, amountHistory: Recu
     startDate: row.start_date,
     endDate: row.end_date,
     active: row.active,
+    bank: row.bank ?? null,
     skippedMonths: row.skipped_months ?? [],
     amountHistory,
   };

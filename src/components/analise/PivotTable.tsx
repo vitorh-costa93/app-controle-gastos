@@ -1,6 +1,8 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
+import { PivotViews } from "./PivotViews";
+import type { PivotBookmark } from "@/lib/pivot-bookmarks";
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown } from "lucide-react";
 import { fetchPivotTransactions } from "@/lib/data/analysis";
 import { Transaction } from "@/types/domain";
@@ -10,13 +12,14 @@ import { formatCurrencyBRL, formatReferenceMonthShort } from "@/lib/utils/format
 import { cn } from "@/lib/utils/cn";
 import { FilterButton, ValuesFilter } from "./filter-popup";
 
-type DimensionKey = "month" | "person" | "category" | "type" | "fixedVariable" | "direction" | "considered";
+type DimensionKey = "month" | "person" | "category" | "type" | "fixedVariable" | "direction" | "considered" | "bank";
 type MeasureKey = "sum" | "count";
 type ZoneKey = "rows" | "columns" | "values";
 type TotalsMode = "none" | "row" | "column" | "both";
 type TotalAggMode = "sum" | "avg";
 
 const DIMENSIONS: { key: DimensionKey; label: string }[] = [
+  { key: "bank", label: "Banco" },
   { key: "month", label: "Mês" },
   { key: "person", label: "Origem" },
   { key: "category", label: "Categoria" },
@@ -58,15 +61,18 @@ const TONE = {
  * dados quando é aberta pela primeira vez.
  */
 export function PivotTable({
+  pageMonth,
   people,
   categories,
   types,
 }: {
+  pageMonth: string;
   people: Person[];
   categories: Category[];
   types: TransactionType[];
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [currentMonthOnly, setCurrentMonthOnly] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[] | null>(null);
   const [loadError, setLoadError] = useState(false);
 
@@ -101,6 +107,8 @@ export function PivotTable({
 
   function dimValue(dim: DimensionKey, t: Transaction): string {
     switch (dim) {
+      case "bank":
+        return t.bank === "picpay" ? "PicPay" : t.bank === "nubank" ? "Nubank" : "Sem banco";
       case "month":
         return formatReferenceMonthShort(t.referenceMonth);
       case "person":
@@ -133,13 +141,13 @@ export function PivotTable({
   }
 
   const filtered = useMemo(() => {
-    const all = transactions ?? [];
+    const all = (transactions ?? []).filter((t) => !currentMonthOnly || t.referenceMonth === pageMonth);
     const byDirection = directionFilter === "all" ? all : all.filter((t) => t.direction === directionFilter);
     const active = Object.entries(valueFilters).filter(([, set]) => set && set.size > 0) as [DimensionKey, Set<string>][];
     if (active.length === 0) return byDirection;
     return byDirection.filter((t) => active.every(([dim, set]) => set.has(dimValue(dim, t))));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transactions, directionFilter, valueFilters, peopleById, categoriesById, typesById]);
+  }, [transactions, currentMonthOnly, pageMonth, directionFilter, valueFilters, peopleById, categoriesById, typesById]);
 
   /** Valores elegíveis de cada dimensão (na base completa) para os popups de filtro. */
   const optionsByDimension = useMemo(() => {
@@ -294,6 +302,7 @@ export function PivotTable({
   }
 
   function toggleDimensionValue(dim: DimensionKey, value: string) {
+    if (dim === "month") setCurrentMonthOnly(false);
     setValueFilters((prev) => {
       const next = new Set(prev[dim] ?? []);
       if (next.has(value)) next.delete(value);
@@ -358,6 +367,18 @@ export function PivotTable({
   }
 
   const usedDimensions = new Set<DimensionKey>([...rowDims, ...colDims]);
+  const bookmarkConfig: PivotBookmark["config"] = {
+    rowDims, colDims, measures, descDims, expandTo, toggled: [...toggled], totals, totalAgg,
+    directionFilter, currentMonthOnly, valueSort,
+    valueFilters: Object.fromEntries(Object.entries(valueFilters).map(([key, values]) => [key, [...(values ?? [])]])),
+  };
+  function applyBookmark(c: PivotBookmark["config"]) {
+    setRowDims(c.rowDims); setColDims(c.colDims); setMeasures(c.measures);
+    setDescDims(c.descDims); setExpandTo(c.expandTo); setToggled(new Set(c.toggled));
+    setTotals(c.totals); setTotalAgg(c.totalAgg); setDirectionFilter(c.directionFilter);
+    setValueFilters(Object.fromEntries(Object.entries(c.valueFilters).map(([key, values]) => [key, new Set(values)])));
+    setCurrentMonthOnly(c.currentMonthOnly); setValueSort(c.valueSort); setOpenFilter(null);
+  }
   const rowHeaderLabel = rowDims.length > 0 ? rowDims.map(dimensionLabel).join(" › ") : "Total";
   const controlClass =
     "h-8 rounded-(--radius-md) border border-[#cbd8d5] bg-(--color-surface) px-2 text-xs text-(--color-text-primary)";
@@ -373,7 +394,7 @@ export function PivotTable({
         <span>
           <span className="block text-[15px] font-semibold">Tabela dinâmica</span>
           <span className="block text-xs text-(--color-text-tertiary)">
-            Base completa — todos os meses e origens, sem os filtros da página.
+            Base completa — use “Mês Atual” para acompanhar o mês da página.
           </span>
         </span>
         <ChevronDown
@@ -381,6 +402,8 @@ export function PivotTable({
           className={cn("shrink-0 text-(--color-text-tertiary) transition-transform", expanded && "rotate-180")}
         />
       </button>
+
+      {expanded && <PivotViews config={bookmarkConfig} onApply={applyBookmark} />}
 
       {expanded && transactions === null && (
         <p className="py-8 text-center text-xs text-(--color-text-tertiary)">
@@ -416,12 +439,21 @@ export function PivotTable({
                     )}
                   </button>
                   <FilterButton
-                    active={(valueFilters[d.key]?.size ?? 0) > 0}
+                    active={(valueFilters[d.key]?.size ?? 0) > 0 || (d.key === "month" && currentMonthOnly)}
                     open={openFilter === d.key}
                     onToggle={() => setOpenFilter((cur) => (cur === d.key ? null : d.key))}
                     onClose={() => setOpenFilter(null)}
                     align="left"
                   >
+                    {d.key === "month" && (
+                      <label className="mb-2 flex cursor-pointer items-center gap-2 border-b border-(--color-border) px-2 py-2 text-xs">
+                        <input type="checkbox" checked={currentMonthOnly} onChange={(e) => {
+                          setCurrentMonthOnly(e.target.checked);
+                          setValueFilters((prev) => ({ ...prev, month: new Set() }));
+                        }} />
+                        Mês Atual ({formatReferenceMonthShort(pageMonth)})
+                      </label>
+                    )}
                     <ValuesFilter
                       options={optionsByDimension[d.key]}
                       selected={valueFilters[d.key] ?? new Set()}

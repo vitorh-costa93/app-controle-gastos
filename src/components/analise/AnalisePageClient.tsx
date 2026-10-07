@@ -247,7 +247,7 @@ export function AnalisePageClient({
             onChanged={refreshCurrent}
           />
 
-          <PivotTable people={data.people} categories={data.categories} types={data.types} />
+          <PivotTable pageMonth={month} people={data.people} categories={data.categories} types={data.types} />
         </div>
       )}
     </div>

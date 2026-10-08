@@ -42,6 +42,7 @@ export function AnalisePageClient({
   const [data, setData] = useState(initialData);
   const [monthTransactions, setMonthTransactions] = useState(initialTransactions);
   const [insight, setInsight] = useState(initialInsight);
+  const [pivotRefreshKey, setPivotRefreshKey] = useState(0);
   const [commitmentView, setCommitmentView] = useState<"composition" | "commitments">("composition");
   const [isPending, startTransition] = useTransition();
   const [insightPending, startInsightTransition] = useTransition();
@@ -85,6 +86,7 @@ export function AnalisePageClient({
     if (requestIdRef.current !== requestId) return;
     setData(nextData);
     setMonthTransactions(nextTransactions);
+    setPivotRefreshKey((key) => key + 1);
   }
 
   // Pré-aquece o cache dos meses vizinhos em segundo plano — assim, na maioria das
@@ -247,7 +249,7 @@ export function AnalisePageClient({
             onChanged={refreshCurrent}
           />
 
-          <PivotTable pageMonth={month} people={data.people} categories={data.categories} types={data.types} />
+          <PivotTable refreshKey={pivotRefreshKey} pageMonth={month} people={data.people} categories={data.categories} types={data.types} />
         </div>
       )}
     </div>

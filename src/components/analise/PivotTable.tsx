@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { PivotViews } from "./PivotViews";
 import type { PivotBookmark } from "@/lib/pivot-bookmarks";
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown } from "lucide-react";
@@ -61,11 +61,14 @@ const TONE = {
  * dados quando é aberta pela primeira vez.
  */
 export function PivotTable({
+  refreshKey = 0,
   pageMonth,
   people,
   categories,
   types,
 }: {
+  /** Muda quando a Análise grava/recarrega dados; a pivot reconsulta a base se estiver aberta. */
+  refreshKey?: number;
   pageMonth: string;
   people: Person[];
   categories: Category[];
@@ -93,6 +96,20 @@ export function PivotTable({
   const peopleById = useMemo(() => new Map(people.map((p) => [p.id, p.name])), [people]);
   const categoriesById = useMemo(() => new Map(categories.map((c) => [c.id, c.name])), [categories]);
   const typesById = useMemo(() => new Map(types.map((t) => [t.id, t.name])), [types]);
+
+  const lastRefreshKey = useRef(refreshKey);
+  useEffect(() => {
+    if (lastRefreshKey.current === refreshKey) return;
+    lastRefreshKey.current = refreshKey;
+    if (!expanded || transactions === null) {
+      // Recolhida/ainda não carregada: descarta o cache para recarregar na próxima abertura.
+      if (transactions !== null) setTransactions(null);
+      return;
+    }
+    fetchPivotTransactions()
+      .then(setTransactions)
+      .catch(() => setLoadError(true));
+  }, [refreshKey, expanded, transactions]);
 
   function toggleExpanded() {
     const next = !expanded;

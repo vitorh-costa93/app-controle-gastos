@@ -44,7 +44,7 @@ export function CadastroRecordsTable({ rows, people, categories, types, onEdit }
   const [valueFilters, setValueFilters] = useState<Partial<Record<Column, Set<string>>>>({});
   const [description, setDescription] = useState("");
   const [range, setRange] = useState<RangeFilter>({ min: "", max: "" });
-  const [openFilter, setOpenFilter] = useState<Column | null>(null);
+  const [openFilter, setOpenFilter] = useState<string | null>(null);
   const [sort, setSort] = useState<{ column: Column; ascending: boolean } | null>({ column: "created", ascending: false });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
@@ -169,11 +169,11 @@ export function CadastroRecordsTable({ rows, people, categories, types, onEdit }
       return next;
     });
   }
-  function filterControl(column: Column, align: "left" | "right") {
+  function filterControl(column: Column, align: "left" | "right", scope: "mobile" | "desktop") {
     return <FilterButton
       active={isActive(column)}
-      open={openFilter === column}
-      onToggle={() => setOpenFilter((current) => (current === column ? null : column))}
+      open={openFilter === `${scope}:${column}`}
+      onToggle={() => setOpenFilter((current) => (current === `${scope}:${column}` ? null : `${scope}:${column}`))}
       onClose={() => setOpenFilter(null)}
       align={align}
     >
@@ -201,7 +201,7 @@ export function CadastroRecordsTable({ rows, people, categories, types, onEdit }
       <summary className="cursor-pointer text-sm font-medium">Filtros e ordenação de todas as colunas</summary>
       <div className="mt-3 grid grid-cols-2 gap-3">
         {COLUMNS.map(([column, label], index) => <div key={column} className="flex items-center justify-between rounded-(--radius-md) border border-(--color-border) px-2 py-1 text-xs">
-          <span>{label}</span>{filterControl(column, index % 2 === 0 ? "left" : "right")}
+          <span>{label}</span>{filterControl(column, index % 2 === 0 ? "left" : "right", "mobile")}
         </div>)}
         <label className="text-xs">Ordenar por<select className={controlClass} value={sort?.column ?? ""} onChange={(event) => { setSort(event.target.value ? { column: event.target.value as Column, ascending: sort?.ascending ?? true } : null); setPage(1); }}><option value="">Sem ordenação</option>{COLUMNS.map(([column, label]) => <option key={column} value={column}>{label}</option>)}</select></label>
         <Button size="sm" variant="secondary" disabled={!sort} onClick={() => sort && changeSort(sort.column)}>{!sort ? "Sem ordenação" : sort.ascending ? "Crescente ↑" : "Decrescente ↓"}</Button>
@@ -226,7 +226,7 @@ export function CadastroRecordsTable({ rows, people, categories, types, onEdit }
                     {label}
                     <SortIcon size={11} className={sortedHere ? "" : "opacity-40"} />
                   </button>
-                  {filterControl(column, RIGHT_ALIGNED.includes(column) ? "right" : "left")}
+                  {filterControl(column, RIGHT_ALIGNED.includes(column) ? "right" : "left", "desktop")}
                 </div>
               </th>;
             })}

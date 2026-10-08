@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { formatCurrencyBRL, formatDateBR, formatReferenceMonthShort } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/cn";
-import { ClearRow, FilterButton, ValuesFilter } from "./filter-popup";
+import { FilterButton, RangeFilter, RangeFilterPanel, TextFilter, ValuesFilter } from "./filter-popup";
 import { MovementDetailsDialog } from "./MovementDetailsDialog";
 import { BulkEditDialog } from "@/components/cadastro/BulkEditDialog";
 import { Button } from "@/components/ui/Button";
@@ -52,11 +52,6 @@ const COLUMNS: ColumnDef[] = [
 interface Sort {
   key: ColumnKey;
   dir: "asc" | "desc";
-}
-
-interface RangeFilter {
-  min: string;
-  max: string;
 }
 
 export function AnaliseTransactionsTable({
@@ -473,61 +468,3 @@ export function AnaliseTransactionsTable({
   );
 }
 
-function TextFilter({
-  value,
-  onChange,
-  onClear,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  onClear: () => void;
-}) {
-  return (
-    <div>
-      <input
-        autoFocus
-        type="text"
-        placeholder="Buscar na descrição..."
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="h-8 w-full rounded-(--radius-sm) border border-(--color-border) bg-(--color-surface) px-2 text-xs"
-      />
-      <ClearRow disabled={value === ""} onClear={onClear} />
-    </div>
-  );
-}
-
-function RangeFilterPanel({
-  value,
-  onChange,
-  onClear,
-}: {
-  value: RangeFilter;
-  onChange: (value: RangeFilter) => void;
-  onClear: () => void;
-}) {
-  const inputClass =
-    "h-8 w-full rounded-(--radius-sm) border border-(--color-border) bg-(--color-surface) px-2 text-xs";
-  return (
-    <div>
-      <div className="flex gap-1.5">
-        <input
-          autoFocus
-          type="number"
-          placeholder="mín"
-          className={inputClass}
-          value={value.min}
-          onChange={(e) => onChange({ ...value, min: e.target.value })}
-        />
-        <input
-          type="number"
-          placeholder="máx"
-          className={inputClass}
-          value={value.max}
-          onChange={(e) => onChange({ ...value, max: e.target.value })}
-        />
-      </div>
-      <ClearRow disabled={value.min === "" && value.max === ""} onClear={onClear} />
-    </div>
-  );
-}

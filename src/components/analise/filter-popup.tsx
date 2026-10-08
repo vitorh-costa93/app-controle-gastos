@@ -121,6 +121,72 @@ export function ValuesFilter({
   );
 }
 
+export interface RangeFilter {
+  min: string;
+  max: string;
+}
+
+export function TextFilter({
+  value,
+  onChange,
+  onClear,
+  placeholder = "Buscar na descrição...",
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onClear: () => void;
+  placeholder?: string;
+}) {
+  return (
+    <div>
+      <input
+        autoFocus
+        type="text"
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="h-8 w-full rounded-(--radius-sm) border border-(--color-border) bg-(--color-surface) px-2 text-xs"
+      />
+      <ClearRow disabled={value === ""} onClear={onClear} />
+    </div>
+  );
+}
+
+export function RangeFilterPanel({
+  value,
+  onChange,
+  onClear,
+}: {
+  value: RangeFilter;
+  onChange: (value: RangeFilter) => void;
+  onClear: () => void;
+}) {
+  const inputClass =
+    "h-8 w-full rounded-(--radius-sm) border border-(--color-border) bg-(--color-surface) px-2 text-xs";
+  return (
+    <div>
+      <div className="flex gap-1.5">
+        <input
+          autoFocus
+          type="number"
+          placeholder="mín"
+          className={inputClass}
+          value={value.min}
+          onChange={(e) => onChange({ ...value, min: e.target.value })}
+        />
+        <input
+          type="number"
+          placeholder="máx"
+          className={inputClass}
+          value={value.max}
+          onChange={(e) => onChange({ ...value, max: e.target.value })}
+        />
+      </div>
+      <ClearRow disabled={value.min === "" && value.max === ""} onClear={onClear} />
+    </div>
+  );
+}
+
 export function ClearRow({ disabled, onClear }: { disabled: boolean; onClear: () => void }) {
   return (
     <div className="mt-2 flex justify-end border-t border-(--color-border) pt-2">

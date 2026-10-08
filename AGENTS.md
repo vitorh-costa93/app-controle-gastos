@@ -20,7 +20,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 ## Execução econômica
 - Leia `docs/CODEX_CONTINUIDADE.md` somente ao retomar trabalho; atualize-o ao fechar uma etapa, sem copiar histórico ou segredos.
 - Busque arquivos e seções relevantes antes de carregar documentos inteiros. Seções históricas são contexto sob demanda.
-- Tarefas pequenas são diretas; delegue apenas trabalho independente extenso ou revisão de risco, com escopo e critério de aceite.
+- Entenda o problema e delegue a execução (leitura, busca, edição mecânica, lint/build/testes) a subagente Haiku 5.5 com escopo e critério de aceite. Faça direto só ajuste de 1–2 linhas já em contexto. Revisão de risco pode usar Sonnet.
 - Um responsável integra e valida o estado final. Subagentes fazem testes focados e devolvem evidência; não repetem toda a suíte/build por hábito.
 - Alterações somente em instruções/documentação exigem revisão de diff e links, sem build de aplicação. Para código, cumpra as verificações abaixo; repita se o estado relevante mudar.
 - Consulte `docs/CODEX_CONTEXTO.md` quando existir para localizar seções de contexto.

@@ -1,12 +1,12 @@
 import { z } from "zod";
 
-export const pivotDimension = z.enum(["month", "person", "category", "type", "fixedVariable", "direction", "considered", "bank"]);
+export const pivotDimension = z.enum(["month", "person", "category", "type", "fixedVariable", "direction", "considered", "bank", "year", "date", "created", "description", "installment", "kind", "source"]);
 const measure = z.enum(["sum", "count"]);
 export const pivotConfigSchema = z.object({
-  rowDims: z.array(pivotDimension).max(8),
-  colDims: z.array(pivotDimension).max(8),
+  rowDims: z.array(pivotDimension).max(16),
+  colDims: z.array(pivotDimension).max(16),
   measures: z.array(measure).max(2),
-  descDims: z.array(pivotDimension).max(8),
+  descDims: z.array(pivotDimension).max(16),
   expandTo: z.number().int().min(1).max(8).nullable(),
   toggled: z.array(z.string().max(2000)).max(1000),
   totals: z.enum(["none", "row", "column", "both"]),

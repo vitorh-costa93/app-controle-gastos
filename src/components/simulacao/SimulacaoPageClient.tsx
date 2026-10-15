@@ -10,7 +10,8 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { NewSimulationForm } from "./NewSimulationForm";
 import { ScenarioList } from "./ScenarioList";
-import { LeftoverComparisonChart, AccumulatedBalanceChart, BaseAccumulatedChart } from "./SimulationCharts";
+import { LeftoverComparisonChart, AccumulatedBalanceChart } from "./SimulationCharts";
+import { BaseCaixinhaYield } from "./BaseCaixinhaYield";
 import { ImpactSummaryCard } from "./ImpactSummaryCard";
 import { BaseBudget, CashVsInstallmentSection, YieldParams, analyzeSimulation } from "./CashVsInstallmentSection";
 import { YieldAssumptionCard } from "./YieldAssumptionCard";
@@ -42,6 +43,11 @@ export function SimulacaoPageClient({
   const [includeOthers, setIncludeOthers] = useState(false);
   const [selectedOtherIds, setSelectedOtherIds] = useState<string[]>([]);
   const [percentOfCdi, setPercentOfCdi] = useState(100);
+  const [cdiAnnualPercent, setCdiAnnualPercent] = useState(cdi.annualPercent);
+  const effectiveCdi = useMemo<CdiRate>(
+    () => (cdiAnnualPercent === cdi.annualPercent ? cdi : { ...cdi, annualPercent: cdiAnnualPercent }),
+    [cdi, cdiAnnualPercent]
+  );
   const [aiState, setAiState] = useState<{ key: string; summary: string } | null>(null);
 
   const baseMap = useMemo(() => new Map(baseSummaries.map((s) => [s.referenceMonth, s])), [baseSummaries]);
@@ -75,8 +81,8 @@ export function SimulacaoPageClient({
   }, [primary, comparison]);
 
   const yieldParams = useMemo<YieldParams>(
-    () => ({ cdiAnnualPercent: cdi.annualPercent, percentOfCdi }),
-    [cdi.annualPercent, percentOfCdi]
+    () => ({ cdiAnnualPercent, percentOfCdi }),
+    [cdiAnnualPercent, percentOfCdi]
   );
 
   const base = useMemo<BaseBudget>(
@@ -180,7 +186,15 @@ export function SimulacaoPageClient({
               Com base só no que já está cadastrado (sem nenhuma simulação de compra). Horizonte:{" "}
               {formatMonthLabel(horizon.from)} → {formatMonthLabel(horizon.to)}.
             </p>
-            <BaseAccumulatedChart points={baseAccumulated} />
+            <BaseCaixinhaYield
+              summaries={baseSummaries}
+              accumulated={baseAccumulated}
+              cdiAnnualPercent={cdiAnnualPercent}
+              onCdiAnnualPercent={setCdiAnnualPercent}
+              percentOfCdi={percentOfCdi}
+              onPercentOfCdi={setPercentOfCdi}
+              horizon={horizon}
+            />
           </Card>
 
           {!primary ? (
@@ -260,10 +274,10 @@ export function SimulacaoPageClient({
         </div>
 
         <div className="flex flex-col gap-6">
-          <YieldAssumptionCard cdi={cdi} percentOfCdi={percentOfCdi} onChange={setPercentOfCdi} />
+          <YieldAssumptionCard cdi={effectiveCdi}percentOfCdi={percentOfCdi} onChange={setPercentOfCdi} />
 
           <NewSimulationForm
-            cdiAnnualPercent={cdi.annualPercent}
+            cdiAnnualPercent={cdiAnnualPercent}
             percentOfCdi={percentOfCdi}
             onCreated={(sim) => {
               setSimulations((prev) => [sim, ...prev]);
@@ -295,7 +309,7 @@ export function SimulacaoPageClient({
       {editing && (
         <SimulationEditModal
           simulation={editing}
-          cdiAnnualPercent={cdi.annualPercent}
+          cdiAnnualPercent={cdiAnnualPercent}
           percentOfCdi={percentOfCdi}
           onClose={() => setEditing(null)}
           onSaved={(saved) => {

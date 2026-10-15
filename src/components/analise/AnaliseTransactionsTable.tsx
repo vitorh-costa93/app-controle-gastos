@@ -165,6 +165,12 @@ export function AnaliseTransactionsTable({
     }
   }
 
+  // Total de todos os registros filtrados (não só da página): entradas positivas, saídas negativas.
+  const filteredTotalCents = useMemo(
+    () => filtered.reduce((sum, t) => sum + (t.direction === "income" ? t.amountCents : -t.amountCents), 0),
+    [filtered]
+  );
+
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const pageRows = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -315,6 +321,17 @@ export function AnaliseTransactionsTable({
                         </FilterButton>
                       )}
                     </div>
+                    {col.key === "amount" && (
+                      <div
+                        className={cn(
+                          "mt-0.5 text-xs font-semibold tabular-nums",
+                          filteredTotalCents < 0 ? "text-(--color-negative)" : "text-(--color-positive)"
+                        )}
+                        title="Soma dos registros filtrados: entradas menos saídas"
+                      >
+                        Total: {formatCurrencyBRL(filteredTotalCents)}
+                      </div>
+                    )}
                   </th>
                 );
               })}

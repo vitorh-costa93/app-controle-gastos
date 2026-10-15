@@ -205,6 +205,44 @@ function round(scenario: PortfolioScenario): PortfolioScenario {
   };
 }
 
+export interface CaixinhaProjection {
+  /** Rendimento bruto acumulado no período. */
+  grossYieldCents: number;
+  /** IR regressivo sobre o rendimento (resgates ao longo do período + resgate final). */
+  irCents: number;
+  netYieldCents: number;
+  /** Saldo ao fim de cada mês com rendimento, antes do IR do resgate final; mesmo comprimento de `monthlyChangeCents`. */
+  balanceSeriesCents: number[];
+  /** Saldo final como se tudo fosse resgatado no último mês (já sem IR). */
+  finalNetCents: number;
+}
+
+/**
+ * Quanto o saldo acumulado projetado renderia na Caixinha. `monthlyChangeCents` é a variação do saldo em cada mês
+ * (sobra positiva entra no fim do mês; sobra negativa é resgatada no início). Saldo negativo não rende.
+ */
+export function projectCaixinha(
+  openingCents: number,
+  monthlyChangeCents: number[],
+  cdiAnnualPercent: number,
+  percentOfCdi: number
+): CaixinhaProjection {
+  const rate = monthlyYieldRate(cdiAnnualPercent, percentOfCdi);
+  if (monthlyChangeCents.length === 0) {
+    return { grossYieldCents: 0, irCents: 0, netYieldCents: 0, balanceSeriesCents: [], finalNetCents: Math.round(openingCents) };
+  }
+  const inflows = monthlyChangeCents.map((v) => Math.max(v, 0));
+  const outflows = monthlyChangeCents.map((v) => Math.max(-v, 0));
+  const result = simulatePortfolio(openingCents, inflows, outflows, rate);
+  return {
+    grossYieldCents: Math.round(result.netYieldCents + result.irCents),
+    irCents: Math.round(result.irCents),
+    netYieldCents: Math.round(result.netYieldCents),
+    balanceSeriesCents: result.balanceSeriesCents.map(Math.round),
+    finalNetCents: Math.round(result.finalNetCents),
+  };
+}
+
 /** Completa meses desconhecidos (null) com a média dos conhecidos e garante horizon + 1 meses. */
 function fillLeftovers(known: (number | null)[], length: number): number[] {
   const values = known.filter((v): v is number => v !== null);

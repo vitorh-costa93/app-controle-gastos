@@ -8,11 +8,14 @@ import { fetchPivotTransactions } from "@/lib/data/analysis";
 import { Transaction } from "@/types/domain";
 import { Person, Category, TransactionType } from "@/types/db";
 import { Card } from "@/components/ui/Card";
-import { formatCurrencyBRL, formatReferenceMonthShort } from "@/lib/utils/format";
+import { formatCurrencyBRL, formatDateBR, formatDateTimeBR, formatReferenceMonthShort } from "@/lib/utils/format";
+import { rowKind } from "@/lib/domain/month-rows";
 import { cn } from "@/lib/utils/cn";
 import { FilterButton, ValuesFilter } from "./filter-popup";
 
-type DimensionKey = "month" | "person" | "category" | "type" | "fixedVariable" | "direction" | "considered" | "bank";
+type DimensionKey =
+  | "month" | "person" | "category" | "type" | "fixedVariable" | "direction" | "considered" | "bank"
+  | "year" | "date" | "created" | "description" | "installment" | "kind" | "source";
 type MeasureKey = "sum" | "count";
 type ZoneKey = "rows" | "columns" | "values";
 type TotalsMode = "none" | "row" | "column" | "both";
@@ -27,7 +30,24 @@ const DIMENSIONS: { key: DimensionKey; label: string }[] = [
   { key: "fixedVariable", label: "Fixo/Variável" },
   { key: "direction", label: "Direção" },
   { key: "considered", label: "Considerado" },
+  { key: "year", label: "Ano" },
+  { key: "date", label: "Data cadastro" },
+  { key: "created", label: "Criado em" },
+  { key: "description", label: "Descrição" },
+  { key: "installment", label: "Parcela" },
+  { key: "kind", label: "Natureza" },
+  { key: "source", label: "Fonte do registro" },
 ];
+
+/** Dimensões com muitos valores distintos: a tabela mostra só os primeiros grupos para não travar a UI. */
+const HIGH_CARDINALITY: readonly DimensionKey[] = ["date", "created", "description"];
+const MAX_ROW_GROUPS = 300;
+const MAX_COLUMN_GROUPS = 60;
+
+const SOURCE_LABEL: Record<Transaction["source"], string> = {
+  manual: "Manual", audio: "Áudio", photo: "Foto", text: "Texto", pdf: "PDF", csv: "CSV",
+};
+const KIND_LABEL = { pontual: "Pontual", recorrente: "Recorrente", parcelado: "Parcelado" } as const;
 
 const MEASURES: { key: MeasureKey; label: string }[] = [
   { key: "sum", label: "Soma (R$)" },
@@ -141,12 +161,37 @@ export function PivotTable({
         return t.direction === "income" ? "Entrada" : "Saída";
       case "considered":
         return t.considered ? "Sim" : "Não";
+      case "year":
+        return t.referenceMonth.slice(0, 4);
+      case "date":
+        return formatDateBR(t.registrationDate);
+      case "created":
+        return t.createdAt ? formatDateTimeBR(t.createdAt).split(" ")[0] : "—";
+      case "description":
+        return t.description?.trim() || "Sem descrição";
+      case "installment":
+        return `${t.installmentCurrent}/${t.installmentTotal}`;
+      case "kind":
+        return KIND_LABEL[rowKind(t)];
+      case "source":
+        return SOURCE_LABEL[t.source] ?? t.source;
     }
   }
 
-  /** Chave de ordenação: meses seguem o calendário, o resto segue o texto. */
+  /** Chave de ordenação: meses e datas seguem o calendário, parcelas a ordem numérica, o resto segue o texto. */
   function dimSortKey(dim: DimensionKey, t: Transaction): string {
-    return dim === "month" ? t.referenceMonth : dimValue(dim, t);
+    switch (dim) {
+      case "month":
+        return t.referenceMonth;
+      case "date":
+        return t.registrationDate;
+      case "created":
+        return dimValue(dim, t).split("/").reverse().join("-");
+      case "installment":
+        return `${String(t.installmentTotal).padStart(3, "0")}/${String(t.installmentCurrent).padStart(3, "0")}`;
+      default:
+        return dimValue(dim, t);
+    }
   }
 
   function aggregate(list: Transaction[], measure: MeasureKey): number {
@@ -210,6 +255,7 @@ export function PivotTable({
             ? (spec.dir === "asc" ? 1 : -1) * (valueOf(a.items) - valueOf(b.items))
             : direction * a.sortKey.localeCompare(b.sortKey, "pt-BR")
         )
+        .slice(0, MAX_ROW_GROUPS)
         .map(([label, group]) => {
           const path = `${parentPath}/${label}`;
           return { path, label, level, items: group.items, children: build(group.items, level + 1, path) };
@@ -227,7 +273,7 @@ export function PivotTable({
       if (!seen.has(label)) seen.set(label, colDims.map((d) => dimSortKey(d, t)).join("|"));
     }
     const direction = descDims.includes(colDims[0]) ? -1 : 1;
-    return [...seen.entries()].sort(([, a], [, b]) => direction * a.localeCompare(b, "pt-BR")).map(([label]) => label);
+    return [...seen.entries()].sort(([, a], [, b]) => direction * a.localeCompare(b, "pt-BR")).slice(0, MAX_COLUMN_GROUPS).map(([label]) => label);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtered, colDims, descDims, peopleById, categoriesById, typesById]);
 
@@ -671,6 +717,11 @@ export function PivotTable({
                   <option value="all">Entradas e saídas</option>
                 </select>
               </label>
+              {usedDimensions.size > 0 && [...usedDimensions].some((d) => HIGH_CARDINALITY.includes(d)) && (
+                <span className="text-(--color-negative)">
+                  Campo com muitos valores: mostrando só os {MAX_ROW_GROUPS} primeiros grupos nas linhas e {MAX_COLUMN_GROUPS} nas colunas (os totais gerais consideram tudo).
+                </span>
+              )}
               <span className="text-(--color-text-tertiary)">
                 {visibleRows.length} linhas · {valueColumnCount} colunas de valor
               </span>

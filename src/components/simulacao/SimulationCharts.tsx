@@ -20,8 +20,19 @@ export interface AccumulatedPoint {
 }
 
 /** Saldo acumulado projetado, sem nenhuma simulação — só com o que já está cadastrado. */
-export function BaseAccumulatedChart({ points }: { points: AccumulatedPoint[] }) {
-  const data = points.map((p) => ({ ...p, label: formatMonthShortWithYear(p.referenceMonth) }));
+export function BaseAccumulatedChart({
+  points,
+  yieldSeriesCents,
+}: {
+  points: AccumulatedPoint[];
+  /** Saldo com rendimento da Caixinha (mesmo comprimento de `points`); opcional. */
+  yieldSeriesCents?: number[];
+}) {
+  const data = points.map((p, i) => ({
+    ...p,
+    label: formatMonthShortWithYear(p.referenceMonth),
+    withYieldCents: yieldSeriesCents?.[i],
+  }));
 
   return (
     <div className="h-56 w-full">
@@ -32,11 +43,16 @@ export function BaseAccumulatedChart({ points }: { points: AccumulatedPoint[] })
           <Tooltip
             content={({ active, payload }) => {
               if (!active || !payload?.length) return null;
-              const d = payload[0].payload as AccumulatedPoint & { label: string };
+              const d = payload[0].payload as AccumulatedPoint & { label: string; withYieldCents?: number };
               return (
                 <div className="rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-3 py-2 text-xs shadow-(--shadow-md)">
                   <p className="mb-1 font-medium">{formatMonthLabel(d.referenceMonth)}</p>
                   <p style={{ color: "var(--chart-1)" }}>Saldo acumulado: {formatCurrencyBRL(d.accumulatedCents)}</p>
+                  {d.withYieldCents !== undefined && (
+                    <p style={{ color: "var(--color-positive)" }}>
+                      Saldo com rendimento (Caixinha): {formatCurrencyBRL(d.withYieldCents)}
+                    </p>
+                  )}
                 </div>
               );
             }}
@@ -50,6 +66,18 @@ export function BaseAccumulatedChart({ points }: { points: AccumulatedPoint[] })
             fillOpacity={0.15}
             strokeWidth={2}
           />
+          {yieldSeriesCents && (
+            <Area
+              type="monotone"
+              dataKey="withYieldCents"
+              name="Saldo com rendimento (Caixinha)"
+              stroke="var(--color-positive)"
+              fill="var(--color-positive)"
+              fillOpacity={0.08}
+              strokeWidth={2}
+              strokeDasharray="5 3"
+            />
+          )}
         </AreaChart>
       </ResponsiveContainer>
     </div>

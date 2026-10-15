@@ -19,7 +19,7 @@ export async function getCdiRate(): Promise<CdiRate> {
   try {
     const response = await fetch(BCB_CDI_URL, {
       signal: AbortSignal.timeout(5000),
-      next: { revalidate: 60 * 60 * 12 },
+      next: { revalidate: 60 * 60 * 24},
     });
     if (!response.ok) return FALLBACK;
     const rows = (await response.json()) as { data: string; valor: string }[];

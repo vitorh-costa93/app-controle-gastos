@@ -89,6 +89,7 @@ export function PivotTable({
   const [totalAgg, setTotalAgg] = useState<TotalAggMode>("sum");
   const [directionFilter, setDirectionFilter] = useState<"expense" | "income" | "all">("expense");
   const [dragOverZone, setDragOverZone] = useState<ZoneKey | null>(null);
+  const [dragging, setDragging] = useState<{ kind: "dimension" | "measure"; key: string; fromShelf: boolean } | null>(null);
   const [valueFilters, setValueFilters] = useState<Partial<Record<DimensionKey, Set<string>>>>({});
   const [openFilter, setOpenFilter] = useState<DimensionKey | null>(null);
   const [valueSort, setValueSort] = useState<{ colKey: string; measure: MeasureKey; dir: "asc" | "desc" } | null>(null);
@@ -290,11 +291,18 @@ export function PivotTable({
     setToggled(new Set());
   }
 
-  function addDimension(zone: "rows" | "columns", dim: DimensionKey) {
-    const nextRows = rowDims.filter((d) => d !== dim);
-    const nextCols = colDims.filter((d) => d !== dim);
-    if (zone === "rows") nextRows.push(dim);
-    else nextCols.push(dim);
+  /** Insere `item` em `list` na posição `index` (fim se omitido), movendo se já existir (sem duplicar). */
+  function insertAt<T>(list: T[], item: T, index?: number): T[] {
+    const at = index ?? list.length;
+    const prev = list.indexOf(item);
+    const next = list.filter((x) => x !== item);
+    next.splice(prev !== -1 && prev < at ? at - 1 : at, 0, item);
+    return next;
+  }
+
+  function addDimension(zone: "rows" | "columns", dim: DimensionKey, index?: number) {
+    const nextRows = zone === "rows" ? insertAt(rowDims, dim, index) : rowDims.filter((d) => d !== dim);
+    const nextCols = zone === "columns" ? insertAt(colDims, dim, index) : colDims.filter((d) => d !== dim);
     resetRowState(nextRows);
     setColDims(nextCols);
   }
@@ -304,8 +312,8 @@ export function PivotTable({
     setColDims(colDims.filter((d) => d !== dim));
   }
 
-  function addMeasure(measure: MeasureKey) {
-    setMeasures((prev) => (prev.includes(measure) ? prev : [...prev, measure]));
+  function addMeasure(measure: MeasureKey, index?: number) {
+    setMeasures((prev) => insertAt(prev, measure, index));
   }
 
   function toggleValueSort(colKey: string, measure: MeasureKey) {
@@ -368,19 +376,44 @@ export function PivotTable({
   function handleDrop(zone: ZoneKey, e: React.DragEvent) {
     e.preventDefault();
     setDragOverZone(null);
+    setDragging(null);
     const kind = e.dataTransfer.getData("kind");
     const key = e.dataTransfer.getData("key");
+    // Posição: antes/depois do chip sob o cursor; sem chip, vai para o fim.
+    let index: number | undefined;
+    const chip = (e.target as HTMLElement).closest<HTMLElement>("[data-chip-index]");
+    if (chip) {
+      const rect = chip.getBoundingClientRect();
+      index = Number(chip.dataset.chipIndex) + (e.clientX > rect.left + rect.width / 2 ? 1 : 0);
+    }
     if (zone === "values") {
-      if (kind === "measure") addMeasure(key as MeasureKey);
+      if (kind === "measure") addMeasure(key as MeasureKey, index);
       return;
     }
-    if (kind === "dimension") addDimension(zone, key as DimensionKey);
+    if (kind === "dimension") addDimension(zone, key as DimensionKey, index);
   }
 
-  function handleDragStart(kind: "dimension" | "measure", key: string, e: React.DragEvent) {
+  /** Soltar um chip de volta na lista de campos remove-o. */
+  function handleDropOnList(e: React.DragEvent) {
+    e.preventDefault();
+    setDragOverZone(null);
+    setDragging(null);
+    const kind = e.dataTransfer.getData("kind");
+    const key = e.dataTransfer.getData("key");
+    if (kind === "measure") setMeasures((prev) => prev.filter((m) => m !== key));
+    else if (kind === "dimension") removeDimension(key as DimensionKey);
+  }
+
+  function handleDragStart(kind: "dimension" | "measure", key: string, e: React.DragEvent, fromShelf = false) {
     e.dataTransfer.setData("kind", kind);
     e.dataTransfer.setData("key", key);
-    e.dataTransfer.effectAllowed = "copy";
+    e.dataTransfer.effectAllowed = "copyMove";
+    setDragging({ kind, key, fromShelf });
+  }
+
+  function handleDragEnd() {
+    setDragging(null);
+    setDragOverZone(null);
   }
 
   const usedDimensions = new Set<DimensionKey>([...rowDims, ...colDims]);
@@ -431,7 +464,15 @@ export function PivotTable({
       {expanded && transactions !== null && (
         <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
           {/* Lista de campos */}
-          <aside className={cn("h-fit rounded-(--radius-lg) border p-3", TONE.border)}>
+          <aside
+            onDragOver={(e) => dragging?.fromShelf && e.preventDefault()}
+            onDrop={handleDropOnList}
+            className={cn(
+              "h-fit rounded-(--radius-lg) border p-3 transition-colors",
+              TONE.border,
+              dragging?.fromShelf && "border-dashed border-(--color-negative)"
+            )}
+          >
             <p className="mb-2 text-[11px] font-semibold tracking-wider text-(--color-text-secondary)">DIMENSÕES</p>
             <ul className="mb-4 space-y-1">
               {DIMENSIONS.map((d) => (
@@ -440,9 +481,11 @@ export function PivotTable({
                     type="button"
                     draggable
                     onDragStart={(e) => handleDragStart("dimension", d.key, e)}
+                    onDragEnd={handleDragEnd}
                     onClick={() => toggleFromList("dimension", d.key)}
                     className={cn(
                       "flex min-w-0 flex-1 cursor-grab items-center justify-between rounded-md border px-2.5 py-1.5 text-left text-sm active:cursor-grabbing",
+                      dragging?.kind === "dimension" && dragging.key === d.key && "opacity-50",
                       usedDimensions.has(d.key)
                         ? cn(TONE.active, TONE.border)
                         : "border-(--color-border) bg-(--color-surface) hover:bg-(--color-surface-secondary)"
@@ -489,9 +532,11 @@ export function PivotTable({
                     type="button"
                     draggable
                     onDragStart={(e) => handleDragStart("measure", m.key, e)}
+                    onDragEnd={handleDragEnd}
                     onClick={() => toggleFromList("measure", m.key)}
                     className={cn(
                       "flex w-full cursor-grab items-center rounded-md border px-2.5 py-1.5 text-left text-sm active:cursor-grabbing",
+                      dragging?.kind === "measure" && dragging.key === m.key && "opacity-50",
                       measures.includes(m.key)
                         ? cn(TONE.active, TONE.border, "font-semibold")
                         : "border-(--color-border) bg-(--color-surface) hover:bg-(--color-surface-secondary)"
@@ -515,9 +560,13 @@ export function PivotTable({
                 onDrop={(e) => handleDrop("rows", e)}
                 isEmpty={rowDims.length === 0}
               >
-                {rowDims.map((d) => (
+                {rowDims.map((d, i) => (
                   <ShelfChip
                     key={d}
+                    index={i}
+                    isDragging={dragging?.kind === "dimension" && dragging.key === d}
+                    onDragStart={(e) => handleDragStart("dimension", d, e, true)}
+                    onDragEnd={handleDragEnd}
                     label={dimensionLabel(d)}
                     arrow={descDims.includes(d) ? "←" : "→"}
                     onArrow={() => toggleSortDirection(d)}
@@ -533,9 +582,13 @@ export function PivotTable({
                 onDrop={(e) => handleDrop("columns", e)}
                 isEmpty={colDims.length === 0}
               >
-                {colDims.map((d) => (
+                {colDims.map((d, i) => (
                   <ShelfChip
                     key={d}
+                    index={i}
+                    isDragging={dragging?.kind === "dimension" && dragging.key === d}
+                    onDragStart={(e) => handleDragStart("dimension", d, e, true)}
+                    onDragEnd={handleDragEnd}
                     label={dimensionLabel(d)}
                     arrow={descDims.includes(d) ? "←" : "→"}
                     onArrow={() => toggleSortDirection(d)}
@@ -551,9 +604,13 @@ export function PivotTable({
                 onDrop={(e) => handleDrop("values", e)}
                 isEmpty={measures.length === 0}
               >
-                {measures.map((m) => (
+                {measures.map((m, i) => (
                   <ShelfChip
                     key={m}
+                    index={i}
+                    isDragging={dragging?.kind === "measure" && dragging.key === m}
+                    onDragStart={(e) => handleDragStart("measure", m, e, true)}
+                    onDragEnd={handleDragEnd}
                     label={measureLabel(m)}
                     onRemove={() => setMeasures((prev) => prev.filter((x) => x !== m))}
                   />
@@ -820,14 +877,32 @@ function ShelfChip({
   arrow,
   onArrow,
   onRemove,
+  index,
+  isDragging,
+  onDragStart,
+  onDragEnd,
 }: {
   label: string;
   arrow?: string;
   onArrow?: () => void;
   onRemove: () => void;
+  index: number;
+  isDragging: boolean;
+  onDragStart: (e: React.DragEvent) => void;
+  onDragEnd: () => void;
 }) {
   return (
-    <span className={cn("inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium", TONE.chip)}>
+    <span
+      draggable
+      data-chip-index={index}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      className={cn(
+        "inline-flex cursor-grab items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium active:cursor-grabbing",
+        TONE.chip,
+        isDragging && "opacity-50"
+      )}
+    >
       {label}
       {arrow && (
         <button

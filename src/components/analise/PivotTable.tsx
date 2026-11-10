@@ -1,5 +1,7 @@
 "use client";
 
+import { CategoryIcon } from "@/components/ui/CategoryIcon";
+
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { PivotViews } from "./PivotViews";
 import type { PivotBookmark } from "@/lib/pivot-bookmarks";
@@ -774,7 +776,7 @@ export function PivotTable({
                               colSpan={measures.length}
                               className={cn("border-b px-3 py-2 text-center text-xs font-medium text-(--color-text-tertiary)", TONE.header, TONE.border)}
                             >
-                              {c}
+                              {c.split(" › ").map((label, index) => <Fragment key={index}>{index > 0 && " › "}<span className="reference-label">{(colDims[index] === "category" || colDims[index] === "bank") && <CategoryIcon name={label} size={15} />}{label}</span></Fragment>)}
                             </th>
                           ))}
                           {showTotalColumn && (
@@ -828,7 +830,7 @@ export function PivotTable({
                             ) : (
                               <span className="mr-1.5 inline-block w-3" />
                             )}
-                            {node.label}
+                            <span className="reference-label">{(rowDims[node.level] === "category" || rowDims[node.level] === "bank") && <CategoryIcon name={node.label} size={15} />}{node.label}</span>
                           </td>
                           {perColumn.map((bucket, ci) =>
                             measures.map((m) => (

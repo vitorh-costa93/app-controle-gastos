@@ -53,7 +53,11 @@ export function BaseCaixinhaYield({
   percentOfCdi,
   onPercentOfCdi,
   horizon,
+  compact = false,
+  chartHeight,
 }: {
+  compact?: boolean;
+  chartHeight?: number | string;
   summaries: MonthSummary[];
   accumulated: AccumulatedPoint[];
   cdiAnnualPercent: number;
@@ -72,14 +76,14 @@ export function BaseCaixinhaYield({
 
   return (
     <>
-      <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-(--color-text-secondary)">
+      {!compact && <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-(--color-text-secondary)">
         <NumberField label="CDI a.a. (%)" value={cdiAnnualPercent} onValid={onCdiAnnualPercent} max={60} />
         <NumberField label="% do CDI" value={percentOfCdi} onValid={onPercentOfCdi} max={300} />
-      </div>
+      </div>}
 
-      <BaseAccumulatedChart points={accumulated} yieldSeriesCents={projection?.balanceSeriesCents} />
+      <BaseAccumulatedChart points={accumulated} yieldSeriesCents={projection?.balanceSeriesCents} height={chartHeight} />
 
-      {projection && (
+      {!compact && projection && (
         <>
           <p className="mt-3 text-sm font-medium">
             Rendimento projetado no período:{" "}
@@ -96,12 +100,12 @@ export function BaseCaixinhaYield({
           </p>
         </>
       )}
-      <p className="mt-2 text-xs leading-relaxed text-(--color-text-tertiary)">
+      {!compact && <p className="mt-2 text-xs leading-relaxed text-(--color-text-tertiary)">
         Estimativa: todo o saldo positivo fica na Caixinha do Nubank rendendo o % do CDI informado, com capitalização
         mensal; saldo negativo não rende. IR regressivo só sobre o rendimento (22,5% até 180 dias, 20% de 181 a 360,
         17,5% de 361 a 720, 15% acima), contado por sobra mensal. O CDI fica constante: não considera mudanças da
         Selic. A linha pontilhada no gráfico é o saldo antes do IR do resgate final.
-      </p>
+      </p>}
     </>
   );
 }

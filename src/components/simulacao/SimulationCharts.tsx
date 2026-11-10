@@ -23,7 +23,9 @@ export interface AccumulatedPoint {
 export function BaseAccumulatedChart({
   points,
   yieldSeriesCents,
+  height = 224,
 }: {
+  height?: number | string;
   points: AccumulatedPoint[];
   /** Saldo com rendimento da Caixinha (mesmo comprimento de `points`); opcional. */
   yieldSeriesCents?: number[];
@@ -35,7 +37,7 @@ export function BaseAccumulatedChart({
   }));
 
   return (
-    <div className="h-56 w-full">
+    <div className="w-full" style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
           <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "var(--color-text-tertiary)" }} />

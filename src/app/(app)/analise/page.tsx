@@ -1,4 +1,5 @@
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 import { fetchAnalysisPageData, getMonthInsight } from "@/lib/data/analysis";
 import { syncSalaryIncomeTransactions } from "@/lib/data/salary";

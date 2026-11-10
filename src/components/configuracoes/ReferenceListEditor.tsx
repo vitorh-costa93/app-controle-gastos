@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
 import { deactivateReferenceItem } from "@/lib/data/reference";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
-import { useInterface } from "@/components/layout/InterfaceProvider";
 
 interface Item {
   id: string;
@@ -27,7 +26,6 @@ export function ReferenceListEditor({
   onCreate: (name: string) => Promise<{ ok: true } | { ok: false; error: string }>;
 }) {
   const [name, setName] = useState("");
-  const { isModern } = useInterface();
   const [list, setList] = useState(items);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -55,7 +53,7 @@ export function ReferenceListEditor({
             className="flex items-center gap-1.5 rounded-full bg-black/5 py-1 pl-3 pr-1.5 text-sm"
           >
             {item.color && <span className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />}
-            {isModern && table === "categories" && <CategoryIcon name={item.name} size={14} />}
+            {table === "categories" && <CategoryIcon name={item.name} size={14} />}
             {item.name}
             <button
               aria-label={`Remover ${item.name}`}

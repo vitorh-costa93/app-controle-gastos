@@ -1,5 +1,7 @@
 "use client";
 
+import { CategoryIcon } from "@/components/ui/CategoryIcon";
+
 import { useMemo, useState, useTransition } from "react";
 import { ChevronDown } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
@@ -198,6 +200,7 @@ export function UnplannedCard({
                         size={14}
                         className={cn("text-(--color-text-tertiary) transition-transform", !open && "-rotate-90")}
                       />
+                      <CategoryIcon name={c.categoryId ? categoriesById.get(c.categoryId) ?? "Categoria removida" : "Sem categoria"} size={15} />
                       {c.categoryId ? categoriesById.get(c.categoryId) ?? "Categoria removida" : "Sem categoria"}
                     </span>
                     <span className="tabular-nums">

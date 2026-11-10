@@ -69,3 +69,30 @@ for (const month of months) {
 }
 assert.equal(assemblies, 6);
 console.log("✓ Simulação: base montada antes do filtro, casal é soma das duas pessoas");
+
+let synced = 0;
+const budgetCalls = [];
+const baseline = { month: "2026-09", amountCents: 120000 };
+const { getSimulationBudget } = load("src/lib/data/simulation-budget.ts", {
+  "@/lib/data/simulation-analysis": { getBaseMonthSummaries: async (range, personId) => { budgetCalls.push({ range, personId }); return new Map([[range.from, { referenceMonth: range.from, incomeCents: 2000, expenseCents: 1000, leftoverCents: 1000 }]]); } },
+  "@/lib/data/settings": { getStartingBalance: async () => baseline },
+  "@/lib/data/salary": { syncSalaryIncomeTransactions: async () => { synced++; } },
+  "@/lib/data/reference": { listPeople: async () => [{ id: "v" }, { id: "j" }] },
+  "@/lib/data/cdi": { getCdiRate: async () => ({ annualPercent: 13.65 }) },
+  "@/lib/domain/horizon": { getDefaultSimulationHorizon: () => ({ from: "2026-11", to: "2027-12" }) },
+  "@/lib/utils/format": { addMonths: (month, count) => { assert.equal(month, "2026-09"); assert.equal(count, 1); return "2026-10"; } },
+});
+const sharedBudget = await getSimulationBudget();
+assert.equal(sharedBudget.horizon.from, "2026-10");
+assert.equal(sharedBudget.horizon.to, "2027-12");
+assert.equal(sharedBudget.startingBalance.amountCents, 120000);
+assert.equal(sharedBudget.baseSummaries[0].referenceMonth, "2026-10");
+assert.equal(sharedBudget.cdi.annualPercent, 13.65);
+const personalBudget = await getSimulationBudget("v");
+assert.equal(personalBudget.startingBalance, null);
+assert.equal(personalBudget.horizon.from, sharedBudget.horizon.from);
+assert.equal(budgetCalls[1].personId, "v");
+assert.equal(synced, 2);
+await assert.rejects(getSimulationBudget("unknown"), /Pessoa não encontrada/);
+assert.equal(synced, 2);
+console.log("✓ Acumulado e Simulação compartilham horizonte, saldo, CDI e filtro por pessoa");

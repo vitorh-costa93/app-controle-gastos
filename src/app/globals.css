@@ -116,8 +116,8 @@ body {
 .interface-toggle button[aria-pressed="true"] { background:#eaf2ff; color:#065be9; font-weight:600; }
 .interface-toggle button:focus-visible { outline:2px solid #0a6cff; outline-offset:2px; }
 [data-interface="modern"] { --color-bg:#f5f6f8; --color-border:#e8eaf0; --color-text-primary:#191d26; --color-text-secondary:#697080; --color-text-tertiary:#858b98; --radius-sm:7px; --radius-md:9px; --radius-lg:12px; --radius-xl:14px; font-family:var(--font-inter-tight),sans-serif; font-size:13px; background:var(--color-bg); }
-[data-interface="modern"] .interface-header { min-height:62px; padding:10px 22px; align-items:center; justify-content:space-between; gap:10px; }
-[data-interface="modern"] .interface-main { max-width:1600px; padding:0 22px 28px; }
+[data-interface="modern"] .interface-header { min-height:48px; padding:6px 14px; align-items:center; justify-content:space-between; gap:10px; }
+[data-interface="modern"] .interface-main { max-width:none; padding:0 14px 12px; }
 [data-interface="modern"] .interface-toggle button[aria-pressed="true"] { color:#fff; background:#0867f9; box-shadow:0 1px 3px #0867f92b; }
 .modern-header-context { display:flex; align-items:center; gap:10px; color:#8a8f9b; font-size:12px; }
 .modern-header-context strong { color:#404655; font-weight:500; }
@@ -175,3 +175,4 @@ body {
 @media (max-width:767px) { [data-interface="modern"] .interface-header { min-height:60px; padding:10px 12px; } [data-interface="modern"] .interface-main { padding-inline:12px; padding-bottom:20px; } .modern-header-context > span,.modern-header-context > svg { display:none; } .modern-header-context strong { font-size:12px; } .interface-header-actions { gap:7px; } .interface-toggle button { padding:6px 7px; font-size:10px; } .modern-add-button { padding:8px; } .modern-add-button > span { display:none; } [data-interface="modern"] .page-heading { align-items:flex-start; } [data-interface="modern"] .page-heading h1 { font-size:18px; } [data-interface="modern"] input,[data-interface="modern"] select,[data-interface="modern"] textarea { font-size:16px; } .bank-card { min-height:145px; } }
 @media (prefers-reduced-motion:reduce) { [data-interface="modern"] *,[data-interface="modern"] *::before,[data-interface="modern"] *::after { scroll-behavior:auto !important; transition:none !important; animation:none !important; } }
 .person-scope-filter { display:flex; align-items:center; gap:9px; margin-bottom:16px; font-size:12px; color:var(--color-text-secondary); } .person-scope-filter select { border:1px solid var(--color-border); border-radius:8px; background:white; padding:7px 10px; color:var(--color-text-primary); }
+.reference-label { display:inline-flex; align-items:center; gap:6px; vertical-align:middle; } .bank-mini-mark { font-size:14px; line-height:1; letter-spacing:-.08em; } .bank-mini-mark--nubank { font-style:italic; font-family:Arial,sans-serif; } .bank-mini-mark--picpay { font-size:15px; }

@@ -1,5 +1,7 @@
 "use client";
 
+import { CategoryIcon } from "@/components/ui/CategoryIcon";
+
 import { useMemo, useState } from "react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { X } from "lucide-react";
@@ -177,7 +179,7 @@ export function CategoryDonutChart({
             >
               <span className="flex items-center gap-2">
                 <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                <span className="text-(--color-text-primary)">{item.name}</span>
+                <CategoryIcon name={item.name} size={15} /><span className="text-(--color-text-primary)">{item.name}</span>
               </span>
               <span className="flex items-center gap-2 tabular-nums text-(--color-text-secondary)">
                 <span className="text-(--color-text-tertiary)">{item.percent.toFixed(1)}%</span>
@@ -196,7 +198,7 @@ export function CategoryDonutChart({
         <div className="mb-2 flex items-center justify-between">
           <span className="flex items-center gap-2 text-sm font-semibold">
             <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: selected.color }} />
-            {selected.name}
+            <CategoryIcon name={selected.name} size={15} />{selected.name}
             <span className="font-normal text-(--color-text-tertiary)">
               · {selectedItems.length} {selectedItems.length === 1 ? "lançamento" : "lançamentos"} ·{" "}
               {formatCurrencyBRL(selected.value)}
@@ -216,7 +218,7 @@ export function CategoryDonutChart({
             {othersGroups.map((g) => (
               <section key={g.key}>
                 <div className="flex items-center justify-between border-b border-(--color-border) pb-1 text-sm font-semibold">
-                  <span>{g.name}</span>
+                  <span className="reference-label"><CategoryIcon name={g.name} size={15} />{g.name}</span>
                   <span className="tabular-nums">{formatCurrencyBRL(g.totalCents)}</span>
                 </div>
                 <ul className="divide-y divide-(--color-border)">{g.items.map(renderOccurrence)}</ul>

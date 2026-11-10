@@ -2,6 +2,13 @@
 
 Atualizado: 10/11/2026.
 
+## Ajuste — visão geral em uma tela, evolução alternável e ícones
+- Desktop moderno agora usa toda a largura útil e grade única de três colunas; saldo compacto, ambos cartões com altura limitada, contas do mês ao lado e evolução/moradia na faixa inferior. Ajustes próprios para altura até800px; mobile continua em fluxo vertical. Expansões de detalhes e grupos extras podem aumentar o conteúdo, sem esconder lançamentos.
+- Evolução alterna Mensal (sobra/taxa dos12meses do mês escolhido) e Acumulado (mesmo horizonte dinâmico/base/âncora/CDI e gráfico da Simulação, carregado sob demanda). Novo getSimulationBudget em lib/data/simulation-budget.ts é compartilhado com a página Simulação; não é uma soma diferente das12sobras da Análise. Modo compacto preserva fórmula projectCaixinha e explicita rendimento bruto/100%CDI, com link para Simulação. Pessoa respeitada, saldo inicial consolidado nunca atribuído ao indivíduo; projeção individual usa zero como padrão explícito.
+- CategoryIcon é a fonte comum de cores/símbolos: luz amarela, saúde rosa, Nubank roxo/nu, PicPay verde/P, financiamento e psicologia com símbolos próprios. Removida regra que sobrescrevia todas as contas para azul. Rótulos de categoria/banco em tabelas, análises, pivot e configurações usam ícones comuns; selects nativos mantêm texto.
+- Validação visual: resolução do print1711x908 com painéis completos e página sem rolagem; notebook1366x768 e mobile390px verificados, inclusive valores dos cartões sem cortes e filtros. Teste test-ui-scope ampliado garante compartilhamento do horizonte/saldo/CDI/pessoa entre Acumulado e Simulação. Lint/build finais antes da publicação automática GitHub/Vercel. Sem migrations ou alterações manuais de gastos.
+- Próximo passo: usuário testar painel maximizado e alternância dos gráficos em PRD.
+
 ## Implementação — Nova UI reconstruída e conferência
 - Usuário aprovou a proposta e avatar em desenho. Nova estrutura moderna com sidebar própria, navegação móvel, Inter Tight, avatar familiar em public/family-avatar.png, CategoryIcon e BankCard compartilhados. Substituída a cascata antiga de estilos por shell e estilos de cada módulo. Toggle clássico preservado; preferência segue por navegador.
 - Análise moderna em Visão geral / Análises / Conferência / Tabela dinâmica / Todas as movimentações. Categorias e cartões abrem conferência; banco/categoria/origem se combinam, total do banco independe de categoria, comparação manual é só local e se limpa ao mudar o escopo do banco/mês/pessoa/origem. Usa mês de referência, não período de fechamento de fatura. Dinâmica e tabela conservam contexto e operações; dinâmica contém somente reais.

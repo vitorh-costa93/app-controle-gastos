@@ -7,9 +7,11 @@ import { formatCurrencyBRL, formatMonthShort, formatMonthLabel } from "@/lib/uti
 export function MonthlyEvolutionChart({
   summaries,
   selectedMonth,
+  height = 224,
 }: {
   summaries: MonthSummary[];
   selectedMonth: string;
+  height?: number | string;
 }) {
   const data = summaries.map((s) => ({
     ...s,
@@ -18,7 +20,7 @@ export function MonthlyEvolutionChart({
   }));
 
   return (
-    <div className="h-56 w-full">
+    <div className="w-full" style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
           <XAxis

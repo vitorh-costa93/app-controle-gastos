@@ -1,3 +1,4 @@
+import { CategoryIcon } from "@/components/ui/CategoryIcon";
 import { Card } from "@/components/ui/Card";
 import { CategoryChange } from "@/lib/domain/insights";
 import { Category } from "@/types/db";
@@ -23,7 +24,7 @@ function Column({
       {items.map((c) => (
         <div key={c.categoryId ?? "none"} className="py-2">
           <div className="mb-1.5 flex items-center justify-between text-sm">
-            <span>{c.categoryId ? categoriesById.get(c.categoryId) ?? "Outros" : "Sem categoria"}</span>
+            <span className="reference-label"><CategoryIcon name={c.categoryId ? categoriesById.get(c.categoryId) ?? "Outros" : "Sem categoria"} size={15} />{c.categoryId ? categoriesById.get(c.categoryId) ?? "Outros" : "Sem categoria"}</span>
             <span className="font-semibold tabular-nums" style={{ color }}>
               {c.deltaCents > 0 ? "+" : "−"}
               {formatCurrencyBRL(Math.abs(c.deltaCents))}

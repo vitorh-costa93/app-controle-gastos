@@ -7,7 +7,7 @@ import { formatCurrencyBRL } from "@/lib/utils/format";
 import { MonthlyPaymentsPanel } from "@/components/payments/MonthlyPaymentsPanel";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
 import { BankCard } from "@/components/ui/BankCard";
-import { MonthlyEvolutionChart } from "./MonthlyEvolutionChart";
+import { BalanceEvolution } from "./BalanceEvolution";
 
 function FinanceObject({ index }: { index: number }) {
   return <span aria-hidden="true" className="finance-object" style={{ backgroundPosition: `${index * 100 / 3}% center` }} />;
@@ -57,13 +57,13 @@ export function ModernOverview({ data, transactions, month, personId, onInspect 
           <div className="ma-cards">{(["nubank", "picpay"] as const).map((bank) => <BankCard key={bank} bank={bank} amountCents={bankTotal(bank)} subtitle="Saídas do mês · reais e projetadas" onClick={() => onInspect(bank, "all", true)} />)}</div>
         </section>
       </div>
-      <section className="ma-panel ma-evolution"><div className="ma-heading"><div><h2>Evolução do saldo</h2><p>Últimos 12 meses · barras de saldo e taxa de poupança</p></div></div><MonthlyEvolutionChart summaries={data.summaries} selectedMonth={month} /></section>
+      <BalanceEvolution summaries={data.summaries} month={month} personId={personId} />
     </div>
     <aside className="ma-overview-side">
       <MonthlyPaymentsPanel key={`${month}|${personId}`} month={month} personId={personId} personName={personName} />
       <section className="ma-panel ma-housing"><div className="ma-heading"><div><h2>Moradia</h2><p>Já incluída nas saídas</p><Money cents={housing?.amountCents ?? 0} /></div><House size={28} className="ma-heading-icon" /></div>
         {housing && summary.incomeCents > 0 && <><p className="ma-housing-ratio">{Math.round(housing.amountCents / summary.incomeCents * 100)}% da renda prevista</p><div className="ma-housing-bar"><span style={{ width: `${Math.min(100, Math.max(0, housing.amountCents / summary.incomeCents * 100))}%` }} /></div></>}
-        {housingItems.length ? <div className="ma-housing-items">{housingItems.map((item) => <button key={item.id} type="button" onClick={() => onInspect("all", housingCategory!.id, true)}><CategoryIcon name="Moradia" size={18} /><span>{item.description || "Despesa de moradia"}<b>{formatCurrencyBRL(item.amountCents)}</b></span></button>)}</div> : <p className="ma-empty">Nenhuma saída de moradia neste mês.</p>}
+        {housingItems.length ? <div className="ma-housing-items">{housingItems.map((item) => <button key={item.id} type="button" title={item.description || "Despesa de moradia"} onClick={() => onInspect("all", housingCategory!.id, true)}><CategoryIcon name="Moradia" size={18} /><span><span className="ma-housing-description">{item.description || "Despesa de moradia"}</span><b>{formatCurrencyBRL(item.amountCents)}</b></span></button>)}</div> : <p className="ma-empty">Nenhuma saída de moradia neste mês.</p>}
       </section>
     </aside>
   </div>;

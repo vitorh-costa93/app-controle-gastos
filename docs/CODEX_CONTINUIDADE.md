@@ -3,6 +3,7 @@
 Atualizado: 10/11/2026.
 
 ## Proposta visual — reconstrução completa da Nova UI
+- Refinamento do usuário: gastos sempre de Vitor OU Jaqueline; Casal apenas consolida. Filtro de pessoa deve cobrir todos os dados da visão. Corrigir Pessoa=Casal e remover acerto sugeridos nos primeiros desenhos. Nova tela conferencia.png detalha banco → categoria → movimentações, preserva dinâmica/tabela completa e usa ícones consistentes. Comparação manual opcional com total do banco é proposta, não integração. Regras detalhadas em PROPOSTA.md; nenhuma alteração funcional nesta etapa.
 - Usuário rejeitou o resultado incremental e pediu proposta completa mais fiel ao print. Criados três mockups em docs/design/nova-ui-v2 (Visão do mês, Lançamentos, Simulação); especificação em PROPOSTA.md.
 - Direção: estrutura moderna própria, componentes consistentes, abas para análise aprofundada, editor contextual, cartões renderizados com qualidade; preservar toggle e contratos financeiros. Mobile e demais áreas descritos, ainda sem mockup específico.
 - Estado: proposta visual, sem mudança funcional nesta etapa. Números/taxas/avatares ilustrativos. Próximo passo: implementar a reconstrução seguindo a especificação; não repetir a sobreposição de painéis à UI clássica.

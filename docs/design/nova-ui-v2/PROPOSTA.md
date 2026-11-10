@@ -14,13 +14,33 @@ Reconstruir a experiência moderna com composição própria, em vez de acrescen
 
 ## Telas
 
+### Titularidade e filtro de pessoa — regra transversal
+
+Cada gasto pertence exclusivamente a Vitor ou Jaqueline. Casal é apenas a visão que consolida os dois, nunca uma pessoa selecionável no cadastro. O filtro Casal / Vitor / Jaqueline deve atualizar todos os totais, cartões, categorias, pagamentos, gráficos e movimentações do contexto. A simulação parte igualmente da base correspondente à pessoa selecionada. Preservar essa seleção ao navegar para o detalhamento e voltar. Comparações entre pessoas só aparecem na visão Casal; na visão individual não expor gastos da outra pessoa.
+
+Os mockups iniciais são superados por esta regra: as linhas com Pessoa = Casal no desenho de Lançamentos devem ter Vitor ou Jaqueline. A seção de divisão passa a representar participação de cada pessoa nas despesas consolidadas, sem sugerir gastos compartilhados, rateio ou acerto financeiro entre elas. Não implementar o link de acerto do primeiro desenho.
+
+### Conferência por categoria e banco
+
+![Conferência](conferencia.png)
+
+Entrada pelo total de uma categoria ou por um cartão, preservando mês e pessoa. Banco e categoria são filtros independentes: conferir qualquer categoria com todos os bancos ou as categorias de um banco específico. Mostrar total por categoria e abrir as movimentações que compõem exatamente esse total; exibir pessoa, banco, data, categoria, parcela e valor, mantendo colunas adicionais acessíveis. Voltar não deve perder o contexto.
+
+Manter Tabela dinâmica e Todas as movimentações como caminhos diretos, com seus recursos existentes. Os links de detalhamento e retorno precisam transportar os filtros compatíveis. Valores da categoria, subtotal dos lançamentos e total do banco devem usar o mesmo conjunto de dados e explicitar quais filtros se aplicam a cada um.
+
+Sugestão adicional: comparação manual opcional com o total informado pelo usuário no aplicativo do banco, mostrando diferença. Não é sincronização bancária nem correção automática de despesas. O escopo da comparação deve ser explícito (pessoa, banco, período e regras da fatura); não tratar mês de referência como período de fechamento automaticamente. Reais e projetados precisam ser distinguíveis; usar apenas reais na conferência bancária por padrão, sem alterar a regra das projeções na visão mensal. O total informado do banco deve permanecer associado ao seu escopo ou ser limpo ao trocar filtros; não comparar um total de fatura completa com apenas uma categoria. A diferença não implica que falta necessariamente uma compra: parcelas, estornos, encargos e período podem divergir.
+
+Ícones fazem parte da linguagem do produto: categorias com símbolos e cores consistentes, Nubank roxo, PicPay verde e pessoa identificada por nome/avatar. Reutilizar o mesmo ícone de categoria em resumos, filtros, tabelas e editores. Não depender apenas de cor ou ícone para transmitir significado, nem criar ícones decorativos diferentes para a mesma categoria. Ícones de estabelecimentos no mockup são ilustrativos; a implementação pode usar o ícone da categoria sem inferir estabelecimento automaticamente.
+
+O mockup de conferência foi gerado pela ferramenta integrada usando os dois primeiros desenhos como referência, com prompt para filtro global Vitor, cartão Nubank, categorias com ícones, detalhamento de Alimentação e comparação manual de totais. Valores ilustrativos.
+
 ### Visão do mês
 
 ![Visão do mês](visao-do-mes.png)
 
 Saldo e composição no topo, divisão do casal e cartões no centro, contas do início do mês e moradia à direita. Abas Visão geral / Análises / Tabela dinâmica, mantendo todos os indicadores, filtros e bookmarks existentes. As análises não serão duplicadas abaixo de um novo painel.
 
-O painel de contas reutiliza os agrupamentos existentes. Plano de Saúde reconhece Unimed em Saúde, Internet corresponde à categoria Internet. Faturas mantêm prioridade para impedir dupla contagem. Pagamento e organização continuam com as regras atuais. Acerto entre pessoas só deve mostrar valor quando houver regra validada; o mockup não cria uma nova regra de divisão.
+O painel de contas reutiliza os agrupamentos existentes. Plano de Saúde reconhece Unimed em Saúde, Internet corresponde à categoria Internet. Faturas mantêm prioridade para impedir dupla contagem. Pagamento e organização continuam com as regras atuais. Participação por pessoa não representa rateio nem gera acerto entre pessoas. O filtro individual também se aplica integralmente a esse painel.
 
 ### Lançamentos
 

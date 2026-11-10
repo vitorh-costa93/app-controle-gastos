@@ -2,6 +2,10 @@
 
 Atualizado: 10/11/2026.
 
+## Ajuste — respiro vertical conforme a janela
+- Acima de800px de altura, o desktop usa espaço adicional em padding dos painéis, linhas de categorias/contas, separação dos cartões e margens internas. Mantém fontes, gráficos e regras financeiras. Layout compacto de notebook e fluxo mobile preservados.
+- Alteração concentrada em modern-analysis.css, sem mudança de lógica. Lint/build passaram; validação visual em1914x942 e1711x908, incluindo gráfico acumulado e filtro individual. Próximo passo: usuário validar o respiro em PRD na mesma janela do print.
+
 ## Ajuste — visão geral em uma tela, evolução alternável e ícones
 - Desktop moderno agora usa toda a largura útil e grade única de três colunas; saldo compacto, ambos cartões com altura limitada, contas do mês ao lado e evolução/moradia na faixa inferior. Ajustes próprios para altura até800px; mobile continua em fluxo vertical. Expansões de detalhes e grupos extras podem aumentar o conteúdo, sem esconder lançamentos.
 - Evolução alterna Mensal (sobra/taxa dos12meses do mês escolhido) e Acumulado (mesmo horizonte dinâmico/base/âncora/CDI e gráfico da Simulação, carregado sob demanda). Novo getSimulationBudget em lib/data/simulation-budget.ts é compartilhado com a página Simulação; não é uma soma diferente das12sobras da Análise. Modo compacto preserva fórmula projectCaixinha e explicita rendimento bruto/100%CDI, com link para Simulação. Pessoa respeitada, saldo inicial consolidado nunca atribuído ao indivíduo; projeção individual usa zero como padrão explícito.

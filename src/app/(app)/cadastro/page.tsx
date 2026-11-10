@@ -33,18 +33,20 @@ export default async function CadastroPage({
     listTransactionTypes(),
     listActiveRecurrenceRules(),
   ]);
+  const personId = typeof sp.personId === "string" && people.some((person) => person.id === sp.personId) ? sp.personId : undefined;
 
   if (sp.tab === "recorrencias") {
     const [installmentGroups, estimatedExpenses] = await Promise.all([
       listInstallmentGroups(),
       getEstimatedExpenses(),
     ]);
-    const estimateAverages = await getEstimateAverages(estimatedExpenses);
+    const scopedEstimates = personId ? estimatedExpenses.filter((item) => item.personId === personId) : estimatedExpenses;
+    const estimateAverages = await getEstimateAverages(scopedEstimates);
     return (
       <RecorrenciasView
-        recurrenceRules={recurrenceRules}
-        installmentGroups={installmentGroups}
-        estimatedExpenses={estimatedExpenses}
+        recurrenceRules={personId ? recurrenceRules.filter((item) => item.personId === personId) : recurrenceRules}
+        installmentGroups={personId ? installmentGroups.filter((item) => item.personId === personId) : installmentGroups}
+        estimatedExpenses={scopedEstimates}
         estimateAverages={estimateAverages}
         people={people}
         categories={categories}
@@ -55,12 +57,12 @@ export default async function CadastroPage({
 
   if (sp.tab === "atencao") {
     const pairs = await listDuplicatePairs();
-    return <AtencaoView pairs={pairs} people={people} categories={categories} />;
+    return <AtencaoView pairs={personId ? pairs.filter((pair) => pair.original.personId === personId && pair.suspect.personId === personId) : pairs} people={people} categories={categories} />;
   }
 
   const month = typeof sp.month === "string" && /^\d{4}-\d{2}$/.test(sp.month) ? sp.month : undefined;
   const filters = {
-    personId: typeof sp.personId === "string" && sp.personId ? sp.personId : undefined,
+    personId,
     direction: sp.direction === "income" || sp.direction === "expense" ? sp.direction : undefined,
     typeId: typeof sp.typeId === "string" && sp.typeId ? sp.typeId : undefined,
     fixedVariable:
@@ -83,7 +85,7 @@ export default async function CadastroPage({
 
   return (
     <CadastroPageClient
-      key={[month, filters.personId, filters.direction, filters.typeId, filters.fixedVariable].join(":")}
+      key={[month, filters.personId, filters.direction, filters.typeId, filters.fixedVariable, sp.action === "new" ? "new" : "list"].join(":")}
       transactions={monthRows ? [] : transactions}
       monthRows={monthRows}
       people={people}

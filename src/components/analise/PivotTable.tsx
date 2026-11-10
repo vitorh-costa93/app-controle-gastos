@@ -77,7 +77,7 @@ const TONE = {
 
 /**
  * Tabela dinâmica de uso pontual: independe do mês e da origem selecionados na página — trabalha
- * sempre sobre a base completa (todos os meses, todas as pessoas). Vem recolhida e só busca os
+ * sobre a base completa de meses, respeitando a pessoa da página. Vem recolhida e só busca os
  * dados quando é aberta pela primeira vez.
  */
 export function PivotTable({
@@ -86,6 +86,11 @@ export function PivotTable({
   people,
   categories,
   types,
+  personId = "",
+  initialExpanded = false,
+  scopedBank,
+  scopedCategory,
+  scopeMonth = false,
 }: {
   /** Muda quando a Análise grava/recarrega dados; a pivot reconsulta a base se estiver aberta. */
   refreshKey?: number;
@@ -93,11 +98,29 @@ export function PivotTable({
   people: Person[];
   categories: Category[];
   types: TransactionType[];
+  personId?: string;
+  initialExpanded?: boolean;
+  scopedBank?: string;
+  scopedCategory?: string;
+  scopeMonth?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const [currentMonthOnly, setCurrentMonthOnly] = useState(false);
+  const [expanded, setExpanded] = useState(initialExpanded);
+  const [currentMonthOnly, setCurrentMonthOnly] = useState(initialExpanded);
   const [transactions, setTransactions] = useState<Transaction[] | null>(null);
   const [loadError, setLoadError] = useState(false);
+  useEffect(() => {
+    if (!initialExpanded) return;
+    let cancelled = false;
+    fetchPivotTransactions().then((items) => { if (!cancelled) setTransactions(items); }).catch(() => { if (!cancelled) setLoadError(true); });
+    return () => { cancelled = true; };
+  }, [initialExpanded]);
+
+  const scopedTransactions = useMemo(() => (transactions ?? []).filter((item) =>
+    (!personId || item.personId === personId)
+    && (!scopeMonth || (item.referenceMonth === pageMonth && item.direction === "expense" && item.considered))
+    && (!scopedBank || scopedBank === "all" || (item.bank ?? "none") === scopedBank)
+    && (!scopedCategory || scopedCategory === "all" || (item.categoryId ?? "none") === scopedCategory)
+  ), [transactions, personId, scopeMonth, pageMonth, scopedBank, scopedCategory]);
 
   const [rowDims, setRowDims] = useState<DimensionKey[]>(["category"]);
   const [colDims, setColDims] = useState<DimensionKey[]>([]);
@@ -204,20 +227,20 @@ export function PivotTable({
   }
 
   const filtered = useMemo(() => {
-    const all = (transactions ?? []).filter((t) => !currentMonthOnly || t.referenceMonth === pageMonth);
+    const all = scopedTransactions.filter((t) => !currentMonthOnly || t.referenceMonth === pageMonth);
     const byDirection = directionFilter === "all" ? all : all.filter((t) => t.direction === directionFilter);
     const active = Object.entries(valueFilters).filter(([, set]) => set && set.size > 0) as [DimensionKey, Set<string>][];
     if (active.length === 0) return byDirection;
     return byDirection.filter((t) => active.every(([dim, set]) => set.has(dimValue(dim, t))));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transactions, currentMonthOnly, pageMonth, directionFilter, valueFilters, peopleById, categoriesById, typesById]);
+  }, [scopedTransactions, currentMonthOnly, pageMonth, directionFilter, valueFilters, peopleById, categoriesById, typesById]);
 
   /** Valores elegíveis de cada dimensão (na base completa) para os popups de filtro. */
   const optionsByDimension = useMemo(() => {
     const result = {} as Record<DimensionKey, string[]>;
     for (const dim of DIMENSIONS) {
       const seen = new Map<string, string>();
-      for (const t of transactions ?? []) {
+      for (const t of scopedTransactions) {
         const label = dimValue(dim.key, t);
         if (!seen.has(label)) seen.set(label, dimSortKey(dim.key, t));
       }
@@ -225,7 +248,7 @@ export function PivotTable({
     }
     return result;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transactions, peopleById, categoriesById, typesById]);
+  }, [scopedTransactions, peopleById, categoriesById, typesById]);
 
   /** Transações de uma linha que caem numa coluna ("" ou "__total__" = todas). */
   function columnItems(items: Transaction[], colKey: string): Transaction[] {
@@ -490,7 +513,7 @@ export function PivotTable({
         <span>
           <span className="block text-[15px] font-semibold">Tabela dinâmica</span>
           <span className="block text-xs text-(--color-text-tertiary)">
-            Base completa — use “Mês Atual” para acompanhar o mês da página.
+            {personId ? `Lançamentos de ${peopleById.get(personId) ?? "pessoa selecionada"}` : "Visão consolidada do casal"} · somente reais. {scopeMonth ? "Escopo da conferência preservado." : "Use “Mês Atual” para acompanhar o mês da página."}
           </span>
         </span>
         <ChevronDown

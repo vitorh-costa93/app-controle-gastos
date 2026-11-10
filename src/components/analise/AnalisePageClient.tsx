@@ -25,6 +25,16 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { useInterface } from "@/components/layout/InterfaceProvider";
 import { ModernOverview } from "./ModernOverview";
 import { addMonths } from "@/lib/utils/format";
+import { ConferencePanel } from "./ConferencePanel";
+import { conferenceScope, ConferenceFilters } from "./conference-scope";
+import "./modern-analysis.css";
+
+type AnalysisTab = "overview" | "analyses" | "conference" | "pivot" | "movements";
+const TABS: { key: AnalysisTab; label: string }[] = [
+  { key: "overview", label: "Visão geral" }, { key: "analyses", label: "Análises" },
+  { key: "conference", label: "Conferência" }, { key: "pivot", label: "Tabela dinâmica" },
+  { key: "movements", label: "Todas as movimentações" },
+];
 
 export function AnalisePageClient({
   initialMonth,
@@ -40,6 +50,26 @@ export function AnalisePageClient({
   initialInsight: string;
 }) {
   const { isModern } = useInterface();
+  const [tab, setTab] = useState<AnalysisTab>("overview");
+  const [conferenceFilters, setConferenceFilters] = useState<ConferenceFilters>({ bank: "all", category: "all", includeProjected: false });
+  const [detailScope, setDetailScope] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const nextTab = params.get("view");
+    if (TABS.some((item) => item.key === nextTab)) setTab(nextTab as AnalysisTab);
+    const bank = params.get("bank") ?? "all";
+    setConferenceFilters({ bank: ["all", "none", "nubank", "picpay"].includes(bank) ? bank : "all", category: params.get("category") ?? "all", includeProjected: params.get("projected") === "1" });
+    setDetailScope(params.get("scope") === "conference");
+  }, []);
+  function changeView(nextTab: AnalysisTab, filters = conferenceFilters, scoped = false) {
+    setTab(nextTab); setConferenceFilters(filters); setDetailScope(scoped);
+    const params = new URLSearchParams(window.location.search);
+    params.set("view", nextTab); params.set("bank", filters.bank); params.set("category", filters.category);
+    if (filters.includeProjected) params.set("projected", "1"); else params.delete("projected");
+    if (scoped) params.set("scope", "conference"); else params.delete("scope");
+    window.history.replaceState(null, "", `/analise?${params.toString()}`);
+  }
   const [month, setMonth] = useState(initialMonth);
   const [personId, setPersonId] = useState(initialPersonId);
   const [data, setData] = useState(initialData);
@@ -55,30 +85,35 @@ export function AnalisePageClient({
   const requestIdRef = useRef(0);
 
   function navigate(nextMonth: string, nextPersonId: string) {
+    setLoadError(null);
     setMonth(nextMonth);
     setPersonId(nextPersonId);
 
     const requestId = ++requestIdRef.current;
 
     startTransition(async () => {
-      const { data: nextData, transactions: nextTransactions } = await fetchAnalysisPageData(
-        nextMonth,
-        nextPersonId || undefined
-      );
-      if (requestIdRef.current !== requestId) return;
-      setData(nextData);
-      setMonthTransactions(nextTransactions);
+      try {
+        const { data: nextData, transactions: nextTransactions } = await fetchAnalysisPageData(nextMonth, nextPersonId || undefined);
+        if (requestIdRef.current !== requestId) return;
+        setData(nextData); setMonthTransactions(nextTransactions);
+      } catch {
+        if (requestIdRef.current === requestId) setLoadError("Não foi possível carregar este mês. Atualize para tentar novamente.");
+      }
     });
 
     startInsightTransition(async () => {
-      const nextInsight = await getMonthInsight(nextMonth, nextPersonId || undefined);
-      if (requestIdRef.current !== requestId) return;
-      setInsight(nextInsight);
+      try {
+        const nextInsight = await getMonthInsight(nextMonth, nextPersonId || undefined);
+        if (requestIdRef.current !== requestId) return;
+        setInsight(nextInsight);
+      } catch {
+        if (requestIdRef.current === requestId) setInsight("Insight indisponível neste momento.");
+      }
     });
 
-    const params = new URLSearchParams();
+    const params = new URLSearchParams(window.location.search);
     params.set("month", nextMonth);
-    if (nextPersonId) params.set("personId", nextPersonId);
+    if (nextPersonId) params.set("personId", nextPersonId); else params.delete("personId");
     window.history.replaceState(null, "", `/analise?${params.toString()}`);
   }
 
@@ -107,9 +142,12 @@ export function AnalisePageClient({
     data.categoryBreakdown.length > 0;
 
 
+  const scopedMovements = conferenceScope(monthTransactions, conferenceFilters, personId).rows;
+  const personName = data.people.find((person) => person.id === personId)?.name ?? "Casal";
+
   return (
-    <div>
-      <PageHeader
+    <div className={isModern ? "ma-page" : undefined}>
+      {isModern ? <><div className="ma-page-toolbar"><MonthSelector month={month} onChange={(m) => navigate(m, personId)} isPending={isPending} /><span>{personId ? `Somente lançamentos de ${personName}` : "Visão consolidada do casal"}</span></div><div className="ma-navigation"><nav aria-label="Áreas da análise">{TABS.map((item) => <button key={item.key} type="button" aria-current={tab === item.key ? "page" : undefined} className={tab === item.key ? "is-active" : ""} onClick={() => changeView(item.key)}>{item.label}</button>)}</nav><PersonFilter people={data.people} personId={personId} onChange={(p) => navigate(month, p)} isPending={isPending} /></div></> : <><PageHeader
         title="Análise"
         subtitle="Veja como está sua vida financeira e acompanhe a evolução dos seus gastos e resultados."
         action={<MonthSelector month={month} onChange={(m) => navigate(m, personId)} isPending={isPending} />}
@@ -122,14 +160,15 @@ export function AnalisePageClient({
           onChange={(p) => navigate(month, p)}
           isPending={isPending}
         />
-      </div>
+      </div></>}
 
-      {!hasData ? (
+      {loadError ? <div className="ma-panel" role="alert"><p>{loadError}</p><button type="button" className="ma-text-link" onClick={() => navigate(month, personId)}>Atualizar mês</button></div> : isModern && (isPending || data.month !== month) ? <div className="ma-panel ma-loading" role="status">Carregando dados de {personName}…</div> : !hasData && (!isModern || tab === "overview" || tab === "analyses") ? (
         <EmptyState title="Ainda não existem dados suficientes neste mês para uma análise confiável. Cadastre alguns lançamentos em Cadastro." />
       ) : (
         <div className={"flex min-w-0 flex-col gap-6 transition-opacity" + (isPending ? " opacity-60" : "")}>
-          {isModern && <ModernOverview data={data} transactions={monthTransactions} month={month} />}
-
+          {isModern && tab === "overview" && <ModernOverview data={data} transactions={monthTransactions} month={month} personId={personId} onInspect={(bank, category, projected = false) => changeView("conference", { bank, category, includeProjected: projected })} />}
+          {isModern && tab === "conference" && <ConferencePanel data={data} transactions={monthTransactions} month={month} personId={personId} filters={conferenceFilters} onFiltersChange={(filters) => changeView("conference", filters)} onChanged={refreshCurrent} onOpenMovements={() => changeView("movements", conferenceFilters, true)} onOpenPivot={() => changeView("pivot", conferenceFilters, true)} />}
+          {(!isModern || tab === "analyses") && <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <KpiCard
               label="Entradas"
@@ -215,7 +254,7 @@ export function AnalisePageClient({
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <CategoryChangesCard changes={data.categoryChanges} categories={data.categories} />
-            <PersonComparisonCard summaries={data.personSummaries} people={data.people} />
+            {!personId && <PersonComparisonCard summaries={data.personSummaries} people={data.people} />}
           </div>
 
           <Card className="p-5">
@@ -245,16 +284,19 @@ export function AnalisePageClient({
           </Card>
           </div>
 
-          <AnaliseTransactionsTable
-            transactions={monthTransactions}
+          </>}
+          {isModern && detailScope && (tab === "movements" || tab === "pivot") && <div className="ma-scope-banner"><span>Escopo da conferência · {personName} · {conferenceFilters.bank === "all" ? "todos os bancos" : conferenceFilters.bank === "none" ? "sem banco" : conferenceFilters.bank === "nubank" ? "Nubank" : "PicPay"} · {conferenceFilters.category === "all" ? "todas as categorias" : data.categories.find((category) => category.id === conferenceFilters.category)?.name ?? "Sem categoria"} · {tab === "pivot" ? "lançamentos reais" : conferenceFilters.includeProjected ? "reais e projetados" : "somente reais"}</span><button type="button" onClick={() => changeView(tab)}>Limpar escopo</button><button type="button" onClick={() => changeView("conference")}>Voltar à conferência</button></div>}
+          {(!isModern || tab === "movements") && <AnaliseTransactionsTable
+            key={`${month}|${personId}|${detailScope ? JSON.stringify(conferenceFilters) : "all"}`}
+            transactions={isModern && detailScope ? scopedMovements : monthTransactions}
             people={data.people}
             categories={data.categories}
             types={data.types}
             recurrenceRules={data.recurrenceRules}
             onChanged={refreshCurrent}
-          />
+          />}
 
-          <PivotTable refreshKey={pivotRefreshKey} pageMonth={month} people={data.people} categories={data.categories} types={data.types} />
+          {(!isModern || tab === "pivot") && <PivotTable key={isModern ? `modern|${personId}|${detailScope}` : "classic"} refreshKey={pivotRefreshKey} pageMonth={month} personId={personId} initialExpanded={isModern} scopedBank={isModern && detailScope ? conferenceFilters.bank : undefined} scopedCategory={isModern && detailScope ? conferenceFilters.category : undefined} scopeMonth={isModern && detailScope} people={data.people} categories={data.categories} types={data.types} />}
         </div>
       )}
     </div>

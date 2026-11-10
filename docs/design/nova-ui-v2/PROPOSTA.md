@@ -1,6 +1,8 @@
 # MeuDinheiro — proposta de reconstrução da Nova UI
 
-10/11/2026. Proposta visual; ainda não implementada. Imagens geradas com a ferramenta integrada de geração de imagens. Valores, taxas, avatares e gráficos são ilustrativos; textos e números das imagens não constituem contratos de implementação.
+10/11/2026. Referência visual da reconstrução da Nova UI. Imagens geradas com a ferramenta integrada de geração de imagens. Valores, taxas, avatares e gráficos são ilustrativos; textos e números das imagens não constituem contratos de implementação.
+
+Atualização: proposta implementada na interface alternável. A aplicação usa dados reais e componentes próprios; as imagens abaixo continuam referências ilustrativas. Avatar familiar em desenho substitui os retratos genéricos. Conferência bancária usa mês de referência com escopo explícito, sem inferir fechamento de fatura. Contas na visão individual são leitura do status consolidado, sem baixa parcial. Saldo inicial individual de Simulação é uma hipótese local, pois o saldo salvo não possui titularidade. Consulte docs/CODEX_CONTINUIDADE.md para validação e estado da entrega.
 
 ## Direção
 

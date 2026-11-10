@@ -16,6 +16,8 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { FieldGroup, Input, Select } from "@/components/ui/Field";
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
+import { CategoryIcon } from "@/components/ui/CategoryIcon";
+import "./modern-cadastro.css";
 import { toISODate, toReferenceMonth, formatCurrencyBRL, formatDateBR } from "@/lib/utils/format";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
@@ -27,6 +29,7 @@ type TransactionEditorProps = {
   categories: Category[];
   types: TransactionType[];
   transaction?: Transaction | null;
+  initialMonth?: string;
   recurrenceRules: RecurrenceRule[];
   onSaved?: (t: Transaction) => void;
 };
@@ -36,11 +39,11 @@ export function TransactionEditor(props: TransactionEditorProps) {
   return props.open ? <TransactionEditorSession key={props.transaction?.id ?? "new"} {...props} /> : null;
 }
 
-function TransactionEditorSession({ open, onClose, people, categories, types, transaction, recurrenceRules, onSaved }: TransactionEditorProps) {
+function TransactionEditorSession({ open, onClose, people, categories, types, transaction, recurrenceRules, onSaved, initialMonth }: TransactionEditorProps) {
   const { isModern } = useInterface();
   const router = useRouter();
   const today = new Date();
-  const [form, setForm] = useState(() => buildInitialForm(transaction, today, people, recurrenceRules));
+  const [form, setForm] = useState(() => ({ ...buildInitialForm(transaction, today, people, recurrenceRules), ...(!transaction && initialMonth && /^\d{4}-(0[1-9]|1[0-2])$/.test(initialMonth) ? { referenceMonth: initialMonth } : {}) }));
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -231,7 +234,7 @@ function TransactionEditorSession({ open, onClose, people, categories, types, tr
 
   const missingFields = [
     form.amountCents <= 0 && "valor",
-    !form.personId && "origem",
+    !people.some((person) => person.id === form.personId) && "origem",
     !form.registrationDate && "data de cadastro",
     form.description.trim().length === 0 && "descrição",
   ].filter((f): f is string => Boolean(f));
@@ -240,8 +243,78 @@ function TransactionEditorSession({ open, onClose, people, categories, types, tr
   const canSave = missingFields.length === 0 && validDuplicateInput && (!isExpense || (!paymentLoading && validDueDay && validPaymentGroup));
   const busy = isPending || saveState === "saving";
 
+  const descriptionField = (
+        <div className={isModern ? undefined : "sm:col-span-2"}>
+          <FieldGroup label="Descrição">
+            <Input
+              value={form.description}
+              onChange={(e) => update("description", e.target.value)}
+              placeholder="Ex.: Compras supermercado Carrefour"
+            />
+          </FieldGroup>
+        </div>
+  );
+  const amountField = (
+        <FieldGroup label="Valor">
+          <CurrencyInput valueCents={form.amountCents} onChange={(cents) => update("amountCents", cents)} />
+        </FieldGroup>
+  );
+  const categoryField = (
+        <FieldGroup label="Categoria">
+          <div className={isModern ? "modern-editor-category" : undefined}>
+          {isModern && <CategoryIcon name={categories.find((category) => category.id === form.categoryId)?.name ?? ""} />}
+          <Select value={form.categoryId} onChange={(e) => update("categoryId", e.target.value)}>
+            <option value="">Não identificado</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </Select>
+          </div>
+        </FieldGroup>
+  );
+  const personField = (
+        <FieldGroup label={isModern ? "Pessoa" : "Origem"}>
+          <Select value={people.some((person) => person.id === form.personId) ? form.personId : ""} onChange={(e) => update("personId", e.target.value)}>
+            <option value="" disabled>Selecione uma pessoa</option>
+            {people.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </Select>
+        </FieldGroup>
+  );
+  const duplicateNotice = <>
+{visibleResult && (!visibleResult.ok || visibleResult.matches.length > 0) && (
+        <div role="alert" className="mt-5 rounded-lg border border-amber-400 bg-amber-50 p-4 text-sm text-amber-950">
+          {visibleResult.ok ? <>
+            <p className="font-semibold">Possível duplicado</p>
+            {visibleResult.matches.map((match) => <div key={match.id} className="mt-2">
+              <p>{match.description} · {formatDateBR(match.registrationDate)} · {people.find((p) => p.id === match.personId)?.name ?? "Origem"} · {formatCurrencyBRL(match.amountCents)}</p>
+              {showDetails && <p> {match.direction === "expense" ? "Saída" : "Entrada"} · {match.bank ?? "Sem cartão"} · Parcela {match.installmentCurrent}/{match.installmentTotal} · Referência {match.referenceMonth}</p>}
+            </div>)}
+            <button type="button" className="mt-2 underline" onClick={() => setShowDetails(!showDetails)}>{showDetails ? "Ocultar detalhes" : "Ver existente"}</button>
+            {!transaction && !committed && <button type="button" disabled={busy} className="ml-4 underline" onClick={onClose}>Descartar novo</button>}
+          </> : <>
+            <p className="font-semibold">A consulta de duplicados falhou</p><p>{visibleResult.error}</p>
+            <button type="button" className="mt-2 underline" onClick={() => { setDuplicateState(null); setRetry((n) => n + 1); }}>Tentar novamente</button>
+          </>}
+        </div>
+      )}
+      {(validDuplicateInput && !visibleResult) && <p className="mt-3 text-xs text-(--color-text-tertiary)">Consultando possíveis duplicados...</p>}
+  </>;
+
   return (
     <EditorContainer modern={isModern} open={open} onClose={busy ? () => {} : onClose} title={transaction ? "Editar lançamento" : "Novo lançamento"}>
+      {isModern && <>
+        <fieldset disabled={busy || Boolean(committed)} className="modern-editor-essential grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {descriptionField}{amountField}{categoryField}{personField}
+        </fieldset>
+        {duplicateNotice}
+        <h3 className="modern-editor-section-title">Detalhes do lançamento</h3>
+      </>}
       <fieldset disabled={busy || Boolean(committed)} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <FieldGroup label="Cartão">
           <Select value={form.bank} onChange={(e) => update("bank", e.target.value as Bank | "")}>
@@ -272,15 +345,9 @@ function TransactionEditorSession({ open, onClose, people, categories, types, tr
           />
         </FieldGroup>
 
-        <FieldGroup label="Origem">
-          <Select value={form.personId} onChange={(e) => update("personId", e.target.value)}>
-            {people.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </Select>
-        </FieldGroup>
+
+
+        {!isModern && personField}
 
         <FieldGroup label="Entrada / Saída">
           <Select
@@ -338,16 +405,9 @@ function TransactionEditorSession({ open, onClose, people, categories, types, tr
           </Select>
         </FieldGroup>
 
-        <FieldGroup label="Categoria">
-          <Select value={form.categoryId} onChange={(e) => update("categoryId", e.target.value)}>
-            <option value="">Não identificado</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </Select>
-        </FieldGroup>
+
+
+        {!isModern && categoryField}
 
         <FieldGroup label="Parcela">
           <div className="flex items-center gap-2">
@@ -372,22 +432,15 @@ function TransactionEditorSession({ open, onClose, people, categories, types, tr
           )}
         </FieldGroup>
 
-        <FieldGroup label="Valor">
-          <CurrencyInput valueCents={form.amountCents} onChange={(cents) => update("amountCents", cents)} />
-        </FieldGroup>
 
-        <div className="sm:col-span-2">
-          <FieldGroup label="Descrição">
-            <Input
-              value={form.description}
-              onChange={(e) => update("description", e.target.value)}
-              placeholder="Ex.: Compras supermercado Carrefour"
-            />
-          </FieldGroup>
-        </div>
+
+
+        {!isModern && amountField}
+        {!isModern && descriptionField}
       </fieldset>
 
       {isExpense && <div className="mt-5">
+        {isModern && <h3 className="modern-editor-section-title">Organização do pagamento</h3>}
         {paymentLoading && <p className="text-sm text-(--color-text-tertiary)">Carregando organização de pagamento...</p>}
         {paymentLoad?.error && !paymentDirty && paymentLoad.month === paymentMonth && <p className="text-sm text-(--color-negative)">{paymentLoad.error} <button type="button" className="underline" onClick={() => { setPaymentLoad(null); setPaymentRetry((v) => v + 1); }}>Tentar novamente</button></p>}
         {paymentDirty && transaction && paymentLoad?.month !== paymentMonth && <p className="mb-2 text-sm text-amber-700">O mês mudou; sua organização editada foi mantida para o novo mês.</p>}
@@ -398,23 +451,7 @@ function TransactionEditorSession({ open, onClose, people, categories, types, tr
         {transaction?.recurrenceRuleId && paymentDirty && <fieldset disabled={busy || Boolean(committed)} className="mt-3 flex gap-4 text-sm"><legend>Aplicar organização</legend><label><input type="radio" checked={paymentScope === "month"} onChange={() => setPaymentScope("month")} /> Este mês</label><label><input type="radio" checked={paymentScope === "following"} onChange={() => setPaymentScope("following")} /> Este e próximos meses</label></fieldset>}
       </div>}
 
-      {visibleResult && (!visibleResult.ok || visibleResult.matches.length > 0) && (
-        <div role="alert" className="mt-5 rounded-lg border border-amber-400 bg-amber-50 p-4 text-sm text-amber-950">
-          {visibleResult.ok ? <>
-            <p className="font-semibold">Possível duplicado</p>
-            {visibleResult.matches.map((match) => <div key={match.id} className="mt-2">
-              <p>{match.description} · {formatDateBR(match.registrationDate)} · {people.find((p) => p.id === match.personId)?.name ?? "Origem"} · {formatCurrencyBRL(match.amountCents)}</p>
-              {showDetails && <p> {match.direction === "expense" ? "Saída" : "Entrada"} · {match.bank ?? "Sem cartão"} · Parcela {match.installmentCurrent}/{match.installmentTotal} · Referência {match.referenceMonth}</p>}
-            </div>)}
-            <button type="button" className="mt-2 underline" onClick={() => setShowDetails(!showDetails)}>{showDetails ? "Ocultar detalhes" : "Ver existente"}</button>
-            {!transaction && !committed && <button type="button" disabled={busy} className="ml-4 underline" onClick={onClose}>Descartar novo</button>}
-          </> : <>
-            <p className="font-semibold">A consulta de duplicados falhou</p><p>{visibleResult.error}</p>
-            <button type="button" className="mt-2 underline" onClick={() => { setDuplicateState(null); setRetry((n) => n + 1); }}>Tentar novamente</button>
-          </>}
-        </div>
-      )}
-      {(validDuplicateInput && !visibleResult) && <p className="mt-3 text-xs text-(--color-text-tertiary)">Consultando possíveis duplicados...</p>}
+      {!isModern && duplicateNotice}
       <div className="mt-6 flex items-center justify-between gap-3">
         <div className="text-xs">
           {saveState === "saving" && <span className="text-(--color-text-tertiary)">Salvando...</span>}
@@ -478,16 +515,33 @@ async function safeCheckDuplicates(input: Parameters<typeof checkManualTransacti
 }
 
 function EditorContainer({ modern, open, onClose, title, children }: { modern: boolean; open: boolean; onClose: () => void; title: string; children: ReactNode }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
     if (!modern || !open) return;
-    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const dialog = dialogRef.current;
+    const focusable = () => Array.from(dialog?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])') ?? []);
+    (focusable().find((element) => element.tagName === "INPUT") ?? focusable()[0])?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { event.preventDefault(); closeRef.current(); return; }
+      if (event.key !== "Tab") return;
+      const controls = focusable();
+      if (!controls.length) { event.preventDefault(); return; }
+      const first = controls[0], last = controls[controls.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [modern, open, onClose]);
+    return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = previousOverflow; previousFocus?.focus(); };
+  }, [modern, open]);
   if (!modern) return <Modal open={open} onClose={onClose} title={title}>{children}</Modal>;
   if (!open) return null;
   return <div className="fixed inset-0 z-50 flex justify-end bg-black/30">
-    <div role="dialog" aria-modal="true" aria-label={title} className="h-full w-full max-w-xl overflow-y-auto bg-(--color-surface) shadow-(--shadow-lg)">
+    <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={title} className="modern-editor-dialog h-full w-full overflow-y-auto bg-(--color-surface) shadow-(--shadow-lg)">
       <div className="sticky top-0 z-10 flex items-center justify-between border-b border-(--color-border) bg-(--color-surface) px-5 py-4">
         <h2 className="text-[17px] font-semibold">{title}</h2>
         <button type="button" onClick={onClose} aria-label="Fechar" className="rounded-full p-1.5 text-(--color-text-tertiary) hover:bg-black/5"><X size={18} /></button>

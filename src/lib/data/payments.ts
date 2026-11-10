@@ -108,20 +108,29 @@ export async function savePaymentOrganization(input: { targets: PaymentTarget[];
     return { ok: true };
   } catch (error) { return { ok: false, error: error instanceof Error ? error.message : "Não foi possível salvar a organização." }; }
 }
-export async function getMonthlyPayments(month: string) {
+export async function getMonthlyPayments(month: string, personId?: string) {
   if (!monthSchema.safeParse(month).success) return { ok: false as const, error: "Mês inválido." };
+  if (personId && !z.string().uuid().safeParse(personId).success) return { ok: false as const, error: "Pessoa inválida." };
   try {
     const client = createAdminClient();
     const [transactions, rules, profiles, paidRows, categories] = await Promise.all([
       listConsideredTransactionsInRange(month, month), listActiveRecurrenceRules(), loadProfiles(client), loadSettings(client, `payment_paid:${month}:`), listAllCategories(),
     ]);
     const occurrences = buildMonthOccurrences(month, transactions, rules);
-    const groups = buildPaymentGroups(occurrences, profiles, month, new Map(categories.map((category) => [category.id, category.name])));
+    let groups = buildPaymentGroups(occurrences, profiles, month, new Map(categories.map((category) => [category.id, category.name])));
     for (const group of groups) {
       const canonical = JSON.stringify(group.items.map((item) => [item.id, item.amountCents, item.origin]).sort((a, b) => String(a[0]).localeCompare(String(b[0]))));
       group.fingerprint = createHash("sha256").update(canonical).digest("hex");
       const stored = paidRows.find((row) => row.key === `payment_paid:${month}:${group.id}`)?.value as { paid?: boolean; fingerprint?: string } | undefined;
       group.paid = group.items.length > 0 && stored?.paid === true && stored.fingerprint === group.fingerprint;
+    }
+    if (personId) {
+      const ids = new Set(occurrences.filter((item) => item.personId === personId).map((item) => item.id));
+      groups = groups.map((group) => {
+        const items = group.items.filter((item) => ids.has(item.id));
+        // A visão individual nunca recebe uma assinatura capaz de baixar a conta inteira.
+        return { ...group, items, amountCents: items.length ? items.reduce((sum, item) => sum + item.amountCents, 0) : null, projected: items.some((item) => item.origin === "projected"), paid: items.length > 0 && group.paid, fingerprint: "" };
+      });
     }
     return { ok: true as const, groups, totalCents: groups.reduce((sum, group) => sum + (group.amountCents ?? 0), 0), pendingCents: groups.reduce((sum, group) => sum + (group.paid ? 0 : group.amountCents ?? 0), 0), configuredCount: groups.filter((group) => group.items.length > 0).length };
   } catch { return { ok: false as const, error: "Não foi possível carregar as contas deste mês. Tente novamente." }; }

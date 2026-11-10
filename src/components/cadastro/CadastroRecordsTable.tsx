@@ -14,6 +14,7 @@ import { FilterButton, RangeFilter, RangeFilterPanel, TextFilter, ValuesFilter }
 import { DeleteRecordDialog, DeleteTarget, deleteTargetFor } from "./DeleteRecordDialog";
 import { BulkEditDialog } from "./BulkEditDialog";
 import { useInterface } from "@/components/layout/InterfaceProvider";
+import { CategoryIcon } from "@/components/ui/CategoryIcon";
 import { PaymentOrganizationDialog } from "@/components/payments/PaymentOrganizationDialog";
 import { targetForOccurrence } from "@/lib/domain/payments";
 import type { MonthlyOccurrence } from "@/types/domain";
@@ -253,14 +254,14 @@ export function CadastroRecordsTable({ rows, people, categories, types, onEdit }
           </tr></thead>
           <tbody>{visible.map(({ row, values }) => <tr key={row.key} className="border-t border-(--color-border)">
             <td className="px-1.5 py-2"><input type="checkbox" aria-label={`Selecionar ${row.occurrence.description ?? "lançamento"}`} disabled={!selectable(row)} checked={selected.has(row.key)} onChange={() => toggleSelection(row.key)} /></td>
-            {visibleColumns.map(([column]) => <td key={column} className={cn("px-1.5 py-2 align-top", column === "description" || column === "category" || column === "type" ? "break-words" : "")} title={values[column]}>{column === "considered" ? <RecordConsidered row={row} onChanged={consideredChanged(row)} /> : values[column]}</td>)}
+            {visibleColumns.map(([column]) => <td key={column} className={cn("px-1.5 py-2 align-top", column === "description" || column === "category" || column === "type" ? "break-words" : "")} title={values[column]}>{column === "considered" ? <RecordConsidered row={row} onChanged={consideredChanged(row)} /> : column === "category" && isModern ? <span className="modern-cadastro-category"><CategoryIcon name={values[column]} size={14} />{values[column]}</span> : values[column]}</td>)}
             <td className="px-1.5 py-2"><RecordActions row={row} onEdit={() => onEdit(row)} onOrganize={() => setPaymentOccurrences([row.occurrence])} /></td>
           </tr>)}</tbody>
         </table>
       </div>
       <div className="divide-y divide-(--color-border) md:hidden">{visible.map(({ row, values }) => <article key={row.key} className="space-y-2 p-3">
         <label className="flex items-center gap-2 font-medium"><input type="checkbox" aria-label={`Selecionar ${values.description}`} disabled={!selectable(row)} checked={selected.has(row.key)} onChange={() => toggleSelection(row.key)} />{values.description}</label>
-        <dl className="grid grid-cols-2 gap-2 text-xs">{COLUMNS.filter(([column]) => column !== "description").map(([column, label]) => <div key={column}><dt className="text-(--color-text-secondary)">{label}</dt><dd>{column === "considered" ? <RecordConsidered row={row} onChanged={consideredChanged(row)} /> : values[column]}</dd></div>)}</dl>
+        <dl className="grid grid-cols-2 gap-2 text-xs">{COLUMNS.filter(([column]) => column !== "description").map(([column, label]) => <div key={column}><dt className="text-(--color-text-secondary)">{label}</dt><dd>{column === "considered" ? <RecordConsidered row={row} onChanged={consideredChanged(row)} /> : column === "category" && isModern ? <span className="modern-cadastro-category"><CategoryIcon name={values[column]} size={14} />{values[column]}</span> : values[column]}</dd></div>)}</dl>
         <RecordActions row={row} onEdit={() => onEdit(row)} onOrganize={() => setPaymentOccurrences([row.occurrence])} />
       </article>)}</div>
       {!filtered.length && <p className="p-6 text-center text-sm">Nenhum lançamento encontrado com esses filtros.</p>}
@@ -279,7 +280,7 @@ export function CadastroRecordsTable({ rows, people, categories, types, onEdit }
       </div>
     </div>}
     {paymentOccurrences && <PaymentOrganizationDialog occurrences={paymentOccurrences} onClose={() => setPaymentOccurrences(null)} onSaved={() => { setPaymentOccurrences(null); setSelected(new Set()); router.refresh(); }} />}
-    {bulkOpen && <BulkEditDialog occurrences={selectedRows.map(({ row }) => row.occurrence)} people={people} categories={categories} types={types} onClose={() => setBulkOpen(false)} onSaved={() => { setBulkOpen(false); setSelected(new Set()); setConsideredOverrides({}); router.refresh(); }} />}
+    {bulkOpen && <BulkEditDialog occurrences={selectedRows.map(({ row }) => row.occurrence)} people={people.filter((person) => person.name.trim().toLocaleLowerCase("pt-BR") !== "casal")} categories={categories} types={types} onClose={() => setBulkOpen(false)} onSaved={() => { setBulkOpen(false); setSelected(new Set()); setConsideredOverrides({}); router.refresh(); }} />}
   </div>;
 }
 

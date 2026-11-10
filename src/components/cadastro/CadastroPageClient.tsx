@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Plus } from "lucide-react";
 import { MonthRow, transactionMonthRow } from "@/lib/domain/month-rows";
 import { CadastroRecordsTable } from "./CadastroRecordsTable";
@@ -16,6 +16,8 @@ import { FiltersBar } from "./FiltersBar";
 import { TransactionEditor } from "./TransactionEditor";
 import { CaptureFlow } from "@/components/ingest/CaptureFlow";
 import { CadastroTabs } from "./CadastroTabs";
+import { useInterface } from "@/components/layout/InterfaceProvider";
+import "./modern-cadastro.css";
 
 export function CadastroPageClient({
   transactions,
@@ -33,7 +35,12 @@ export function CadastroPageClient({
   types: TransactionType[];
   recurrenceRules: RecurrenceRule[];
 }) {
-  const [editorOpen, setEditorOpen] = useState(false);
+  const { isModern } = useInterface();
+  const searchParams = useSearchParams();
+  const eligiblePeople = people.filter((person) => person.name.trim().toLocaleLowerCase("pt-BR") !== "casal");
+  const selectedPersonId = searchParams.get("personId");
+  const editorPeople = [...eligiblePeople].sort((a, b) => Number(b.id === selectedPersonId) - Number(a.id === selectedPersonId));
+  const [editorOpen, setEditorOpen] = useState(() => searchParams.get("action") === "new");
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [captureMethod, setCaptureMethod] = useState<InputMethod | null>(null);
   const [ruleEditing, setRuleEditing] = useState<{ rule: RecurrenceRule; month: string } | null>(null);
@@ -57,7 +64,7 @@ export function CadastroPageClient({
   }
 
   return (
-    <div>
+    <div className={isModern ? "modern-cadastro" : undefined}>
       <PageHeader
         title="Cadastro"
         subtitle="Registre suas entradas e saídas de forma rápida e prática. Você pode usar áudio, foto, texto ou PDF."
@@ -73,10 +80,11 @@ export function CadastroPageClient({
         }
       />
 
-      <CadastroTabs active="lancamentos" />
+      {!isModern && <CadastroTabs active="lancamentos" />}
+      {isModern ? <section className="modern-cadastro-capture"><div><h2>Adicionar lançamento</h2><p>Escolha como deseja registrar</p></div><InputMethodCards onSelect={setCaptureMethod} /></section> : <InputMethodCards onSelect={setCaptureMethod} />}
 
-      <InputMethodCards onSelect={setCaptureMethod} />
-
+      <section className={isModern ? "modern-cadastro-records" : undefined}>
+      {isModern && <CadastroTabs active="lancamentos" />}
       <FiltersBar people={people} types={types} />
 
       <CadastroRecordsTable
@@ -86,12 +94,21 @@ export function CadastroPageClient({
         types={types}
         onEdit={handleEditRow}
       />
+      </section>
 
       <TransactionEditor
         key={editingTransaction?.id ?? "new"}
         open={editorOpen}
-        onClose={() => setEditorOpen(false)}
-        people={people}
+        initialMonth={searchParams.get("month") ?? undefined}
+        onClose={() => {
+          setEditorOpen(false);
+          if (searchParams.get("action") === "new") {
+            const params = new URLSearchParams(searchParams.toString());
+            params.delete("action");
+            router.replace(`/cadastro${params.size ? `?${params}` : ""}`);
+          }
+        }}
+        people={editorPeople}
         categories={categories}
         types={types}
         transaction={editingTransaction}
@@ -129,7 +146,7 @@ export function CadastroPageClient({
       {captureMethod && (
         <CaptureFlow
           method={captureMethod}
-          people={people}
+          people={eligiblePeople}
           categories={categories}
           types={types}
           onClose={() => setCaptureMethod(null)}

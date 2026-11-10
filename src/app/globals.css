@@ -108,151 +108,70 @@ body {
   background: transparent;
 }
 
-/* O seletor pertence ao shell, portanto acompanha todas as páginas. */
-.interface-header { display: flex; justify-content: flex-end; padding: 10px 24px 0; }
-.interface-toggle { display: inline-flex; padding: 3px; border: 1px solid #e5e5ea; border-radius: 10px; background: #fff; gap: 2px; }
-.interface-toggle button { border: 0; border-radius: 7px; padding: 6px 10px; color: #6e6e73; font-size: 12px; cursor: pointer; }
-.interface-toggle button[aria-pressed="true"] { background: #eaf2ff; color: #0a6cff; font-weight: 600; }
-.interface-toggle button:focus-visible { outline: 2px solid #0a6cff; outline-offset: 2px; }
-[data-interface="modern"] { font-family: var(--font-inter-tight), sans-serif; font-size: 13px; background: #f5f5f7; }
-[data-interface="modern"] .interface-header { min-height: 54px; align-items: center; padding: 8px 24px; background: #fff; border-bottom: 1px solid #ededf0; }
-[data-interface="modern"] .interface-main { padding-top: 20px; }
-[data-interface="modern"] aside { width: 190px; padding-top: 22px; }
-[data-interface="modern"] aside nav a { font-size: 13px; padding-top: 9px; padding-bottom: 9px; }
-[data-interface="modern"] .capture-methods { display: flex; flex-wrap: wrap; gap: 8px; }
-[data-interface="modern"] .capture-methods button { flex: 1 1 110px; flex-direction: row; min-height: 52px; padding: 10px 14px; }
-[data-interface="modern"] .capture-methods button svg { width: 18px; height: 18px; }
-[data-interface="modern"] .capture-methods button span { font-size: 13px; }
-.modern-overview { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: start; }
-.modern-overview-content { display: grid; gap: 12px; min-width: 0; }
-.modern-overview-first { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.modern-tile { min-width: 0; border: 1px solid #ececf0; border-radius: 16px; background: #fff; padding: 18px; box-shadow: 0 3px 14px #20204508; }
-.modern-tile h2 { font-size: 14px; font-weight: 500; }
-.modern-tile p { color: #81818a; font-size: 12px; }
-.modern-balance { display: flex; align-items: center; justify-content: space-between; background: linear-gradient(125deg, #eaf2ff, #f9fbff); }
-.modern-balance strong { display: block; margin: 10px 0 3px; font-size: clamp(23px, 2.2vw, 32px); line-height: 1.1; letter-spacing: -.04em; }
-.modern-balance span:not(.finance-object) { color: #777e8f; font-size: 12px; }
-.finance-object { display: block; flex: 0 0 76px; width: 76px; height: 76px; background-image: url('/modern-finance-objects.png'); background-size: 400% 100%; background-repeat: no-repeat; }
-.modern-tile-heading { display: flex; justify-content: space-between; align-items: start; }
-.modern-tile-heading .finance-object { width: 45px; height: 45px; flex-basis: 45px; }
-.modern-person { display: flex; justify-content: space-between; gap: 10px; margin-top: 8px; font-size: 12px; }
-.modern-person span { display: flex; align-items: center; gap: 7px; }
-.modern-person i { width: 7px; height: 7px; border-radius: 50%; }
-.modern-bank-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
-.modern-bank-card { min-height: 135px; display: flex; flex-direction: column; overflow: hidden; border-radius: 13px; padding: 14px; color: #fff; background-image: radial-gradient(circle at 110% -20%, #ffffff45, transparent 55%), repeating-linear-gradient(120deg, #ffffff08 0 1px, transparent 1px 5px), linear-gradient(135deg, #902dd5, #5a168d); box-shadow: 0 5px 12px #2523371c; }
-.modern-bank-card.picpay { background-image: radial-gradient(circle at 110% -20%, #ffffff45, transparent 55%), repeating-linear-gradient(120deg, #ffffff08 0 1px, transparent 1px 5px), linear-gradient(135deg, #24b77b, #087854); }
-.modern-bank-top { display: flex; justify-content: space-between; font-size: 14px; }
-.modern-chip { width: 25px; height: 19px; margin: 12px 0 8px; border: 1px solid #ffffff8c; border-radius: 5px; background: linear-gradient(135deg, #eee8c5, #b8ae82); }
-.modern-bank-card > span { color: #ffffffc9; font-size: 10px; }
-.modern-bank-card > strong { font-size: 17px; }
-@media (min-width: 1100px) { .modern-overview { grid-template-columns: minmax(0, 2fr) minmax(270px, 1fr); } }
-@media (max-width: 600px) { .modern-overview-first { grid-template-columns: 1fr; } .interface-header { padding-right: 16px; } }
-
-/* O escopo mantém a apresentação clássica intacta, inclusive gráficos e formulários. */
-[data-interface="modern"] .page-heading { margin-bottom: 18px; }
-[data-interface="modern"] .page-heading h1 { font-size: 21px; font-weight: 500; }
-[data-interface="modern"] .page-heading p { font-size: 12px; }
-[data-interface="modern"] .text-sm { font-size: 13px; }
-[data-interface="modern"] .text-base { font-size: 14px; }
-[data-interface="modern"] .font-semibold { font-weight: 500; }
-[data-interface="modern"] .app-card { border-radius: 14px; border-color: #ededf1; box-shadow: 0 2px 12px #1d294008; }
-[data-interface="modern"] .app-card h3 { font-size: 14px; font-weight: 500; }
-[data-interface="modern"] .gap-6 { gap: 16px; }
-[data-interface="modern"] .mb-6 { margin-bottom: 18px; }
-[data-interface="modern"] input, [data-interface="modern"] select, [data-interface="modern"] textarea { font-family: inherit; }
-.modern-balance { background: #fff; }
-.modern-bank-card.nubank { background-image: radial-gradient(ellipse at 100% 0%, #ffffff38, transparent 60%), repeating-linear-gradient(0deg, #ffffff06 0 1px, transparent 1px 3px), linear-gradient(125deg, #36383b, #171819); }
-.modern-chip { position: relative; background: linear-gradient(130deg, #eeeff0, #999da2 48%, #dedfe2); border-color: #aaa; }
-.modern-chip::before { content: ""; position: absolute; inset: 5px 0; border-block: 1px solid #696e7380; }
-.modern-chip::after { content: ""; position: absolute; inset: 0 8px; border-inline: 1px solid #696e7380; }
-.modern-bank-section .modern-bank-grid { grid-template-columns: 1fr; }
-.modern-bank-card { min-height: 145px; }
-.modern-allocation { display: flex; height: 7px; border-radius: 6px; overflow: hidden; margin-top: 18px; background: #eeeef2; }
-.modern-allocation span:first-child { background: #0a6cff; }
-.modern-allocation span:last-child { background: #16a34a; }
-.modern-summary { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; margin-top: 12px; }
-.modern-summary span { color: #6e6e73; font-size: 11px; }
-.modern-summary b { display: block; margin-top: 3px; font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.modern-category-list { margin-top: 24px; }
-.modern-category-list h3 { font-weight: 500; font-size: 12px; margin-bottom: 8px; }
-.modern-category-list > div { display: flex; justify-content: space-between; gap: 10px; padding: 10px 0; border-bottom: 1px solid #f1f1f4; font-size: 12px; }
-.modern-category-list b { white-space: nowrap; font-weight: 500; }
-.finance-object { height: 101px; }
-.modern-tile-heading .finance-object { height: 60px; }
-@media (min-width: 1024px) { [data-interface="modern"] .simulation-grid { grid-template-columns: minmax(0,1.55fr) minmax(0,1fr); } }
-@media (max-width: 640px) {
-  [data-interface="modern"] .interface-header { padding: 8px 16px; }
-  [data-interface="modern"] .page-heading h1 { font-size: 20px; }
-  [data-interface="modern"] input, [data-interface="modern"] select, [data-interface="modern"] textarea { font-size: 16px; }
-}
-
-/* Interface moderna: composição compacta e cartões do mês. */
-[data-interface="modern"] aside { width: 177px; }
-[data-interface="modern"] .interface-header { min-height: 42px; padding-block: 4px; }
-[data-interface="modern"] .interface-main { padding-top: 12px; }
-[data-interface="modern"] .page-heading { align-items: center; gap: 12px; padding: 10px 14px; margin-bottom: 12px; border: 1px solid #ececf0; border-radius: 12px; background: #fff; }
-[data-interface="modern"] .page-heading h1 { font-size: 16px; line-height: 1.25; }
-[data-interface="modern"] .page-heading > div:first-child > p { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-[data-interface="modern"] .modern-tile, [data-interface="modern"] .modern-payments { border: 1px solid #ececf0; border-radius: 13px; padding: 16px; background: #fff; box-shadow: 0 2px 12px #20204508; }
-[data-interface="modern"] .modern-hero { min-height: 194px; }
-[data-interface="modern"] .modern-balance { align-items: flex-start; }
-[data-interface="modern"] .modern-balance .finance-object { width: 82px; height: 82px; flex-basis: 82px; }
-[data-interface="modern"] .modern-balance-value { display: flex; align-items: center; gap: 14px; margin-top: 13px; }
-[data-interface="modern"] .modern-money { display: block; color: #17171b; font-size: 24px; font-weight: 650; line-height: 1.1; letter-spacing: -.045em; white-space: nowrap; font-variant-numeric: tabular-nums; }
-[data-interface="modern"] .modern-balance .modern-money { margin: 0; font-size: clamp(28px, 2.5vw, 36px); }
-[data-interface="modern"] .modern-money small { color: #777980; font-size: .58em; letter-spacing: -.02em; }
-[data-interface="modern"] .modern-balance .modern-ratio { color: #198744; font-size: 11px; font-weight: 600; line-height: 1.35; }
-[data-interface="modern"] .modern-ratio em { color: #74747c; font-style: normal; font-weight: 400; }
-[data-interface="modern"] .modern-allocation { margin-top: 15px; }
-[data-interface="modern"] .modern-summary > div:first-child span::before, [data-interface="modern"] .modern-summary > div:nth-child(2) span::before, [data-interface="modern"] .modern-summary > div:last-child span::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 5px; border-radius: 50%; background: #0a6cff; vertical-align: middle; }
-[data-interface="modern"] .modern-summary > div:last-child span::before { background: #16a34a; }
-[data-interface="modern"] .modern-couple, [data-interface="modern"] .modern-bank-section { min-height: 380px; }
-[data-interface="modern"] .modern-tile-heading p { margin: 12px 0 4px; }
-[data-interface="modern"] .modern-tile-heading .finance-object { width: 56px; height: 62px; flex-basis: 56px; }
-[data-interface="modern"] .modern-people { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-top: 14px; }
-[data-interface="modern"] .modern-person { display: block; margin: 0; font-size: 11px; }
-[data-interface="modern"] .modern-person strong { display: block; margin-top: 3px; }
-[data-interface="modern"] .modern-person-bar { display: flex; height: 9px; overflow: hidden; border-radius: 4px; margin-top: 9px; }
-[data-interface="modern"] .modern-category-list { margin-top: 20px; }
-[data-interface="modern"] .modern-category-list > div { padding: 8px 0; }
-[data-interface="modern"] .modern-bank-section { overflow: hidden; }
-[data-interface="modern"] .modern-bank-controls { display: flex; align-items: center; justify-content: space-between; margin: 16px 0 9px; color: #696970; font-size: 11px; }
-[data-interface="modern"] .modern-bank-controls button { width: 25px; height: 25px; margin-left: 5px; border: 1px solid #ececf0; border-radius: 50%; background: #fff; color: #555; font-size: 18px; line-height: 1; cursor: pointer; }
-[data-interface="modern"] .modern-bank-viewport { overflow: hidden; }
-[data-interface="modern"] .modern-bank-track { display: flex; gap: 4%; transition: transform .25s ease; }
-[data-interface="modern"] .modern-bank-card { position: relative; flex: 0 0 80%; min-width: 0; min-height: 170px; padding: 15px; border-radius: 11px; background-image: radial-gradient(ellipse at 85% 0%, #ffffff42, transparent 55%), repeating-linear-gradient(120deg, #ffffff09 0 1px, transparent 1px 4px), linear-gradient(135deg, #a52bea, #820ad1 48%, #57058e); }
-[data-interface="modern"] .modern-bank-card.picpay { background-image: radial-gradient(ellipse at 85% 0%, #ffffff40, transparent 55%), repeating-linear-gradient(120deg, #ffffff09 0 1px, transparent 1px 4px), linear-gradient(135deg, #35cd88, #128a5a); }
-[data-interface="modern"] .modern-bank-top b { font-size: 20px; letter-spacing: -.05em; }
-[data-interface="modern"] .modern-chip { width: 30px; height: 23px; margin: 16px 0 14px; }
-[data-interface="modern"] .modern-bank-card > strong { font-size: 15px; }
-[data-interface="modern"] .modern-payments { min-width: 0; }
-[data-interface="modern"] .modern-payments .modern-payment-row { padding-block: 9px; }
-[data-interface="modern"] .modern-payment-row input { accent-color: #0a6cff; }
-[data-interface="modern"] .modern-payment-icon { display: grid; flex: 0 0 27px; width: 27px; height: 27px; place-items: center; border-radius: 8px; background: #edf3ff; color: #2863d8; font-size: 12px; font-weight: 600; }
-[data-interface="modern"] .modern-payment-row strong { font-size: 11px; }
-@media (max-width: 600px) {
-  [data-interface="modern"] .page-heading { align-items: stretch; }
-  [data-interface="modern"] .modern-balance-value { flex-wrap: wrap; gap: 5px 10px; }
-  [data-interface="modern"] .modern-couple, [data-interface="modern"] .modern-bank-section { min-height: 0; }
-  [data-interface="modern"] .modern-bank-card { min-height: 155px; }
-}
-[data-interface="modern"] .modern-overview-side { display: grid; gap: 12px; min-width: 0; }
-[data-interface="modern"] .modern-ratio.is-negative { color: #ba3434; }
-[data-interface="modern"] .modern-decorative-icon { display: grid; width: 52px; height: 48px; flex: 0 0 52px; place-items: center; border-radius: 14px; color: #2268e7; background: linear-gradient(145deg, #eff6ff, #d5e5ff); transform: rotate(-8deg); }
-[data-interface="modern"] .modern-housing-ratio { margin-top: 14px; color: #16803d; }
-[data-interface="modern"] .modern-housing-bar { height: 7px; overflow: hidden; margin-top: 8px; border-radius: 5px; background: #eeeef2; }
-[data-interface="modern"] .modern-housing-bar span { display: block; height: 100%; background: #16a34a; }
-[data-interface="modern"] .modern-housing-caption { margin-top: 12px; }
-[data-interface="modern"] .modern-bank-card { aspect-ratio: 1.586; min-height: 0; }
-[data-interface="modern"] .modern-payments-heading .finance-object { width: 40px !important; height: 42px !important; flex-basis: 40px !important; }
-[data-interface="modern"] .modern-payments-total { margin-block: 8px; }
-[data-interface="modern"] .modern-payment-row { position: relative; padding-block: 6px; }
-[data-interface="modern"] .modern-payment-main { display: flex; align-items: center; gap: 7px; min-height: 28px; padding-right: 27px; }
-[data-interface="modern"] .modern-payment-label { min-width: 0; flex: 1; font-size: 12px; line-height: 1.2; }
-[data-interface="modern"] .modern-payment-label > span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-[data-interface="modern"] .modern-payment-meta { color: #73737d; font-size: 11px; }
-[data-interface="modern"] .modern-payment-details summary { position: absolute; top: 7px; right: 0; width: 24px; height: 28px; display: grid; place-items: center; color: #696970; list-style: none; }
-[data-interface="modern"] .modern-payment-details summary::-webkit-details-marker { display: none; }
-[data-interface="modern"] .modern-payment-details[open] summary svg { transform: rotate(180deg); }
-[data-interface="modern"] .modern-payment-details ul { margin: 6px 0 2px 46px; }
-@media (max-width: 600px) { [data-interface="modern"] .modern-bank-card { min-height: 0; } }
+/* Shared shell. Classic styling stays unchanged. */
+.interface-header { display:flex; justify-content:flex-end; padding:10px 24px 0; }
+.interface-header-actions { display:flex; align-items:center; gap:12px; }
+.interface-toggle { display:inline-flex; padding:3px; border:1px solid #e3e5eb; border-radius:9px; background:#fff; gap:2px; }
+.interface-toggle button { border:0; border-radius:6px; padding:6px 10px; color:#676b77; font-size:12px; cursor:pointer; white-space:nowrap; }
+.interface-toggle button[aria-pressed="true"] { background:#eaf2ff; color:#065be9; font-weight:600; }
+.interface-toggle button:focus-visible { outline:2px solid #0a6cff; outline-offset:2px; }
+[data-interface="modern"] { --color-bg:#f5f6f8; --color-border:#e8eaf0; --color-text-primary:#191d26; --color-text-secondary:#697080; --color-text-tertiary:#858b98; --radius-sm:7px; --radius-md:9px; --radius-lg:12px; --radius-xl:14px; font-family:var(--font-inter-tight),sans-serif; font-size:13px; background:var(--color-bg); }
+[data-interface="modern"] .interface-header { min-height:62px; padding:10px 22px; align-items:center; justify-content:space-between; gap:10px; }
+[data-interface="modern"] .interface-main { max-width:1600px; padding:0 22px 28px; }
+[data-interface="modern"] .interface-toggle button[aria-pressed="true"] { color:#fff; background:#0867f9; box-shadow:0 1px 3px #0867f92b; }
+.modern-header-context { display:flex; align-items:center; gap:10px; color:#8a8f9b; font-size:12px; }
+.modern-header-context strong { color:#404655; font-weight:500; }
+.modern-add-button { display:inline-flex; align-items:center; justify-content:center; gap:7px; background:#0867f9; color:white; border-radius:8px; padding:9px 13px; font-size:12px; font-weight:500; }
+.modern-add-button:hover { background:#0058de; }
+.modern-sidebar { position:sticky; top:0; height:100dvh; flex:0 0 186px; width:186px; flex-direction:column; align-self:flex-start; padding:24px 12px 20px; border-right:1px solid #e8eaf0; background:#fff; }
+.modern-brand { display:flex; align-items:center; gap:9px; padding:0 8px; margin-bottom:34px; font-size:14px; letter-spacing:-.03em; }
+.modern-brand > span { display:grid; width:29px; height:29px; place-items:center; color:#0867f9; background:#eaf2ff; font-size:21px; font-weight:800; border-radius:10px; }
+.modern-sidebar nav { flex:1; }
+.modern-nav-section + .modern-nav-section { margin-top:31px; }
+.modern-nav-section > p { margin:0 10px 9px; color:#8a909e; font-size:10px; font-weight:500; }
+.modern-nav-link { display:flex; align-items:center; gap:9px; min-height:35px; padding:8px 10px; margin-bottom:3px; border-radius:7px; color:#586070; font-size:12px; }
+.modern-nav-link:hover { background:#f5f7fb; }
+.modern-nav-link.is-active { color:#0661ef; background:#eaf2ff; font-weight:600; }
+.modern-account { display:flex; flex-wrap:wrap; align-items:center; gap:7px; padding:10px 8px 0; }
+.family-avatar { width:54px; height:54px; border-radius:50%; object-fit:cover; margin-bottom:3px; }
+.modern-account > div { width:calc(100% - 20px); font-size:11px; }
+.modern-account strong { font-size:12px; font-weight:600; }
+.modern-account p { color:#8a909b; font-size:10px; margin-top:3px; }
+.modern-account > svg { color:#8a909b; }
+[data-interface="modern"] .page-heading { margin-bottom:16px; gap:12px; align-items:center; }
+[data-interface="modern"] .page-heading h1 { font-size:19px; font-weight:600; letter-spacing:-.035em; }
+[data-interface="modern"] .page-heading p { font-size:12px; margin-top:4px; color:#838997; }
+[data-interface="modern"] .app-card { border-radius:12px; border-color:#e8eaf0; box-shadow:0 2px 5px #202a3b03; }
+[data-interface="modern"] .app-card h3 { font-size:14px; }
+[data-interface="modern"] input, [data-interface="modern"] select, [data-interface="modern"] textarea { font-family:inherit; }
+[data-interface="modern"] input:focus-visible, [data-interface="modern"] select:focus-visible, [data-interface="modern"] textarea:focus-visible { outline:2px solid #0a6cff; outline-offset:2px; }
+[data-interface="modern"] button, [data-interface="modern"] a { -webkit-tap-highlight-color:transparent; }
+[data-interface="modern"] button:focus-visible, [data-interface="modern"] a:focus-visible, [data-interface="modern"] summary:focus-visible { outline:2px solid #0a6cff; outline-offset:3px; }
+[data-interface="modern"] button:not(:disabled), [data-interface="modern"] summary { cursor:pointer; }
+.category-icon { display:inline-flex; flex:0 0 27px; width:27px; height:27px; align-items:center; justify-content:center; border-radius:8px; color:#737c8d; background:#f0f2f6; vertical-align:middle; }
+.category-icon--blue { color:#2872e9; background:#edf4ff; }
+.category-icon--amber { color:#bf790e; background:#fff5e5; }
+.category-icon--green { color:#16875a; background:#eaf9f2; }
+.category-icon--rose { color:#d7426c; background:#fff0f4; }
+.category-icon--violet { color:#7951b7; background:#f3efff; }
+.bank-card { position:relative; display:flex; flex-direction:column; justify-content:space-between; width:100%; min-width:0; min-height:150px; aspect-ratio:1.72; padding:17px; overflow:hidden; border:1px solid #ffffff27; border-radius:12px; color:#fff; text-align:left; box-shadow:0 5px 12px #2c0b5014; isolation:isolate; }
+.bank-card--nubank { background:radial-gradient(ellipse at 75% -10%,#c479f975,transparent 58%),repeating-linear-gradient(135deg,#ffffff07 0 1px,transparent 1px 4px),linear-gradient(125deg,#9815e1,#820ad1 45%,#4c087f); }
+.bank-card--picpay { background:radial-gradient(ellipse at 75% -10%,#79e3aa65,transparent 60%),repeating-linear-gradient(135deg,#ffffff07 0 1px,transparent 1px 4px),linear-gradient(125deg,#12aa68,#087d4d 50%,#045d3b); }
+.bank-card::after { content:""; position:absolute; z-index:-1; width:150%; height:150%; top:-95%; left:-20%; border-radius:50%; border:1px solid #ffffff17; box-shadow:0 14px 0 #ffffff06,0 28px 0 #ffffff05,0 42px 0 #ffffff04; transform:rotate(-18deg); pointer-events:none; }
+.bank-card-top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.bank-wordmark { font-size:23px; font-weight:700; letter-spacing:-.06em; line-height:1; }
+.bank-wordmark.nubank { font-family:Arial,sans-serif; font-size:33px; font-weight:700; letter-spacing:-.11em; font-style:italic; }
+.bank-wordmark.picpay { font-size:22px; }
+.bank-card-selection { padding:4px 7px; border:1px solid #ffffff38; border-radius:20px; font-size:10px; background:#ffffff12; }
+.bank-card-hardware { display:flex; align-items:center; justify-content:space-between; margin-block:12px; }
+.bank-card-hardware > svg { transform:rotate(90deg); opacity:.85; }
+.bank-chip { position:relative; display:block; width:31px; height:24px; border:1px solid #b5b5b9; border-radius:5px; background:linear-gradient(130deg,#edeeee,#b1b1b7 50%,#e5e6ea); box-shadow:inset 0 0 0 1px #ffffff38; }
+.bank-chip::before { content:""; position:absolute; inset:6px 0; border-block:1px solid #797b8580; }
+.bank-chip::after { content:""; position:absolute; inset:0 9px; border-inline:1px solid #797b8580; border-radius:3px; }
+.bank-card-bottom span { display:block; font-size:10px; color:#ffffffe0; }
+.bank-card-bottom strong { display:block; font-size:18px; margin-top:3px; font-weight:600; letter-spacing:-.025em; font-variant-numeric:tabular-nums; }
+.finance-object { display:block; flex:0 0 64px; width:64px; height:85px; background-image:url('/modern-finance-objects.png'); background-size:400% 100%; background-repeat:no-repeat; }
+@media (max-width:1023px) { .modern-sidebar { flex-basis:166px; width:166px; padding-inline:9px; } [data-interface="modern"] .interface-header { padding-inline:16px; } [data-interface="modern"] .interface-main { padding-inline:16px; } .modern-brand { font-size:13px; } }
+@media (max-width:767px) { [data-interface="modern"] .interface-header { min-height:60px; padding:10px 12px; } [data-interface="modern"] .interface-main { padding-inline:12px; padding-bottom:20px; } .modern-header-context > span,.modern-header-context > svg { display:none; } .modern-header-context strong { font-size:12px; } .interface-header-actions { gap:7px; } .interface-toggle button { padding:6px 7px; font-size:10px; } .modern-add-button { padding:8px; } .modern-add-button > span { display:none; } [data-interface="modern"] .page-heading { align-items:flex-start; } [data-interface="modern"] .page-heading h1 { font-size:18px; } [data-interface="modern"] input,[data-interface="modern"] select,[data-interface="modern"] textarea { font-size:16px; } .bank-card { min-height:145px; } }
+@media (prefers-reduced-motion:reduce) { [data-interface="modern"] *,[data-interface="modern"] *::before,[data-interface="modern"] *::after { scroll-behavior:auto !important; transition:none !important; animation:none !important; } }
+.person-scope-filter { display:flex; align-items:center; gap:9px; margin-bottom:16px; font-size:12px; color:var(--color-text-secondary); } .person-scope-filter select { border:1px solid var(--color-border); border-radius:8px; background:white; padding:7px 10px; color:var(--color-text-primary); }

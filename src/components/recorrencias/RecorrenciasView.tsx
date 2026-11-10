@@ -7,6 +7,7 @@ import { CadastroTabs } from "@/components/cadastro/CadastroTabs";
 import { RecurrenceRulesEditor } from "./RecurrenceRulesEditor";
 import { InstallmentGroupsEditor } from "./InstallmentGroupsEditor";
 import { EstimatedExpensesEditor } from "./EstimatedExpensesEditor";
+import { PersonScopeFilter } from "@/components/layout/PersonScopeFilter";
 
 export function RecorrenciasView({
   recurrenceRules,
@@ -32,6 +33,7 @@ export function RecorrenciasView({
         subtitle="Custos fixos, compras parceladas e gastos estimados que se repetem nos próximos meses."
       />
       <CadastroTabs active="recorrencias" />
+      <PersonScopeFilter people={people} />
 
       <div className="flex flex-col gap-6">
         <RecurrenceRulesEditor rules={recurrenceRules} people={people} categories={categories} types={types} />

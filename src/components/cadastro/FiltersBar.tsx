@@ -3,6 +3,7 @@
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Person, TransactionType } from "@/types/db";
 import { cn } from "@/lib/utils/cn";
+import { useInterface } from "@/components/layout/InterfaceProvider";
 
 const TABS = [
   { value: "", label: "Todas" },
@@ -12,6 +13,7 @@ const TABS = [
 
 export function FiltersBar({ people, types }: { people: Person[]; types: TransactionType[] }) {
   const router = useRouter();
+  const { isModern } = useInterface();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
@@ -60,7 +62,7 @@ export function FiltersBar({ people, types }: { people: Person[]; types: Transac
           onChange={(e) => setParam("personId", e.target.value)}
           className="h-9 rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-3 text-sm"
         >
-          <option value="">Todas as origens</option>
+          <option value="">{isModern ? "Casal" : "Todas as origens"}</option>
           {people.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}

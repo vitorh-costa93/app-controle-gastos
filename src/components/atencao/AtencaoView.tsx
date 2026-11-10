@@ -3,6 +3,7 @@ import { DuplicatePair } from "@/lib/domain/duplicates";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { CadastroTabs } from "@/components/cadastro/CadastroTabs";
 import { DuplicateReviewList } from "./DuplicateReviewList";
+import { PersonScopeFilter } from "@/components/layout/PersonScopeFilter";
 
 export function AtencaoView({
   pairs,
@@ -20,6 +21,7 @@ export function AtencaoView({
         subtitle="Lançamentos que parecem duplicados. Confira e decida: aprovar mantém os dois, recusar exclui o repetido."
       />
       <CadastroTabs active="atencao" attentionCount={pairs.length} />
+      <PersonScopeFilter people={people} />
       <DuplicateReviewList pairs={pairs} people={people} categories={categories} />
     </div>
   );

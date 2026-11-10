@@ -427,7 +427,7 @@ function ScenarioCard({
 
 function AiAnalysisCard({ simulation, input }: { simulation: Simulation; input: CashVsInstallmentInput }) {
   const [nonce, setNonce] = useState(0);
-  const key = `${simulation.id}|${input.cashPriceCents}|${input.installmentTotalCents}|${input.installments}|${input.cdiAnnualPercent}|${input.percentOfCdi}|${input.openingBalanceCents}|${nonce}`;
+  const key = JSON.stringify({ id: simulation.id, description: simulation.description, input, nonce });
   const [state, setState] = useState<{ key: string; text: string } | null>(null);
 
   useEffect(() => {

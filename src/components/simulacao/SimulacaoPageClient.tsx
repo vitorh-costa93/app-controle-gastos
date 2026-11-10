@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import type { Person } from "@/types/db";
+import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import { ImageIcon, RefreshCw, Sparkles } from "lucide-react";
 import { Simulation, MonthSummary } from "@/types/domain";
 import { buildScenarioComparison, summarizeScenarioImpact } from "@/lib/domain/simulation";
@@ -20,6 +23,8 @@ import { generateScenarioAiSummary } from "@/lib/data/simulation-analysis";
 import { deleteSimulation, regenerateSimulationImage, restoreSimulation } from "@/lib/data/simulations";
 import { SimulationEditModal } from "./SimulationEditModal";
 import { formatCurrencyBRL, formatMonthLabel } from "@/lib/utils/format";
+import { useInterface } from "@/components/layout/InterfaceProvider";
+import "./modern-simulation.css";
 
 export function SimulacaoPageClient({
   initialSimulations,
@@ -28,6 +33,8 @@ export function SimulacaoPageClient({
   horizon,
   startingBalance,
   cdi,
+  people,
+  personId,
 }: {
   initialSimulations: Simulation[];
   initialArchived: Simulation[];
@@ -35,7 +42,16 @@ export function SimulacaoPageClient({
   horizon: { from: string; to: string };
   startingBalance: StartingBalance | null;
   cdi: CdiRate;
+  people: Person[];
+  personId: string;
 }) {
+  const { isModern } = useInterface();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [individualBalances, setIndividualBalances] = useState<Record<string, number>>({});
+  const effectiveStartingBalance = personId ? { month: undefined, amountCents: individualBalances[personId] ?? 0 } : startingBalance;
+  const [tab, setTab] = useState<"projection" | "compare" | "saved">("projection");
   const [simulations, setSimulations] = useState(initialSimulations);
   const [archived, setArchived] = useState(initialArchived);
   const [editing, setEditing] = useState<Simulation | null>(null);
@@ -52,8 +68,8 @@ export function SimulacaoPageClient({
 
   const baseMap = useMemo(() => new Map(baseSummaries.map((s) => [s.referenceMonth, s])), [baseSummaries]);
   const baseAccumulated = useMemo(
-    () => accumulateBalance(baseSummaries, startingBalance?.amountCents ?? 0, startingBalance?.month),
-    [baseSummaries, startingBalance]
+    () => accumulateBalance(baseSummaries, effectiveStartingBalance?.amountCents ?? 0, effectiveStartingBalance?.month),
+    [baseSummaries, effectiveStartingBalance?.amountCents, effectiveStartingBalance?.month]
   );
   const primary = simulations.find((s) => s.id === primaryId) ?? null;
   const others = useMemo(
@@ -70,10 +86,10 @@ export function SimulacaoPageClient({
       baseMap,
       [primary, ...others],
       horizon,
-      startingBalance?.amountCents ?? 0,
-      startingBalance?.month
+      effectiveStartingBalance?.amountCents ?? 0,
+      effectiveStartingBalance?.month
     );
-  }, [baseMap, primary, others, horizon, startingBalance]);
+  }, [baseMap, primary, others, horizon, effectiveStartingBalance?.amountCents, effectiveStartingBalance?.month]);
 
   const impact = useMemo(() => {
     if (!primary) return null;
@@ -102,17 +118,20 @@ export function SimulacaoPageClient({
   }
 
   const aiRequestKey = primary
-    ? `${primary.id}|${others.map((o) => o.id).join(",")}|${horizon.from}|${horizon.to}`
+    ? JSON.stringify({ personId, primary, others, comparison, startingBalance: effectiveStartingBalance, horizon })
     : null;
 
   useEffect(() => {
     if (!primary || !aiRequestKey) return;
     let cancelled = false;
-    generateScenarioAiSummary(primary, comparison).then((summary) => {
-      if (!cancelled) setAiState({ key: aiRequestKey, summary });
-    });
+    const timer = setTimeout(() => {
+      generateScenarioAiSummary(primary, comparison).then((summary) => {
+        if (!cancelled) setAiState({ key: aiRequestKey, summary });
+      });
+    }, 500);
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiRequestKey]);
@@ -136,11 +155,11 @@ export function SimulacaoPageClient({
   // Simulações criadas quando a geração de imagem falhava ficaram só com o ícone —
   // tenta gerar a foto uma vez por visita quando a simulação principal não tem imagem.
   useEffect(() => {
-    if (!primary || primary.imageUrl || autoImageAttempted.current.has(primary.id)) return;
+    if (isModern || !primary || primary.imageUrl || autoImageAttempted.current.has(primary.id)) return;
     autoImageAttempted.current.add(primary.id);
     generateImage(primary.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [primary?.id, primary?.imageUrl]);
+  }, [isModern, primary?.id, primary?.imageUrl]);
 
   async function handleDelete(sim: Simulation) {
     const result = await deleteSimulation(sim.id);
@@ -172,15 +191,50 @@ export function SimulacaoPageClient({
   const aiLoading = Boolean(primary) && aiState?.key !== aiRequestKey;
 
   return (
-    <div>
+    <div className={isModern ? "modern-simulation" : undefined}>
       <PageHeader
         title="Simulação"
         subtitle="Planeje suas próximas compras e viagens e veja o impacto no seu orçamento."
       />
 
-      <div className="simulation-grid grid grid-cols-1 gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+      {(isModern || personId) && <div className="modern-simulation-person">
+        {(isModern || personId) && <label>Pessoa <select value={personId} onChange={(event) => { const params = new URLSearchParams(searchParams.toString()); if (event.target.value) params.set("personId", event.target.value); else params.delete("personId"); router.push(`${pathname}${params.size ? `?${params}` : ""}`); }}><option value="">Casal</option>{people.filter((person) => person.name.trim().toLocaleLowerCase("pt-BR") !== "casal").map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select></label>}
+        {personId && <div><p>{individualBalances[personId] ? "Saldo inicial individual usado apenas nesta simulação." : "Saldo inicial individual não informado; projeção parte de zero."}</p><label htmlFor="individual-balance">Saldo inicial individual</label><CurrencyInput id="individual-balance" valueCents={individualBalances[personId] ?? 0} onChange={(amount) => setIndividualBalances((previous) => ({ ...previous, [personId]: amount }))} /></div>}
+      </div>}
+      {isModern && <nav className="modern-simulation-tabs" aria-label="Áreas da simulação">
+        {([ ["projection", "Projeção do dinheiro"], ["compare", "Comparar compra"], ["saved", "Cenários salvos"] ] as const).map(([id, label]) => <button key={id} type="button" aria-current={tab === id ? "page" : undefined} onClick={() => setTab(id)}>{label}</button>)}
+      </nav>}
+      {isModern ? <div className="modern-simulation-layout">
+        <section className="modern-simulation-main" aria-label="Resultados da simulação">
+          {tab === "projection" && <Card className="p-5">
+            <h2 className="modern-simulation-title">Saldo acumulado projetado</h2>
+            <p className="modern-simulation-subtitle">Com base no que já está cadastrado, sem compras simuladas. Horizonte: {formatMonthLabel(horizon.from)} → {formatMonthLabel(horizon.to)}.</p>
+            <BaseCaixinhaYield summaries={baseSummaries} accumulated={baseAccumulated} cdiAnnualPercent={cdiAnnualPercent} onCdiAnnualPercent={setCdiAnnualPercent} percentOfCdi={percentOfCdi} onPercentOfCdi={setPercentOfCdi} horizon={horizon} />
+          </Card>}
+          {tab === "compare" && (primary ? <>
+            <div className="modern-simulation-impact"><CashVsInstallmentSection simulation={primary} params={yieldParams} base={base} /></div>
+            <Card className="p-5">
+              <h2 className="modern-simulation-title">Evolução do orçamento · {primary.description}</h2>
+              <p className="modern-simulation-subtitle">{formatMonthLabel(horizon.from)} → {formatMonthLabel(horizon.to)}{others.length ? " · com outras simulações" : ""}</p>
+              <h3 className="modern-simulation-chart-title">Saldo no final do mês</h3>
+              <LeftoverComparisonChart comparison={comparison} />
+              <h3 className="modern-simulation-chart-title">Saldo acumulado</h3>
+              <AccumulatedBalanceChart comparison={comparison} />
+            </Card>
+            {impact && <ImpactSummaryCard impact={impact} />}
+            <Card className="flex gap-3 bg-(--color-primary-soft)/40 p-4"><Sparkles size={18} className="mt-0.5 shrink-0 text-(--color-primary)" /><div><p className="mb-1 text-sm font-semibold text-(--color-primary)">Insight da IA</p>{aiLoading ? <p className="text-sm text-(--color-text-secondary)">Analisando cenário...</p> : <p className="text-sm text-(--color-text-secondary)">{aiSummary}</p>}</div></Card>
+          </> : <Card className="p-5"><h2 className="modern-simulation-title">Compare uma compra</h2><p className="modern-simulation-subtitle">Crie uma simulação para ver o impacto no seu dinheiro guardado.</p></Card>)}
+          {tab === "saved" && (simulations.length || archived.length ? <ScenarioList simulations={simulations} archived={archived} onEdit={setEditing} onDelete={handleDelete} onRestore={handleRestore} verdictFor={verdictFor} primaryId={primaryId} onSelectPrimary={(id) => { setPrimaryId(id); setTab("compare"); }} includeOthers={includeOthers} onIncludeOthersChange={setIncludeOthers} selectedOtherIds={selectedOtherIds} onToggleOther={(id) => setSelectedOtherIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])} /> : <Card className="p-5 text-sm">Nenhum cenário salvo ainda. Crie uma simulação em Comparar compra.</Card>)}
+        </section>
+        <aside className="modern-simulation-sidebar" aria-label="Configuração da simulação">
+          {tab !== "saved" && <YieldAssumptionCard cdi={effectiveCdi} percentOfCdi={percentOfCdi} onChange={setPercentOfCdi} />}
+          {tab !== "projection" && <NewSimulationForm cdiAnnualPercent={cdiAnnualPercent} percentOfCdi={percentOfCdi} onCreated={(sim) => { setSimulations((prev) => [sim, ...prev]); setPrimaryId(sim.id); setTab("compare"); }} />}
+          {tab === "compare" && (simulations.length > 0 || archived.length > 0) && <ScenarioList simulations={simulations} archived={archived} onEdit={setEditing} onDelete={handleDelete} onRestore={handleRestore} verdictFor={verdictFor} primaryId={primaryId} onSelectPrimary={setPrimaryId} includeOthers={includeOthers} onIncludeOthersChange={setIncludeOthers} selectedOtherIds={selectedOtherIds} onToggleOther={(id) => setSelectedOtherIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])} />}
+        </aside>
+      </div> : (
+      <div className={`simulation-grid grid grid-cols-1 gap-6 lg:grid-cols-[1.1fr_0.9fr] ${isModern ? `modern-simulation-grid modern-simulation-grid--${tab}` : ""}`}>
         <div className="flex flex-col gap-6">
-          <Card className="p-5">
+          <div hidden={isModern && tab !== "projection"}><Card className="p-5">
             <h3 className="mb-1 text-[15px] font-semibold">Saldo acumulado projetado</h3>
             <p className="mb-4 text-xs text-(--color-text-tertiary)">
               Com base só no que já está cadastrado (sem nenhuma simulação de compra). Horizonte:{" "}
@@ -195,8 +249,9 @@ export function SimulacaoPageClient({
               onPercentOfCdi={setPercentOfCdi}
               horizon={horizon}
             />
-          </Card>
+          </Card></div>
 
+          <div hidden={isModern && tab !== "compare"} className="modern-simulation-comparison">
           {!primary ? (
             <Card className="p-5 text-center">
               <p className="text-sm text-(--color-text-secondary)">
@@ -205,7 +260,7 @@ export function SimulacaoPageClient({
             </Card>
           ) : (
             <>
-              <Card className="p-5">
+              <div className="modern-simulation-graphs"><Card className="p-5">
                 <div className="relative mb-4 h-48 w-full overflow-hidden rounded-(--radius-lg) bg-(--color-primary-soft) sm:h-56">
                   {primary.imageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -245,13 +300,13 @@ export function SimulacaoPageClient({
 
                 <h4 className="mb-2 mt-6 text-sm font-medium text-(--color-text-secondary)">Saldo acumulado</h4>
                 <AccumulatedBalanceChart comparison={comparison} />
-              </Card>
+              </Card></div>
 
-              <CashVsInstallmentSection
+              <div className="modern-simulation-impact"><CashVsInstallmentSection
                 simulation={primary}
                 params={yieldParams}
                 base={base}
-              />
+              /></div>
 
               {impact && <ImpactSummaryCard impact={impact} />}
 
@@ -271,20 +326,23 @@ export function SimulacaoPageClient({
               </Card>
             </>
           )}
+          </div>
         </div>
 
         <div className="flex flex-col gap-6">
-          <YieldAssumptionCard cdi={effectiveCdi}percentOfCdi={percentOfCdi} onChange={setPercentOfCdi} />
+          <div hidden={isModern && tab === "saved"}><YieldAssumptionCard cdi={effectiveCdi} percentOfCdi={percentOfCdi} onChange={setPercentOfCdi} /></div>
 
-          <NewSimulationForm
+          <div hidden={isModern && tab !== "compare"}><NewSimulationForm
             cdiAnnualPercent={cdiAnnualPercent}
             percentOfCdi={percentOfCdi}
             onCreated={(sim) => {
               setSimulations((prev) => [sim, ...prev]);
               setPrimaryId(sim.id);
+              if (isModern) setTab("compare");
             }}
-          />
+          /></div>
 
+          <div hidden={isModern && tab !== "saved"}>
           {(simulations.length > 0 || archived.length > 0) && (
             <ScenarioList
               simulations={simulations}
@@ -294,7 +352,7 @@ export function SimulacaoPageClient({
               onRestore={handleRestore}
               verdictFor={verdictFor}
               primaryId={primaryId}
-              onSelectPrimary={setPrimaryId}
+              onSelectPrimary={(id) => { setPrimaryId(id); if (isModern) setTab("compare"); }}
               includeOthers={includeOthers}
               onIncludeOthersChange={setIncludeOthers}
               selectedOtherIds={selectedOtherIds}
@@ -303,8 +361,10 @@ export function SimulacaoPageClient({
               }
             />
           )}
+          {isModern && simulations.length === 0 && archived.length === 0 && <Card className="p-5 text-sm">Nenhum cenário salvo ainda. Crie uma simulação em Comparar compra.</Card>}
+          </div>
         </div>
-      </div>
+      </div>)}
 
       {editing && (
         <SimulationEditModal

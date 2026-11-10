@@ -18,7 +18,8 @@ import { SimulationHorizon } from "@/lib/domain/horizon";
 export type { SimulationHorizon } from "@/lib/domain/horizon";
 
 export async function getBaseMonthSummaries(
-  horizon: SimulationHorizon
+  horizon: SimulationHorizon,
+  personId?: string
 ): Promise<Map<string, MonthSummary>> {
   const currentMonth = toReferenceMonth(new Date());
   const [rules, transactions, people, types] = await Promise.all([
@@ -53,7 +54,7 @@ export async function getBaseMonthSummaries(
       estimatedSalaryPersonId: estimatedSalary.personId,
       estimateOccurrences: estimatesByMonth.get(month),
     });
-    map.set(month, summarizeMonth(month, occurrences));
+    map.set(month, summarizeMonth(month, personId ? occurrences.filter((o) => o.personId === personId) : occurrences));
   }
   return map;
 }

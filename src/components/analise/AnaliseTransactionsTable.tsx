@@ -12,6 +12,7 @@ import { FilterButton, RangeFilter, RangeFilterPanel, TextFilter, ValuesFilter }
 import { MovementDetailsDialog } from "./MovementDetailsDialog";
 import { BulkEditDialog } from "@/components/cadastro/BulkEditDialog";
 import { Button } from "@/components/ui/Button";
+import { CategoryIcon } from "@/components/ui/CategoryIcon";
 
 type ColumnKey =
   | "date"
@@ -61,6 +62,7 @@ export function AnaliseTransactionsTable({
   types,
   recurrenceRules,
   onChanged,
+  title = "Todas as movimentações do mês",
 }: {
   transactions: MonthlyOccurrence[];
   people: Person[];
@@ -69,6 +71,7 @@ export function AnaliseTransactionsTable({
   recurrenceRules: RecurrenceRule[];
   /** Recarrega a Análise depois de excluir um lançamento pelo popup. */
   onChanged: () => void;
+  title?: string;
 }) {
   const [selected, setSelected] = useState<MonthlyOccurrence | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -214,7 +217,7 @@ export function AnaliseTransactionsTable({
   return (
     <Card className="min-w-0 p-5">
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-[15px] font-semibold">Todas as movimentações do mês</h3>
+        <h3 className="text-[15px] font-semibold">{title}</h3>
         <div className="flex items-center gap-3">
           {hasAnyFilter && (
             <button
@@ -373,7 +376,7 @@ export function AnaliseTransactionsTable({
                   </td>
                   <td className="px-3 py-2 text-(--color-text-secondary)">{type?.name ?? "—"}</td>
                   <td className="px-3 py-2 text-(--color-text-secondary)">{labelOf("bank", t)}</td>
-                  <td className="px-3 py-2 text-(--color-text-secondary)">{category?.name ?? "—"}</td>
+                  <td className="px-3 py-2 text-(--color-text-secondary)"><span className="inline-flex items-center gap-2"><CategoryIcon name={category?.name ?? "Sem categoria"} size={15} />{category?.name ?? "—"}</span></td>
                   <td className="max-w-[220px] truncate px-3 py-2 text-(--color-text-secondary)" title={t.description ?? ""}>
                     {t.description ?? "—"}
                     {t.origin === "projected" && (

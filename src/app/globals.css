@@ -107,3 +107,81 @@ body {
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* O seletor pertence ao shell, portanto acompanha todas as páginas. */
+.interface-header { display: flex; justify-content: flex-end; padding: 10px 24px 0; }
+.interface-toggle { display: inline-flex; padding: 3px; border: 1px solid #e5e5ea; border-radius: 10px; background: #fff; gap: 2px; }
+.interface-toggle button { border: 0; border-radius: 7px; padding: 6px 10px; color: #6e6e73; font-size: 12px; cursor: pointer; }
+.interface-toggle button[aria-pressed="true"] { background: #eaf2ff; color: #0a6cff; font-weight: 600; }
+.interface-toggle button:focus-visible { outline: 2px solid #0a6cff; outline-offset: 2px; }
+[data-interface="modern"] { font-family: var(--font-inter-tight), sans-serif; font-size: 13px; background: #f5f5f7; }
+[data-interface="modern"] .interface-header { min-height: 54px; align-items: center; padding: 8px 24px; background: #fff; border-bottom: 1px solid #ededf0; }
+[data-interface="modern"] .interface-main { padding-top: 20px; }
+[data-interface="modern"] aside { width: 190px; padding-top: 22px; }
+[data-interface="modern"] aside nav a { font-size: 13px; padding-top: 9px; padding-bottom: 9px; }
+[data-interface="modern"] .capture-methods { display: flex; flex-wrap: wrap; gap: 8px; }
+[data-interface="modern"] .capture-methods button { flex: 1 1 110px; flex-direction: row; min-height: 52px; padding: 10px 14px; }
+[data-interface="modern"] .capture-methods button svg { width: 18px; height: 18px; }
+[data-interface="modern"] .capture-methods button span { font-size: 13px; }
+.modern-overview { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: start; }
+.modern-overview-content { display: grid; gap: 12px; min-width: 0; }
+.modern-overview-first { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.modern-tile { min-width: 0; border: 1px solid #ececf0; border-radius: 16px; background: #fff; padding: 18px; box-shadow: 0 3px 14px #20204508; }
+.modern-tile h2 { font-size: 14px; font-weight: 500; }
+.modern-tile p { color: #81818a; font-size: 12px; }
+.modern-balance { display: flex; align-items: center; justify-content: space-between; background: linear-gradient(125deg, #eaf2ff, #f9fbff); }
+.modern-balance strong { display: block; margin: 10px 0 3px; font-size: clamp(23px, 2.2vw, 32px); line-height: 1.1; letter-spacing: -.04em; }
+.modern-balance span:not(.finance-object) { color: #777e8f; font-size: 12px; }
+.finance-object { display: block; flex: 0 0 76px; width: 76px; height: 76px; background-image: url('/modern-finance-objects.png'); background-size: 400% 100%; background-repeat: no-repeat; }
+.modern-tile-heading { display: flex; justify-content: space-between; align-items: start; }
+.modern-tile-heading .finance-object { width: 45px; height: 45px; flex-basis: 45px; }
+.modern-person { display: flex; justify-content: space-between; gap: 10px; margin-top: 8px; font-size: 12px; }
+.modern-person span { display: flex; align-items: center; gap: 7px; }
+.modern-person i { width: 7px; height: 7px; border-radius: 50%; }
+.modern-bank-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.modern-bank-card { min-height: 135px; display: flex; flex-direction: column; overflow: hidden; border-radius: 13px; padding: 14px; color: #fff; background-image: radial-gradient(circle at 110% -20%, #ffffff45, transparent 55%), repeating-linear-gradient(120deg, #ffffff08 0 1px, transparent 1px 5px), linear-gradient(135deg, #902dd5, #5a168d); box-shadow: 0 5px 12px #2523371c; }
+.modern-bank-card.picpay { background-image: radial-gradient(circle at 110% -20%, #ffffff45, transparent 55%), repeating-linear-gradient(120deg, #ffffff08 0 1px, transparent 1px 5px), linear-gradient(135deg, #24b77b, #087854); }
+.modern-bank-top { display: flex; justify-content: space-between; font-size: 14px; }
+.modern-chip { width: 25px; height: 19px; margin: 12px 0 8px; border: 1px solid #ffffff8c; border-radius: 5px; background: linear-gradient(135deg, #eee8c5, #b8ae82); }
+.modern-bank-card > span { color: #ffffffc9; font-size: 10px; }
+.modern-bank-card > strong { font-size: 17px; }
+@media (min-width: 1100px) { .modern-overview { grid-template-columns: minmax(0, 2fr) minmax(270px, 1fr); } }
+@media (max-width: 600px) { .modern-overview-first { grid-template-columns: 1fr; } .interface-header { padding-right: 16px; } }
+
+/* O escopo mantém a apresentação clássica intacta, inclusive gráficos e formulários. */
+[data-interface="modern"] .page-heading { margin-bottom: 18px; }
+[data-interface="modern"] .page-heading h1 { font-size: 21px; font-weight: 500; }
+[data-interface="modern"] .page-heading p { font-size: 12px; }
+[data-interface="modern"] .text-sm { font-size: 13px; }
+[data-interface="modern"] .text-base { font-size: 14px; }
+[data-interface="modern"] .font-semibold { font-weight: 500; }
+[data-interface="modern"] .app-card { border-radius: 14px; border-color: #ededf1; box-shadow: 0 2px 12px #1d294008; }
+[data-interface="modern"] .app-card h3 { font-size: 14px; font-weight: 500; }
+[data-interface="modern"] .gap-6 { gap: 16px; }
+[data-interface="modern"] .mb-6 { margin-bottom: 18px; }
+[data-interface="modern"] input, [data-interface="modern"] select, [data-interface="modern"] textarea { font-family: inherit; }
+.modern-balance { background: #fff; }
+.modern-bank-card.nubank { background-image: radial-gradient(ellipse at 100% 0%, #ffffff38, transparent 60%), repeating-linear-gradient(0deg, #ffffff06 0 1px, transparent 1px 3px), linear-gradient(125deg, #36383b, #171819); }
+.modern-chip { position: relative; background: linear-gradient(130deg, #eeeff0, #999da2 48%, #dedfe2); border-color: #aaa; }
+.modern-chip::before { content: ""; position: absolute; inset: 5px 0; border-block: 1px solid #696e7380; }
+.modern-chip::after { content: ""; position: absolute; inset: 0 8px; border-inline: 1px solid #696e7380; }
+.modern-bank-section .modern-bank-grid { grid-template-columns: 1fr; }
+.modern-bank-card { min-height: 145px; }
+.modern-allocation { display: flex; height: 7px; border-radius: 6px; overflow: hidden; margin-top: 18px; background: #eeeef2; }
+.modern-allocation span:first-child { background: #0a6cff; }
+.modern-allocation span:last-child { background: #16a34a; }
+.modern-summary { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; margin-top: 12px; }
+.modern-summary span { color: #6e6e73; font-size: 11px; }
+.modern-summary b { display: block; margin-top: 3px; font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.modern-category-list { margin-top: 24px; }
+.modern-category-list h3 { font-weight: 500; font-size: 12px; margin-bottom: 8px; }
+.modern-category-list > div { display: flex; justify-content: space-between; gap: 10px; padding: 10px 0; border-bottom: 1px solid #f1f1f4; font-size: 12px; }
+.modern-category-list b { white-space: nowrap; font-weight: 500; }
+.finance-object { height: 101px; }
+.modern-tile-heading .finance-object { height: 60px; }
+@media (min-width: 1024px) { [data-interface="modern"] .simulation-grid { grid-template-columns: minmax(0,1.55fr) minmax(0,1fr); } }
+@media (max-width: 640px) {
+  [data-interface="modern"] .interface-header { padding: 8px 16px; }
+  [data-interface="modern"] .page-heading h1 { font-size: 20px; }
+  [data-interface="modern"] input, [data-interface="modern"] select, [data-interface="modern"] textarea { font-size: 16px; }
+}

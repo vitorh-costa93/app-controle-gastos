@@ -1,5 +1,6 @@
 "use server";
 
+import { z } from "zod";
 import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Bank, TransactionRow } from "@/types/db";
@@ -297,6 +298,58 @@ export async function listConsideredTransactionsForMonth(
     throw new Error("Não foi possível carregar os lançamentos do mês.");
   }
   return (data as TransactionRow[]).map(mapTransactionRow);
+}
+
+const manualDuplicateSchema = z.object({
+  personId: z.string().min(1), bank: z.enum(["picpay", "nubank"]).nullable(),
+  direction: z.enum(["income", "expense"]), amountCents: z.number().int().positive(),
+  registrationDate: z.iso.date(), referenceMonth: z.string().regex(/^\d{4}-\d{2}$/),
+  description: z.string().trim().min(1), installmentCurrent: z.number().int().positive(),
+  installmentTotal: z.number().int().positive(), fixedVariable: z.enum(["fixed", "variable"]),
+  excludeId: z.string().nullable(),
+}).refine((v) => v.installmentCurrent <= v.installmentTotal);
+
+export type ManualDuplicateInput = z.infer<typeof manualDuplicateSchema>;
+export type ManualDuplicateResult =
+  | { ok: true; matches: Transaction[] }
+  | { ok: false; error: string };
+
+/** Consulta independente da importação: falhas nunca são apresentadas como ausência de duplicatas. */
+export async function checkManualTransactionDuplicates(input: ManualDuplicateInput): Promise<ManualDuplicateResult> {
+  const parsed = manualDuplicateSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Dados insuficientes para consultar duplicados." };
+  const value = parsed.data;
+  try {
+    const date = new Date(`${value.registrationDate}T00:00:00Z`).getTime();
+    const min = new Date(date - DUPLICATE_WINDOW_DAYS * 86400000).toISOString().slice(0, 10);
+    const max = new Date(date + DUPLICATE_WINDOW_DAYS * 86400000).toISOString().slice(0, 10);
+    const client = createAdminClient();
+    const matches: Transaction[] = [];
+    const pageSize = 1000;
+    for (let from = 0; ; from += pageSize) {
+      let query = client.from("transactions").select("*")
+        .is("deleted_at", null).eq("person_id", value.personId).eq("direction", value.direction)
+        .eq("amount", centsToReaisString(value.amountCents))
+        .eq("installment_current", value.installmentCurrent).eq("installment_total", value.installmentTotal)
+        .gte("registration_date", min).lte("registration_date", max);
+      query = value.bank ? query.eq("bank", value.bank) : query.is("bank", null);
+      const { data, error } = await query.order("id").range(from, from + pageSize - 1);
+      if (error) throw error;
+      const rows = (data ?? []) as TransactionRow[];
+      matches.push(...rows.filter((row) => {
+        if (row.id === value.excludeId || (row.recurrence_rule_id && row.reference_month !== value.referenceMonth)) return false;
+        // A expansão já substitui a parcela do mesmo grupo e mês de referência.
+        if (!value.excludeId && value.fixedVariable === "variable" && value.installmentTotal > 1 && row.installment_group_id &&
+            addMonths(row.reference_month, -row.installment_current) === addMonths(value.referenceMonth, -value.installmentCurrent)) return false;
+        return sameMerchant(row.description, value.description);
+      }).map(mapTransactionRow));
+      if (rows.length < pageSize) break;
+    }
+    return { ok: true, matches };
+  } catch (error) {
+    console.error("checkManualTransactionDuplicates failed:", error);
+    return { ok: false, error: "Não foi possível consultar possíveis duplicados." };
+  }
 }
 
 /** Todos os lançamentos reais (considerados) num intervalo de meses — para gráficos/projeções. */

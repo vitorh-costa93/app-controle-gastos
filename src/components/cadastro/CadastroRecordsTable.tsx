@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDown, ArrowUp, ArrowUpDown, Pencil, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Pencil, Trash2, SlidersHorizontal } from "lucide-react";
 import { MonthRow } from "@/lib/domain/month-rows";
 import { Person, Category, TransactionType } from "@/types/db";
 import { formatCurrencyBRL, formatDateTimeBR, formatReferenceMonthShort } from "@/lib/utils/format";
@@ -13,6 +13,10 @@ import { Toggle } from "@/components/ui/Toggle";
 import { FilterButton, RangeFilter, RangeFilterPanel, TextFilter, ValuesFilter } from "@/components/analise/filter-popup";
 import { DeleteRecordDialog, DeleteTarget, deleteTargetFor } from "./DeleteRecordDialog";
 import { BulkEditDialog } from "./BulkEditDialog";
+import { useInterface } from "@/components/layout/InterfaceProvider";
+import { PaymentOrganizationDialog } from "@/components/payments/PaymentOrganizationDialog";
+import { targetForOccurrence } from "@/lib/domain/payments";
+import type { MonthlyOccurrence } from "@/types/domain";
 
 const COLUMNS = [
   ["date", "Data"], ["created", "Criado em"], ["month", "Mês ref."],
@@ -23,6 +27,7 @@ const COLUMNS = [
 ] as const;
 type Column = typeof COLUMNS[number][0];
 type Values = Record<Column, string>;
+const DEFAULT_MODERN_COLUMNS: Column[] = ["date", "person", "bank", "category", "description", "kind", "amount", "considered"];
 /** Larguras proporcionais (somam 100%) para a tabela caber no container sem rolagem horizontal. */
 const COLUMN_WIDTHS: Record<Column, string> = {
   date: "6.5%", created: "6.5%", month: "5%", person: "6%", direction: "5.5%", fixed: "6%", type: "6.5%",
@@ -40,6 +45,10 @@ export function CadastroRecordsTable({ rows, people, categories, types, onEdit }
   onEdit: (row: MonthRow) => void;
 }) {
   const router = useRouter();
+  const { isModern } = useInterface();
+  const [modernColumns, setModernColumns] = useState<Column[]>(DEFAULT_MODERN_COLUMNS);
+  const visibleColumns: ReadonlyArray<(typeof COLUMNS)[number]> = isModern ? COLUMNS.filter(([column]) => modernColumns.includes(column)) : COLUMNS;
+  const modernWidthTotal = visibleColumns.reduce<number>((total, [column]) => total + parseFloat(COLUMN_WIDTHS[column]), 0);
   // Mesma semântica da Análise: OR dentro da coluna (valores marcados), AND entre colunas.
   const [valueFilters, setValueFilters] = useState<Partial<Record<Column, Set<string>>>>({});
   const [description, setDescription] = useState("");
@@ -50,6 +59,7 @@ export function CadastroRecordsTable({ rows, people, categories, types, onEdit }
   const [pageSize, setPageSize] = useState(25);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [paymentOccurrences, setPaymentOccurrences] = useState<MonthlyOccurrence[] | null>(null);
   const [consideredOverrides, setConsideredOverrides] = useState<Record<string, { value: boolean; updatedAt?: string }>>({});
   const entries = useMemo(() => {
     const peopleNames = new Map(people.map((p) => [p.id, p.name]));
@@ -126,6 +136,7 @@ export function CadastroRecordsTable({ rows, people, categories, types, onEdit }
   const eligible = filtered.filter(({ row }) => selectable(row));
   const allSelected = eligible.length > 0 && eligible.every(({ row }) => selected.has(row.key));
   const selectedRows = entries.filter(({ row }) => selected.has(row.key) && selectable(row));
+  const paymentEligible = selectedRows.length > 0 && selectedRows.length <= 500 && selectedRows.every(({ row }) => row.occurrence.direction === "expense" && targetForOccurrence(row.occurrence));
 
   function toggleValue(column: Column, value: string) {
     setPage(1);
@@ -191,11 +202,19 @@ export function CadastroRecordsTable({ rows, people, categories, types, onEdit }
         for (const { row } of eligible) { if (allSelected) next.delete(row.key); else next.add(row.key); }
         return next;
       })} />Selecionar todos os resultados ({eligible.length})</label>
+      {isModern && <details className="relative">
+        <summary className="flex h-8 cursor-pointer items-center rounded-(--radius-md) bg-black/5 px-3 text-sm font-medium">Colunas</summary>
+        <div className="absolute left-0 z-30 mt-1 grid w-56 gap-2 rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) p-3 shadow-(--shadow-md)">
+          {COLUMNS.map(([column, label]) => <label key={column} className="flex items-center gap-2 text-xs"><input type="checkbox" checked={modernColumns.includes(column)} disabled={modernColumns.length === 1 && modernColumns.includes(column)} onChange={(event) => { const checked = event.target.checked; setModernColumns((previous) => checked ? [...previous, column] : previous.filter((item) => item !== column)); }} />{label}</label>)}
+        </div>
+      </details>}
       <Button size="sm" disabled={!selectedRows.length} onClick={() => setBulkOpen(true)}>Editar em lote ({selectedRows.length})</Button>
+      <Button size="sm" variant="secondary" disabled={!paymentEligible} title={!paymentEligible ? "Selecione até 500 saídas com lançamento ou regra válida" : undefined} onClick={() => setPaymentOccurrences(selectedRows.map(({ row }) => row.occurrence))}>Organizar pagamentos</Button>
       {selected.size > 0 && <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>Limpar seleção</Button>}
       {hasAnyFilter && <Button size="sm" variant="ghost" onClick={clearAllFilters}>Limpar filtros</Button>}
       <span className="ml-auto text-xs text-(--color-text-tertiary)">{filtered.length} de {entries.length}</span>
     </div>
+    {selectedRows.length > 0 && !paymentEligible && <p className="text-xs text-(--color-text-secondary)">Para organizar pagamentos, selecione até 500 saídas com lançamento ou regra válida.</p>}
     <p className="text-xs text-(--color-text-secondary)">A edição em lote altera somente os registros e meses selecionados; outros meses são preservados. Projeções recorrentes podem ser selecionadas. Cálculos sem lançamento ou regra não podem.</p>
     <details className="rounded-(--radius-md) border border-(--color-border) p-3 md:hidden">
       <summary className="cursor-pointer text-sm font-medium">Filtros e ordenação de todas as colunas</summary>
@@ -212,12 +231,12 @@ export function CadastroRecordsTable({ rows, people, categories, types, onEdit }
         <table className="w-full table-fixed text-xs">
           <colgroup>
             <col style={{ width: "2.5%" }} />
-            {COLUMNS.map(([column]) => <col key={column} style={{ width: COLUMN_WIDTHS[column] }} />)}
+            {visibleColumns.map(([column]) => <col key={column} style={{ width: isModern ? `${parseFloat(COLUMN_WIDTHS[column]) / modernWidthTotal * 91.5}%` : COLUMN_WIDTHS[column] }} />)}
             <col style={{ width: "6%" }} />
           </colgroup>
           <thead><tr className="border-b border-(--color-border) text-left text-(--color-text-tertiary)">
             <th className="px-1.5 py-2"><span className="sr-only">Selecionar</span></th>
-            {COLUMNS.map(([column, label]) => {
+            {visibleColumns.map(([column, label]) => {
               const sortedHere = sort?.column === column;
               const SortIcon = !sortedHere ? ArrowUpDown : sort.ascending ? ArrowUp : ArrowDown;
               return <th key={column} className="px-1.5 py-2 align-top font-medium" aria-sort={sortedHere ? sort.ascending ? "ascending" : "descending" : "none"}>
@@ -234,15 +253,15 @@ export function CadastroRecordsTable({ rows, people, categories, types, onEdit }
           </tr></thead>
           <tbody>{visible.map(({ row, values }) => <tr key={row.key} className="border-t border-(--color-border)">
             <td className="px-1.5 py-2"><input type="checkbox" aria-label={`Selecionar ${row.occurrence.description ?? "lançamento"}`} disabled={!selectable(row)} checked={selected.has(row.key)} onChange={() => toggleSelection(row.key)} /></td>
-            {COLUMNS.map(([column]) => <td key={column} className={cn("px-1.5 py-2 align-top", column === "description" || column === "category" || column === "type" ? "break-words" : "")} title={values[column]}>{column === "considered" ? <RecordConsidered row={row} onChanged={consideredChanged(row)} /> : values[column]}</td>)}
-            <td className="px-1.5 py-2"><RecordActions row={row} onEdit={() => onEdit(row)} /></td>
+            {visibleColumns.map(([column]) => <td key={column} className={cn("px-1.5 py-2 align-top", column === "description" || column === "category" || column === "type" ? "break-words" : "")} title={values[column]}>{column === "considered" ? <RecordConsidered row={row} onChanged={consideredChanged(row)} /> : values[column]}</td>)}
+            <td className="px-1.5 py-2"><RecordActions row={row} onEdit={() => onEdit(row)} onOrganize={() => setPaymentOccurrences([row.occurrence])} /></td>
           </tr>)}</tbody>
         </table>
       </div>
       <div className="divide-y divide-(--color-border) md:hidden">{visible.map(({ row, values }) => <article key={row.key} className="space-y-2 p-3">
         <label className="flex items-center gap-2 font-medium"><input type="checkbox" aria-label={`Selecionar ${values.description}`} disabled={!selectable(row)} checked={selected.has(row.key)} onChange={() => toggleSelection(row.key)} />{values.description}</label>
         <dl className="grid grid-cols-2 gap-2 text-xs">{COLUMNS.filter(([column]) => column !== "description").map(([column, label]) => <div key={column}><dt className="text-(--color-text-secondary)">{label}</dt><dd>{column === "considered" ? <RecordConsidered row={row} onChanged={consideredChanged(row)} /> : values[column]}</dd></div>)}</dl>
-        <RecordActions row={row} onEdit={() => onEdit(row)} />
+        <RecordActions row={row} onEdit={() => onEdit(row)} onOrganize={() => setPaymentOccurrences([row.occurrence])} />
       </article>)}</div>
       {!filtered.length && <p className="p-6 text-center text-sm">Nenhum lançamento encontrado com esses filtros.</p>}
     </div>
@@ -259,6 +278,7 @@ export function CadastroRecordsTable({ rows, people, categories, types, onEdit }
         <button type="button" disabled={currentPage >= totalPages} onClick={() => setPage(currentPage + 1)} className="h-7 rounded-(--radius-sm) border border-(--color-border) px-2.5 hover:bg-(--color-surface-secondary) disabled:opacity-40">Próxima</button>
       </div>
     </div>}
+    {paymentOccurrences && <PaymentOrganizationDialog occurrences={paymentOccurrences} onClose={() => setPaymentOccurrences(null)} onSaved={() => { setPaymentOccurrences(null); setSelected(new Set()); router.refresh(); }} />}
     {bulkOpen && <BulkEditDialog occurrences={selectedRows.map(({ row }) => row.occurrence)} people={people} categories={categories} types={types} onClose={() => setBulkOpen(false)} onSaved={() => { setBulkOpen(false); setSelected(new Set()); setConsideredOverrides({}); router.refresh(); }} />}
   </div>;
 }
@@ -278,11 +298,12 @@ function RecordConsidered({ row, onChanged }: { row: MonthRow; onChanged: (value
   }} />{error && <span role="alert" className="text-xs text-(--color-negative)">{error}</span>}</>;
 }
 
-function RecordActions({ row, onEdit }: { row: MonthRow; onEdit: () => void }) {
+function RecordActions({ row, onEdit, onOrganize }: { row: MonthRow; onEdit: () => void; onOrganize: () => void }) {
   const [target, setTarget] = useState<DeleteTarget | null>(null);
   const deleteTarget = deleteTargetFor(row.occurrence, row.transaction);
   return <div className="flex items-center gap-0.5">
     <button className="rounded-full p-1.5 hover:bg-black/5" aria-label="Editar lançamento" onClick={onEdit}><Pencil size={15} /></button>
+    {row.occurrence.direction === "expense" && targetForOccurrence(row.occurrence) && <button className="rounded-full p-1.5 hover:bg-black/5" aria-label="Organizar pagamento" title="Organizar pagamento" onClick={onOrganize}><SlidersHorizontal size={15} /></button>}
     {deleteTarget && <button className="rounded-full p-1.5 hover:bg-black/5" aria-label="Excluir lançamento" onClick={() => setTarget(deleteTarget)}><Trash2 size={15} /></button>}
     <DeleteRecordDialog target={target} onClose={() => setTarget(null)} />
   </div>;

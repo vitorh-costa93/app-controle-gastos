@@ -22,6 +22,8 @@ import { AnaliseTransactionsTable } from "./AnaliseTransactionsTable";
 import { PivotTable } from "./PivotTable";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { useInterface } from "@/components/layout/InterfaceProvider";
+import { ModernOverview } from "./ModernOverview";
 import { addMonths } from "@/lib/utils/format";
 
 export function AnalisePageClient({
@@ -37,6 +39,7 @@ export function AnalisePageClient({
   initialTransactions: MonthlyOccurrence[];
   initialInsight: string;
 }) {
+  const { isModern } = useInterface();
   const [month, setMonth] = useState(initialMonth);
   const [personId, setPersonId] = useState(initialPersonId);
   const [data, setData] = useState(initialData);
@@ -125,6 +128,8 @@ export function AnalisePageClient({
         <EmptyState title="Ainda não existem dados suficientes neste mês para uma análise confiável. Cadastre alguns lançamentos em Cadastro." />
       ) : (
         <div className={"flex min-w-0 flex-col gap-6 transition-opacity" + (isPending ? " opacity-60" : "")}>
+          {isModern && <ModernOverview data={data} transactions={monthTransactions} month={month} />}
+
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <KpiCard
               label="Entradas"

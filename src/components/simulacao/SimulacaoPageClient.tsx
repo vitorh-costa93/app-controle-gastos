@@ -178,7 +178,7 @@ export function SimulacaoPageClient({
         subtitle="Planeje suas próximas compras e viagens e veja o impacto no seu orçamento."
       />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+      <div className="simulation-grid grid grid-cols-1 gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="flex flex-col gap-6">
           <Card className="p-5">
             <h3 className="mb-1 text-[15px] font-semibold">Saldo acumulado projetado</h3>

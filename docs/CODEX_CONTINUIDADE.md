@@ -1,6 +1,18 @@
 # Continuidade — MeuDinheiro
 
-Atualizado: 07/10/2026.
+Atualizado: 10/11/2026.
+
+## Etapa atual — interface alternável e pagamentos
+- Header global alterna UI atual/Nova UI, padrão atual, escolha por navegador persistida e sincronizada entre abas. Nova UI usa Inter Tight real, cards compactos, ilustrações próprias e cartões em CSS; as fórmulas/análises de Simulação foram preservadas (apenas wrapper visual e estilos).
+- Cadastro moderno começa com oito colunas e seletor para acessar todas as 14; filtros/ordenação/paginação/lote continuam completos. Clássico conserva as 14. Editor moderno em painel lateral.
+- Alerta de possível duplicado durante preenchimento e nova consulta antes de salvar valem para as duas UIs. Considera pessoa/cartão/direção/valor/parcela/descrição/data; recorrência só no mesmo mês, exclui o próprio ID e parcelas que já serão substituídas. Confirmação explícita para manter ambos ou continuar se consulta falhar. Importação e aba Atenção anteriores preservadas.
+- Organização de pagamentos em editor e ações individuais/em lote: método, grupo, dia de vencimento e presença no início do mês, com escopo mensal ou mês/seguintes. Dados em chaves individuais `payment_org:*` de meudinheiro.app_settings; nenhuma migration ou alteração em outros schemas.
+- Nova Análise traz contas mensais do casal, com sete sugestões iniciais (sem lançamentos não vira zero). Reutiliza despesas consideradas e recorrências; não cria saídas adicionais. Faturas por banco consolidadas; exibir/ocultar vale para fatura inteira, e cadastrar compra sem editar organização preserva essa decisão.
+- Quitação em `payment_paid:*` por mês/grupo, invalidada se itens ou valores mudarem; campo de quitação não muda despesas nem cálculos. Falhas após gravar lançamento permitem repetir só organização, sem recriar despesa. Receitas não gravam perfil de pagamentos.
+- Verificações: lint/build/TypeScript e scripts test-payments.mjs (14 grupos), test-manual-duplicates.mjs, test-transaction-editor.mjs (hooks simulados) e test-movement-edit.mjs. Navegador confirmou duplicidade nas duas UIs sem salvar registros, fonte/seleção persistida, leitura mobile sem overflow; revisão independente corrigiu erros de receita, bloqueio após rede e sobrescrita implícita de visibilidade.
+- Entrega: GitHub main e Vercel produção do projeto app-controle-gastos (prj_lTAbLzIgZ9luep86udpKHzeomklm). URL: https://app-controle-gastos-swart.vercel.app. Próximo passo do usuário: alternar para Nova UI e revisar agrupamentos sugeridos em Organizar pagamentos. Mockups continham valores ilustrativos; aplicação usa dados reais.
+
+## Contexto anterior (consultar somente se necessário)
 
 ## Objetivo / implementação
 - Importação CSV/PDF/foto/áudio exige cartão global PicPay/Nubank junto do mês. Bank persiste em transações, parcelas e regras; legado continua null. Editor individual permite corrigir banco.

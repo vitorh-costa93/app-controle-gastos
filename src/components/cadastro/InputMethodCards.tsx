@@ -15,7 +15,7 @@ export type InputMethod = (typeof METHODS)[number]["id"];
 
 export function InputMethodCards({ onSelect }: { onSelect: (method: InputMethod) => void }) {
   return (
-    <div className="mb-6 grid grid-cols-3 gap-3 sm:grid-cols-5">
+    <div className="capture-methods mb-6 grid grid-cols-3 gap-3 sm:grid-cols-5">
       {METHODS.map((method) => {
         const Icon = method.icon;
         return (

@@ -21,26 +21,27 @@ export function normalizeOrganization(settings: PaymentOrganization): PaymentOrg
   return { ...settings, groupName: isCardMethod(settings.method) ? (settings.method === "nubank" ? "Nubank" : "PicPay") : settings.groupName.trim() };
 }
 /** Sugestões conservadoras: uma compra de água mineral não vira a conta de água. */
-export function defaultOrganization(input: { bank?: "nubank" | "picpay" | null; description?: string | null }): PaymentOrganization {
+export function defaultOrganization(input: { bank?: "nubank" | "picpay" | null; description?: string | null; categoryName?: string | null }): PaymentOrganization {
   const text = normalize(input.description ?? "");
+  const category = normalize(input.categoryName ?? "");
   let groupName = "";
   if (/^(?:conta de )?(?:luz|energia(?: eletrica)?)$/.test(text)) groupName = "Luz";
   if (/^(?:conta de )?agua$/.test(text)) groupName = "Água";
-  if (/^(?:conta de )?internet$/.test(text)) groupName = "Internet";
-  if (/^(?:plano de saude|plano saude)$/.test(text)) groupName = "Plano de Saúde";
   if (/^condominio(?: residencial)?$/.test(text)) groupName = "Condomínio";
+  if (category === "internet") groupName = "Internet";
+  if (category === "saude" && /\bunimed\b/.test(text)) groupName = "Plano de Saúde";
   return normalizeOrganization({ method: input.bank ?? "other", groupName, showAtMonthStart: Boolean(input.bank || groupName), dueDay: null });
 }
 export function targetForOccurrence(o: MonthlyOccurrence): PaymentTarget | null {
   if (o.origin === "real") return { kind: "transaction", id: o.id, month: o.referenceMonth };
   return o.recurrenceRuleId ? { kind: "recurrence", id: o.recurrenceRuleId, month: o.referenceMonth } : null;
 }
-export function resolveOrganization(o: MonthlyOccurrence, profiles: PaymentProfile[]): { settings: PaymentOrganization; suggested: boolean } {
+export function resolveOrganization(o: MonthlyOccurrence, profiles: PaymentProfile[], categoryNames: ReadonlyMap<string, string> = new Map()): { settings: PaymentOrganization; suggested: boolean } {
   const kind = o.recurrenceRuleId ? "recurrence" : o.installmentGroupId ? "installment" : "transaction";
   const id = o.recurrenceRuleId ?? o.installmentGroupId ?? o.id;
   const candidates = profiles.filter((p) => p.kind === kind && p.id === id && (p.scope === "month" ? p.month === o.referenceMonth : p.month <= o.referenceMonth));
   candidates.sort((a, b) => Number(b.scope === "month") - Number(a.scope === "month") || b.month.localeCompare(a.month));
-  const result = candidates[0] ? { settings: normalizeOrganization(candidates[0].settings), suggested: false } : { settings: defaultOrganization(o), suggested: true };
+  const result = candidates[0] ? { settings: normalizeOrganization(candidates[0].settings), suggested: false } : { settings: defaultOrganization({ ...o, categoryName: o.categoryId ? categoryNames.get(o.categoryId) : null }), suggested: true };
   if (isCardMethod(result.settings.method)) result.settings.showAtMonthStart = cardIsVisible(result.settings.method, o.referenceMonth, profiles);
   return result;
 }
@@ -53,13 +54,13 @@ export function paymentGroupId(settings: PaymentOrganization): string {
   return isCardMethod(settings.method) ? `card:${settings.method}` : `group:${normalize(settings.groupName)}`;
 }
 /** Une apenas saídas consideradas; é uma visão do orçamento, nunca uma nova despesa. */
-export function buildPaymentGroups(occurrences: MonthlyOccurrence[], profiles: PaymentProfile[], month = occurrences[0]?.referenceMonth ?? ""): PaymentGroup[] {
+export function buildPaymentGroups(occurrences: MonthlyOccurrence[], profiles: PaymentProfile[], month = occurrences[0]?.referenceMonth ?? "", categoryNames: ReadonlyMap<string, string> = new Map()): PaymentGroup[] {
   const groups = new Map<string, PaymentGroup>();
   const omittedDefaults = new Set<string>();
   for (const o of occurrences) {
     if (!o.considered || o.direction !== "expense" || o.amountCents <= 0) continue;
-    const { settings, suggested } = resolveOrganization(o, profiles);
-    const defaultName = defaultOrganization(o).groupName;
+    const { settings, suggested } = resolveOrganization(o, profiles, categoryNames);
+    const defaultName = defaultOrganization({ ...o, categoryName: o.categoryId ? categoryNames.get(o.categoryId) : null }).groupName;
     if (!suggested && defaultName && normalize(defaultName) !== normalize(settings.groupName)) omittedDefaults.add(normalize(defaultName));
     if (!settings.showAtMonthStart) {
       for (const name of [settings.groupName, defaultName]) if (name) omittedDefaults.add(normalize(name));

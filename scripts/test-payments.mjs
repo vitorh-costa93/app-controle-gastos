@@ -16,7 +16,8 @@ function load(file, imports = {}) {
 }
 const domain = load("src/lib/domain/payments.ts");
 const uuid = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
-const expense = (overrides = {}) => ({ id: uuid(1), origin: "real", referenceMonth: "2090-01", bank: null, description: "Internet", considered: true, direction: "expense", amountCents: 16000, recurrenceRuleId: null, ...overrides });
+const categories = new Map([[uuid(20), "Internet"], [uuid(21), "Saúde"], [uuid(22), "Outros"]]);
+const expense = (overrides = {}) => ({ categoryId: uuid(20), id: uuid(1), origin: "real", referenceMonth: "2090-01", bank: null, description: "Internet", considered: true, direction: "expense", amountCents: 16000, recurrenceRuleId: null, ...overrides });
 const profile = (overrides = {}) => ({ kind: "recurrence", id: uuid(9), month: "2090-01", scope: "following", settings: { method: "pix", groupName: "Serviços", showAtMonthStart: true, dueDay: 5 }, ...overrides });
 const get = (groups, label) => groups.find((g) => g.label === label);
 let checks = 0;
@@ -24,6 +25,21 @@ function test(name, fn) { fn(); checks++; console.log(`✓ ${name}`); }
 test("sugestões não confundem água mineral ou Luzia com contas", () => {
   assert.equal(domain.defaultOrganization({ description: "Água" }).groupName, "Água");
   for (const description of ["Água mineral", "Luzia", "Saúde: remédio"]) assert.equal(domain.defaultOrganization({ description }).showAtMonthStart, false);
+});
+test("categoria determina Internet e UNIMED em Saúde, com prioridade da fatura", () => {
+  for (const description of ["Provedor", "Condomínio", "Água"]) assert.equal(domain.defaultOrganization({ categoryName: "Internet", description }).groupName, "Internet");
+  assert.equal(domain.defaultOrganization({ categoryName: "Outros", description: "Internet" }).groupName, "");
+  assert.equal(domain.defaultOrganization({ categoryName: "Saúde", description: "UNIMED mensalidade" }).groupName, "Plano de Saúde");
+  for (const description of ["PréUNIMED", "UNIMEDPLUS", "plano de saúde"]) assert.equal(domain.defaultOrganization({ categoryName: "Saúde", description }).groupName, "");
+  assert.equal(domain.defaultOrganization({ categoryName: "Outros", description: "UNIMED" }).groupName, "");
+  const rows = [expense({ categoryId: uuid(21), description: "Unimed", bank: "nubank" }), expense({ id: uuid(2), description: "Provedor" })];
+  const groups = domain.buildPaymentGroups(rows, [], "2090-01", categories);
+  assert.equal(get(groups, "Nubank").amountCents, 16000);
+  assert.equal(get(groups, "Internet").amountCents, 16000);
+  assert.equal(get(groups, "Plano de Saúde").amountCents, null);
+  assert.equal(groups.reduce((sum, g) => sum + (g.amountCents ?? 0), 0), 32000);
+  const override = profile({ kind: "transaction", id: uuid(2) });
+  assert.equal(domain.resolveOrganization(rows[1], [override], categories).settings.groupName, "Serviços");
 });
 test("cartões consolidam pessoas/categorias sem gerar despesa adicional", () => {
   const rows = [expense({ bank: "nubank" }), expense({ id: uuid(2), bank: "nubank", description: "Restaurante", amountCents: 4000 })];
@@ -37,14 +53,14 @@ test("receitas/desconsiderados ficam fora e conta ausente não vira valor zero",
 test("exceção mensal não contamina os meses seguintes nem o passado", () => {
   const rule = expense({ recurrenceRuleId: uuid(9) });
   const profiles = [profile(), profile({ scope: "month", month: "2090-02", settings: { ...profile().settings, groupName: "Só fevereiro" } })];
-  assert.equal(domain.resolveOrganization({ ...rule, referenceMonth: "2089-12" }, profiles).settings.groupName, "Internet");
+  assert.equal(domain.resolveOrganization({ ...rule, referenceMonth: "2089-12" }, profiles, categories).settings.groupName, "Internet");
   assert.equal(domain.resolveOrganization({ ...rule, referenceMonth: "2090-02" }, profiles).settings.groupName, "Só fevereiro");
   assert.equal(domain.resolveOrganization({ ...rule, referenceMonth: "2090-03" }, profiles).settings.groupName, "Serviços");
 });
 test("perfil da compra parcelada é herdado sem misturar outros grupos", () => {
   const settings = profile({ kind: "installment" });
   assert.equal(domain.resolveOrganization(expense({ installmentGroupId: uuid(9) }), [settings]).settings.groupName, "Serviços");
-  assert.equal(domain.resolveOrganization(expense({ installmentGroupId: uuid(8) }), [settings]).settings.groupName, "Internet");
+  assert.equal(domain.resolveOrganization(expense({ installmentGroupId: uuid(8) }), [settings], categories).settings.groupName, "Internet");
 });
 test("projeções e vencimentos são explícitos; agrupamento livre soma uma vez", () => {
   const p = profile({ kind: "transaction", id: uuid(1) });
@@ -65,7 +81,7 @@ test("ocultar cartão vale para toda a fatura e só para o período escolhido", 
 
 let rows = [], writes = [], failure = false;
 let occurrences = [expense()];
-const transactions = [{ id: uuid(1), direction: "expense", reference_month: "2090-01", recurrence_rule_id: uuid(9), installment_group_id: null, deleted_at: null }, { id: uuid(2), direction: "income", reference_month: "2090-01", deleted_at: null }];
+const transactions = [{ id: uuid(1), category_id: uuid(20), description: "Plano genérico", direction: "expense", reference_month: "2090-01", recurrence_rule_id: uuid(9), installment_group_id: null, deleted_at: null }, { id: uuid(2), direction: "income", reference_month: "2090-01", deleted_at: null }];
 const client = { from(table) {
   const filters = []; let offset = 0, limit = Infinity, write = null, single = false;
   const query = {
@@ -87,9 +103,13 @@ const client = { from(table) {
 } };
 const actions = load("src/lib/data/payments.ts", {
   "next/cache": { revalidatePath() {} }, "@/lib/supabase/admin": { createAdminClient: () => client },
+  "./reference": { listAllCategories: async () => [...categories].map(([id, name]) => ({ id, name })) },
   "./transactions": { listConsideredTransactionsInRange: async () => [] }, "./recurrence": { listActiveRecurrenceRules: async () => [] },
   "@/lib/domain/recurrence": { buildMonthOccurrences: () => occurrences }, "@/lib/domain/payments": domain,
 });
+const preview = await actions.getPaymentOrganization({ kind: "transaction", id: uuid(1), month: "2090-01" });
+assert.equal(preview.ok, true); assert.equal(preview.settings.groupName, "Internet");
+checks++; console.log("✓ prévia no servidor usa categoria do lançamento");
 const target = { kind: "transaction", id: uuid(1), month: "2090-01" };
 const settings = profile().settings;
 let result = await actions.savePaymentOrganization({ targets: [target], settings, scope: "following" });

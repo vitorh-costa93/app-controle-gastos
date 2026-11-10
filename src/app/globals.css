@@ -185,3 +185,74 @@ body {
   [data-interface="modern"] .page-heading h1 { font-size: 20px; }
   [data-interface="modern"] input, [data-interface="modern"] select, [data-interface="modern"] textarea { font-size: 16px; }
 }
+
+/* Interface moderna: composição compacta e cartões do mês. */
+[data-interface="modern"] aside { width: 177px; }
+[data-interface="modern"] .interface-header { min-height: 42px; padding-block: 4px; }
+[data-interface="modern"] .interface-main { padding-top: 12px; }
+[data-interface="modern"] .page-heading { align-items: center; gap: 12px; padding: 10px 14px; margin-bottom: 12px; border: 1px solid #ececf0; border-radius: 12px; background: #fff; }
+[data-interface="modern"] .page-heading h1 { font-size: 16px; line-height: 1.25; }
+[data-interface="modern"] .page-heading > div:first-child > p { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+[data-interface="modern"] .modern-tile, [data-interface="modern"] .modern-payments { border: 1px solid #ececf0; border-radius: 13px; padding: 16px; background: #fff; box-shadow: 0 2px 12px #20204508; }
+[data-interface="modern"] .modern-hero { min-height: 194px; }
+[data-interface="modern"] .modern-balance { align-items: flex-start; }
+[data-interface="modern"] .modern-balance .finance-object { width: 82px; height: 82px; flex-basis: 82px; }
+[data-interface="modern"] .modern-balance-value { display: flex; align-items: center; gap: 14px; margin-top: 13px; }
+[data-interface="modern"] .modern-money { display: block; color: #17171b; font-size: 24px; font-weight: 650; line-height: 1.1; letter-spacing: -.045em; white-space: nowrap; font-variant-numeric: tabular-nums; }
+[data-interface="modern"] .modern-balance .modern-money { margin: 0; font-size: clamp(28px, 2.5vw, 36px); }
+[data-interface="modern"] .modern-money small { color: #777980; font-size: .58em; letter-spacing: -.02em; }
+[data-interface="modern"] .modern-balance .modern-ratio { color: #198744; font-size: 11px; font-weight: 600; line-height: 1.35; }
+[data-interface="modern"] .modern-ratio em { color: #74747c; font-style: normal; font-weight: 400; }
+[data-interface="modern"] .modern-allocation { margin-top: 15px; }
+[data-interface="modern"] .modern-summary > div:first-child span::before, [data-interface="modern"] .modern-summary > div:nth-child(2) span::before, [data-interface="modern"] .modern-summary > div:last-child span::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 5px; border-radius: 50%; background: #0a6cff; vertical-align: middle; }
+[data-interface="modern"] .modern-summary > div:last-child span::before { background: #16a34a; }
+[data-interface="modern"] .modern-couple, [data-interface="modern"] .modern-bank-section { min-height: 380px; }
+[data-interface="modern"] .modern-tile-heading p { margin: 12px 0 4px; }
+[data-interface="modern"] .modern-tile-heading .finance-object { width: 56px; height: 62px; flex-basis: 56px; }
+[data-interface="modern"] .modern-people { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-top: 14px; }
+[data-interface="modern"] .modern-person { display: block; margin: 0; font-size: 11px; }
+[data-interface="modern"] .modern-person strong { display: block; margin-top: 3px; }
+[data-interface="modern"] .modern-person-bar { display: flex; height: 9px; overflow: hidden; border-radius: 4px; margin-top: 9px; }
+[data-interface="modern"] .modern-category-list { margin-top: 20px; }
+[data-interface="modern"] .modern-category-list > div { padding: 8px 0; }
+[data-interface="modern"] .modern-bank-section { overflow: hidden; }
+[data-interface="modern"] .modern-bank-controls { display: flex; align-items: center; justify-content: space-between; margin: 16px 0 9px; color: #696970; font-size: 11px; }
+[data-interface="modern"] .modern-bank-controls button { width: 25px; height: 25px; margin-left: 5px; border: 1px solid #ececf0; border-radius: 50%; background: #fff; color: #555; font-size: 18px; line-height: 1; cursor: pointer; }
+[data-interface="modern"] .modern-bank-viewport { overflow: hidden; }
+[data-interface="modern"] .modern-bank-track { display: flex; gap: 4%; transition: transform .25s ease; }
+[data-interface="modern"] .modern-bank-card { position: relative; flex: 0 0 80%; min-width: 0; min-height: 170px; padding: 15px; border-radius: 11px; background-image: radial-gradient(ellipse at 85% 0%, #ffffff42, transparent 55%), repeating-linear-gradient(120deg, #ffffff09 0 1px, transparent 1px 4px), linear-gradient(135deg, #a52bea, #820ad1 48%, #57058e); }
+[data-interface="modern"] .modern-bank-card.picpay { background-image: radial-gradient(ellipse at 85% 0%, #ffffff40, transparent 55%), repeating-linear-gradient(120deg, #ffffff09 0 1px, transparent 1px 4px), linear-gradient(135deg, #35cd88, #128a5a); }
+[data-interface="modern"] .modern-bank-top b { font-size: 20px; letter-spacing: -.05em; }
+[data-interface="modern"] .modern-chip { width: 30px; height: 23px; margin: 16px 0 14px; }
+[data-interface="modern"] .modern-bank-card > strong { font-size: 15px; }
+[data-interface="modern"] .modern-payments { min-width: 0; }
+[data-interface="modern"] .modern-payments .modern-payment-row { padding-block: 9px; }
+[data-interface="modern"] .modern-payment-row input { accent-color: #0a6cff; }
+[data-interface="modern"] .modern-payment-icon { display: grid; flex: 0 0 27px; width: 27px; height: 27px; place-items: center; border-radius: 8px; background: #edf3ff; color: #2863d8; font-size: 12px; font-weight: 600; }
+[data-interface="modern"] .modern-payment-row strong { font-size: 11px; }
+@media (max-width: 600px) {
+  [data-interface="modern"] .page-heading { align-items: stretch; }
+  [data-interface="modern"] .modern-balance-value { flex-wrap: wrap; gap: 5px 10px; }
+  [data-interface="modern"] .modern-couple, [data-interface="modern"] .modern-bank-section { min-height: 0; }
+  [data-interface="modern"] .modern-bank-card { min-height: 155px; }
+}
+[data-interface="modern"] .modern-overview-side { display: grid; gap: 12px; min-width: 0; }
+[data-interface="modern"] .modern-ratio.is-negative { color: #ba3434; }
+[data-interface="modern"] .modern-decorative-icon { display: grid; width: 52px; height: 48px; flex: 0 0 52px; place-items: center; border-radius: 14px; color: #2268e7; background: linear-gradient(145deg, #eff6ff, #d5e5ff); transform: rotate(-8deg); }
+[data-interface="modern"] .modern-housing-ratio { margin-top: 14px; color: #16803d; }
+[data-interface="modern"] .modern-housing-bar { height: 7px; overflow: hidden; margin-top: 8px; border-radius: 5px; background: #eeeef2; }
+[data-interface="modern"] .modern-housing-bar span { display: block; height: 100%; background: #16a34a; }
+[data-interface="modern"] .modern-housing-caption { margin-top: 12px; }
+[data-interface="modern"] .modern-bank-card { aspect-ratio: 1.586; min-height: 0; }
+[data-interface="modern"] .modern-payments-heading .finance-object { width: 40px !important; height: 42px !important; flex-basis: 40px !important; }
+[data-interface="modern"] .modern-payments-total { margin-block: 8px; }
+[data-interface="modern"] .modern-payment-row { position: relative; padding-block: 6px; }
+[data-interface="modern"] .modern-payment-main { display: flex; align-items: center; gap: 7px; min-height: 28px; padding-right: 27px; }
+[data-interface="modern"] .modern-payment-label { min-width: 0; flex: 1; font-size: 12px; line-height: 1.2; }
+[data-interface="modern"] .modern-payment-label > span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-interface="modern"] .modern-payment-meta { color: #73737d; font-size: 11px; }
+[data-interface="modern"] .modern-payment-details summary { position: absolute; top: 7px; right: 0; width: 24px; height: 28px; display: grid; place-items: center; color: #696970; list-style: none; }
+[data-interface="modern"] .modern-payment-details summary::-webkit-details-marker { display: none; }
+[data-interface="modern"] .modern-payment-details[open] summary svg { transform: rotate(180deg); }
+[data-interface="modern"] .modern-payment-details ul { margin: 6px 0 2px 46px; }
+@media (max-width: 600px) { [data-interface="modern"] .modern-bank-card { min-height: 0; } }

@@ -46,7 +46,7 @@ function TransactionEditorSession({ open, onClose, people, categories, types, tr
   const [isPending, startTransition] = useTransition();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [isDeleting, startDeleteTransition] = useTransition();
-  const [payment, setPayment] = useState<PaymentOrganization>(() => defaultOrganization({ bank: transaction?.bank ?? null, description: transaction?.description ?? null }));
+  const [payment, setPayment] = useState<PaymentOrganization>(() => defaultOrganization({ bank: transaction?.bank ?? null, description: transaction?.description ?? null, categoryName: categories.find((category) => category.id === transaction?.categoryId)?.name }));
   const [paymentDirty, setPaymentDirty] = useState(false);
   const [paymentScope, setPaymentScope] = useState<"month" | "following">(!transaction ? "following" : "month");
   const [paymentLoad, setPaymentLoad] = useState<{ month: string; error: string | null } | null>(null);
@@ -58,7 +58,7 @@ function TransactionEditorSession({ open, onClose, people, categories, types, tr
   const paymentMonth = form.referenceMonth;
   const isExpense = form.direction === "expense";
   const hasSavedExpense = transaction?.direction === "expense";
-  const effectivePayment = !hasSavedExpense && !paymentDirty ? defaultOrganization({ bank: form.bank || null, description: form.description || null }) : payment;
+  const effectivePayment = !hasSavedExpense && !paymentDirty ? defaultOrganization({ bank: form.bank || null, description: form.description || null, categoryName: categories.find((category) => category.id === form.categoryId)?.name }) : payment;
   const paymentLoading = Boolean(isExpense && hasSavedExpense && !paymentDirty && paymentLoad?.month !== paymentMonth);
   useEffect(() => {
     const request = paymentRequest;

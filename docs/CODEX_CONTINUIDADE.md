@@ -2,6 +2,12 @@
 
 Atualizado: 10/11/2026.
 
+## Ajuste atual — categorias e fidelidade visual
+- Padrões corrigidos: Plano de Saúde reconhece Unimed dentro da categoria Saúde; Internet reúne a categoria Internet, independente da descrição. Mapa de categorias vem das referências (inclusive inativas), sem IDs fixos. Prévia no editor e checklist usam a mesma regra; configurações explícitas continuam prevalecendo e compras no cartão ficam na fatura, sem dupla contagem.
+- Nova UI mais próxima da referência: cabeçalho compacto, valores com moeda/centavos menores, barra da divisão por pessoa, Nubank roxo e PicPay verde em carrossel funcional, checklist compacto e Moradia com dados reais. UI clássica e análises financeiras preservadas.
+- Verificação local: Internet e Unimed apareceram preenchidos no checklist do mês; carrossel alternou bancos e mobile sem overflow. test-payments.mjs passou em 16 grupos; validação final inclui lint/build e os scripts de duplicidade/editor/edição existentes.
+- Publicação continua no GitHub main com deploy automático Vercel; conferir o commit e Ready pela CLI oficial. URL de teste: https://app-controle-gastos-swart.vercel.app.
+
 ## Etapa atual — interface alternável e pagamentos
 - Header global alterna UI atual/Nova UI, padrão atual, escolha por navegador persistida e sincronizada entre abas. Nova UI usa Inter Tight real, cards compactos, ilustrações próprias e cartões em CSS; as fórmulas/análises de Simulação foram preservadas (apenas wrapper visual e estilos).
 - Cadastro moderno começa com oito colunas e seletor para acessar todas as 14; filtros/ordenação/paginação/lote continuam completos. Clássico conserva as 14. Editor moderno em painel lateral.

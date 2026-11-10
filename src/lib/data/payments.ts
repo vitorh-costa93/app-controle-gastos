@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { listConsideredTransactionsInRange } from "./transactions";
 import { listActiveRecurrenceRules } from "./recurrence";
+import { listAllCategories } from "./reference";
 import { buildMonthOccurrences } from "@/lib/domain/recurrence";
 import { buildPaymentGroups, isCardMethod, normalizeOrganization, PAYMENT_METHODS, resolveOrganization, type PaymentOrganization, type PaymentProfile, type PaymentTarget } from "@/lib/domain/payments";
 import type { MonthlyOccurrence } from "@/types/domain";
@@ -31,16 +32,16 @@ async function loadProfiles(client: Client) {
 }
 async function resolveTarget(client: Client, target: PaymentTarget): Promise<{ occurrence: MonthlyOccurrence; kind: PaymentProfile["kind"]; id: string }> {
   if (target.kind === "recurrence") {
-    const { data, error } = await client.from("recurrence_rules").select("id,bank,description,direction,person_id,amount,active,start_date,end_date").eq("id", target.id).single();
+    const { data, error } = await client.from("recurrence_rules").select("id,bank,description,category_id,direction,person_id,amount,active,start_date,end_date").eq("id", target.id).single();
     if (error || !data || !data.active || data.direction !== "expense") throw new Error("A recorrência não está disponível para organizar pagamentos.");
-    const occurrence = { id: data.id, recurrenceRuleId: data.id, referenceMonth: target.month, bank: data.bank, description: data.description } as MonthlyOccurrence;
+    const occurrence = { id: data.id, recurrenceRuleId: data.id, referenceMonth: target.month, bank: data.bank, description: data.description, categoryId: data.category_id } as MonthlyOccurrence;
     return { occurrence, kind: "recurrence", id: data.id };
   }
-  const { data, error } = await client.from("transactions").select("id,bank,description,direction,reference_month,recurrence_rule_id,installment_group_id").eq("id", target.id).is("deleted_at", null).single();
+  const { data, error } = await client.from("transactions").select("id,bank,description,category_id,direction,reference_month,recurrence_rule_id,installment_group_id").eq("id", target.id).is("deleted_at", null).single();
   // A leitura também serve à prévia de outro mês no editor; a gravação valida
   // novamente o mês real do lançamento antes de aceitar a organização.
   if (error || !data || data.direction !== "expense") throw new Error("O lançamento não está disponível ou não é uma despesa.");
-  const occurrence = { id: data.id, referenceMonth: target.month, bank: data.bank, description: data.description, recurrenceRuleId: data.recurrence_rule_id, installmentGroupId: data.installment_group_id } as MonthlyOccurrence;
+  const occurrence = { id: data.id, referenceMonth: target.month, bank: data.bank, description: data.description, categoryId: data.category_id, recurrenceRuleId: data.recurrence_rule_id, installmentGroupId: data.installment_group_id } as MonthlyOccurrence;
   return { occurrence, kind: data.recurrence_rule_id ? "recurrence" : data.installment_group_id ? "installment" : "transaction", id: data.recurrence_rule_id ?? data.installment_group_id ?? data.id };
 }
 export async function getPaymentOrganization(target: PaymentTarget): Promise<{ ok: true; settings: PaymentOrganization } | { ok: false; error: string }> {
@@ -48,8 +49,8 @@ export async function getPaymentOrganization(target: PaymentTarget): Promise<{ o
   if (!parsed.success) return { ok: false, error: "Lançamento ou mês inválido." };
   try {
     const client = createAdminClient();
-    const [resolved, profiles] = await Promise.all([resolveTarget(client, parsed.data), loadProfiles(client)]);
-    return { ok: true, settings: resolveOrganization(resolved.occurrence, profiles).settings };
+    const [resolved, profiles, categories] = await Promise.all([resolveTarget(client, parsed.data), loadProfiles(client), listAllCategories()]);
+    return { ok: true, settings: resolveOrganization(resolved.occurrence, profiles, new Map(categories.map((category) => [category.id, category.name]))).settings };
   } catch (error) { return { ok: false, error: error instanceof Error ? error.message : "Não foi possível carregar a organização." }; }
 }
 export async function savePaymentOrganization(input: { targets: PaymentTarget[]; settings: PaymentOrganization; scope: "month" | "following" }): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -111,11 +112,11 @@ export async function getMonthlyPayments(month: string) {
   if (!monthSchema.safeParse(month).success) return { ok: false as const, error: "Mês inválido." };
   try {
     const client = createAdminClient();
-    const [transactions, rules, profiles, paidRows] = await Promise.all([
-      listConsideredTransactionsInRange(month, month), listActiveRecurrenceRules(), loadProfiles(client), loadSettings(client, `payment_paid:${month}:`),
+    const [transactions, rules, profiles, paidRows, categories] = await Promise.all([
+      listConsideredTransactionsInRange(month, month), listActiveRecurrenceRules(), loadProfiles(client), loadSettings(client, `payment_paid:${month}:`), listAllCategories(),
     ]);
     const occurrences = buildMonthOccurrences(month, transactions, rules);
-    const groups = buildPaymentGroups(occurrences, profiles, month);
+    const groups = buildPaymentGroups(occurrences, profiles, month, new Map(categories.map((category) => [category.id, category.name])));
     for (const group of groups) {
       const canonical = JSON.stringify(group.items.map((item) => [item.id, item.amountCents, item.origin]).sort((a, b) => String(a[0]).localeCompare(String(b[0]))));
       group.fingerprint = createHash("sha256").update(canonical).digest("hex");

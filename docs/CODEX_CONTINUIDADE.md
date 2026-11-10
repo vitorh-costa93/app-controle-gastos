@@ -2,6 +2,11 @@
 
 Atualizado: 10/11/2026.
 
+## Proposta visual — reconstrução completa da Nova UI
+- Usuário rejeitou o resultado incremental e pediu proposta completa mais fiel ao print. Criados três mockups em docs/design/nova-ui-v2 (Visão do mês, Lançamentos, Simulação); especificação em PROPOSTA.md.
+- Direção: estrutura moderna própria, componentes consistentes, abas para análise aprofundada, editor contextual, cartões renderizados com qualidade; preservar toggle e contratos financeiros. Mobile e demais áreas descritos, ainda sem mockup específico.
+- Estado: proposta visual, sem mudança funcional nesta etapa. Números/taxas/avatares ilustrativos. Próximo passo: implementar a reconstrução seguindo a especificação; não repetir a sobreposição de painéis à UI clássica.
+
 ## Ajuste atual — categorias e fidelidade visual
 - Padrões corrigidos: Plano de Saúde reconhece Unimed dentro da categoria Saúde; Internet reúne a categoria Internet, independente da descrição. Mapa de categorias vem das referências (inclusive inativas), sem IDs fixos. Prévia no editor e checklist usam a mesma regra; configurações explícitas continuam prevalecendo e compras no cartão ficam na fatura, sem dupla contagem.
 - Nova UI mais próxima da referência: cabeçalho compacto, valores com moeda/centavos menores, barra da divisão por pessoa, Nubank roxo e PicPay verde em carrossel funcional, checklist compacto e Moradia com dados reais. UI clássica e análises financeiras preservadas.

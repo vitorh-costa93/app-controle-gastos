@@ -132,12 +132,13 @@ body {
 .modern-nav-link { display:flex; align-items:center; gap:9px; min-height:35px; padding:8px 10px; margin-bottom:3px; border-radius:7px; color:#586070; font-size:12px; }
 .modern-nav-link:hover { background:#f5f7fb; }
 .modern-nav-link.is-active { color:#0661ef; background:#eaf2ff; font-weight:600; }
-.modern-account { display:flex; flex-wrap:wrap; align-items:center; gap:7px; padding:10px 8px 0; }
-.family-avatar { width:54px; height:54px; border-radius:50%; object-fit:cover; margin-bottom:3px; }
-.modern-account > div { width:calc(100% - 20px); font-size:11px; }
+.modern-account { position:relative; display:flex; flex-direction:column; align-items:center; gap:7px; padding:10px 8px 0; text-align:center; }
+/* Recorta a borda azul incorporada à ilustração original. */
+.family-avatar { width:58px; height:58px; object-fit:cover; clip-path:circle(46% at 49.6% 50%); }
+.modern-account > div { width:100%; font-size:11px; }
 .modern-account strong { font-size:12px; font-weight:600; }
 .modern-account p { color:#8a909b; font-size:10px; margin-top:3px; }
-.modern-account > svg { color:#8a909b; }
+.modern-account > svg { position:absolute; right:0; bottom:13px; color:#8a909b; }
 [data-interface="modern"] .page-heading { margin-bottom:16px; gap:12px; align-items:center; }
 [data-interface="modern"] .page-heading h1 { font-size:19px; font-weight:600; letter-spacing:-.035em; }
 [data-interface="modern"] .page-heading p { font-size:12px; margin-top:4px; color:#838997; }

@@ -4,6 +4,10 @@ Atualizado: 11/11/2026.
 
 - Refinamento da lista de desejos: usuário espera rastreamento automático em várias lojas, comparação e histórico para oportunidades como Black Friday. PLANO_DESEJOS.md atualizado com identificação do produto/variante, cobertura explícita, preço final conhecido e impacto na simulação. Somente planejamento; integração e fontes ainda serão avaliadas, sem prometer cobertura universal.
 
+## Ajuste — avatar centralizado e sem contorno (11/11/2026)
+- Rodapé da Nova UI centraliza avatar, nome e descrição. Recorte circular em CSS remove a borda azul incorporada ao PNG, preservando o arquivo original e a ilustração aprovada; chevron permanece à direita.
+- Alteração somente em globals.css; sem mudanças de dados. Lint e build de produção verificados antes da publicação em main/Vercel.
+- Próximo passo: conferir o rodapé em PRD. Navegador interativo indisponível nesta sessão.
 ## Ajuste — seletor compacto e percentual da reserva (11/11/2026)
 - Seletor Casal/Vitor/Jaqueline da Nova UI: caixa visual32px no desktop, botões28px, texto11px e padding reduzido; em pointer coarse botões40px para toque. Preservadas seleção, teclado e escopo por pessoa.
 - EmergencyReserve exibe porcentagem da meta junto do valor-alvo, com até uma casa decimal em pt-BR. Usa mesmo saldo acumulado/meta; negativos contam0% disponível, ausência de meta/saldo não fabrica percentual, acima da meta permite mostrar mais de100% e limita só a largura da barra. Barra com role progressbar e valores acessíveis.

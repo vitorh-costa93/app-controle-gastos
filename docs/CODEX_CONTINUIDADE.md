@@ -4,6 +4,13 @@ Atualizado: 11/11/2026.
 
 - Refinamento da lista de desejos: usuário espera rastreamento automático em várias lojas, comparação e histórico para oportunidades como Black Friday. PLANO_DESEJOS.md atualizado com identificação do produto/variante, cobertura explícita, preço final conhecido e impacto na simulação. Somente planejamento; integração e fontes ainda serão avaliadas, sem prometer cobertura universal.
 
+## Logos adicionais e ícones pela descrição (11/11/2026)
+- Jaú Serve reconhece também Jau Ser, incluindo nomes abreviados de fatura. Marcas locais adicionadas: Pichau, HBO Max, ExitLag/Exit Lag, Allianz e CBI of Miami (identidade CBI confirmada pelo usuário). Fontes em docs/design/BRAND_ASSETS.md.
+- lib/description-icons.ts centraliza símbolos de serviços. DescriptionIcon prioriza marca da descrição, símbolo da descrição e só então categoria; unhas/sobrancelhas/personal etc. não herdam logo Nubank só por agrupamento de pagamento. CategoryIcon também reutiliza símbolos quando há categoria específica.
+- DescriptionSymbolIcon mantém caixas/cores comuns e pictogramas vetoriais: esmalte, sobrancelha e dente, além de personal, academia, cabelo, massagem, pilates, nutrição, terapia, faxina, reparos, pet, combustível, mercado, alimentação, internet/telefone, seguro, transporte, farmácia, luz e água. Associação somente visual; sem mudar categoria/pessoa/valores/banco nem consultar terceiros com descrições.
+- Verificação focada: 16 descrições/limites de palavras e 11 aliases de marcas passaram, integridade de imagens e previews conferidos. Lint/build finais antes de publicar main/Vercel. Sem migrations; navegador interativo indisponível na sessão.
+- Próximo passo: usuário conferir os lançamentos reais na Nova UI e demais tabelas/painéis que já usam os componentes compartilhados.
+
 ## Correção — editar meta da reserva e novas marcas (11/11/2026)
 - Usuário esclareceu que deseja editar a META, não o saldo. PlanningEditor removeu acesso ao saldo de referência; Editar meta abre valor em reais como opção principal, com alternativa por meses essenciais. Configuração compartilhada entre pessoas; saldo segue acumulado automaticamente. Saldo de referência permanece somente em Configurações.
 - reserveConfig.targetAmountCents aceita inteiro positivo ou null; ausência em configurações antigas vira null, preservando metas por meses. Card usa valor explícito se configurado e mostra Meta/progresso separados do saldo. Após salvar, fecha o editor; não altera starting_balance nem movimentos, verificado no test-planning.mjs.

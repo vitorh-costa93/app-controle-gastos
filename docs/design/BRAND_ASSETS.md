@@ -18,3 +18,7 @@ Arquivos locais em `public/brands`; descrições não são enviadas a serviços 
 - Vivo: [ícone do aplicativo oficial da operadora](https://apps.apple.com/br/app/vivo-fatura-suporte-e-mais/id475915064), convertido em PNG.
 
 Os novos PNGs de estabelecimentos foram redimensionados proporcionalmente para até 96 px, preservando a marca para uso nos ícones da interface.
+
+- HBO Max: ícone do [aplicativo oficial](https://apps.apple.com/br/app/id1666653815), convertido proporcionalmente para PNG de 96 px.
+- CBI of Miami: [ícone oficial](https://cbiofmiami.com/CBI_icone.svg).
+- Pichau, ExitLag e Allianz: ícones dos aplicativos oficiais na App Store: [Pichau](https://apps.apple.com/br/app/id1619862228), [ExitLag](https://apps.apple.com/br/app/id6499235163) e [Allianz Cliente](https://apps.apple.com/br/app/id1554862261). Convertidos proporcionalmente para PNG de até 96 px.

@@ -1,5 +1,7 @@
 import { getBrandIcon } from "@/lib/brand-icons";
 import { BrandIcon } from "./BrandIcon";
+import { getDescriptionSymbol } from "@/lib/description-icons";
+import { DescriptionSymbolIcon } from "./DescriptionSymbolIcon";
 import { Activity, Baby, BookOpen, Brain, BriefcaseBusiness, Car, CircleDollarSign, CreditCard, Droplets, Dumbbell, Gamepad2, Heart, House, Landmark, Laptop, PawPrint, Plane, ReceiptText, ShoppingBag, ShoppingBasket, Utensils, Wifi, Zap } from "lucide-react";
 
 /** One visual identity per category, shared by summaries, tables and editors. */
@@ -7,6 +9,8 @@ export function CategoryIcon({ name, size = 16, className = "" }: { name: string
   const value = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const brand = getBrandIcon(name);
   if (brand) return <BrandIcon brand={brand} size={size} className={className} />;
+  const symbol = getDescriptionSymbol(name);
+  if (symbol) return <DescriptionSymbolIcon symbol={symbol} size={size} className={className} />;
   const [Icon, tone] = /internet|wifi/.test(value) ? [Wifi, "blue"] as const
     : /luz|energia|eletric/.test(value) ? [Zap, "amber"] as const
     : /agua/.test(value) ? [Droplets, "blue"] as const

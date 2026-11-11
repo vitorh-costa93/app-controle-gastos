@@ -46,4 +46,4 @@ A imagem complementar foi gerada pela ferramenta integrada com o mockup anterior
 
 Imagem criada com a ferramenta integrada de geração de imagens, usando a referência enviada em11/11 e o avatar familiar aprovado como fontes visuais. Prompt de direção: screenshot de MeuDinheiro em português, Inter Tight e painéis brancos com respiro, comparação individual de entradas/gastos/sobra, cartões por banco/pessoa, compras editáveis na mesma tela, reserva configurável, contas mensais, ícones coloridos e navegação curta. A revisão vigente remove viagem/metas de poupança e qualquer sugestão de definir limite nas categorias sem teto; expande a reserva no espaço disponível. Todos os valores são ilustrativos e foram revisados quanto à relação entre totais/subtotais e ausência de dupla contagem.
 
-Próximo passo: usuário avaliar esta organização da rotina antes de nova implementação.
+Implementação solicitada e integrada à Nova UI em 11/11/2026. Imagens seguem ilustrativas; o aplicativo usa seus dados e não cadastra os valores dos desenhos. Próxima função, somente planejada: [lista de desejos e projeção de compras](PLANO_DESEJOS.md).

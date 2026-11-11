@@ -2,11 +2,19 @@
 
 Atualizado: 11/11/2026.
 
+## Implementação — Nosso mês na Nova UI (11/11/2026)
+- Nova visão geral em ModernOverview.tsx/nosso-mes.css: Inter Tight, matriz de entradas/gastos/sobra por pessoa, distribuição com acesso aos lançamentos, cartões Nubank/PicPay por pessoa, recorrências e reserva. Toggle clássico e análises/Simulação preservados, incluindo evolução mensal/acumulada compartilhada.
+- InspectionDrawer mantém visão geral ao conferir cartão/categoria: grupos expandidos, busca/subtotal, origem real/projetada, parcela, pessoa e edição contextual. Real usa TransactionEditor; projetado usa editor de valor existente. Tabela completa e dinâmica preservam escopo. Ícones locais por descrição com fallback em recorrências, tabelas e pagamentos, sem enviar descrições a serviços externos.
+- Limites opcionais por mês/pessoa/categoria; consolidação exige ambos configurados. Sem limite não há CTA, denominador ou barra. Planejamento em chaves individuais de meudinheiro.app_settings; sem migration. Reserva usa movimentos reais assinados/idempotentes, pessoa/data e categorias essenciais configuráveis, nunca sobra projetada. PlanningEditor permite excluir limite com campo vazio, depósitos/retiradas e configuração de cobertura.
+- Validação: testes isolados test-planning.mjs (validação, persistência, limites completos/parciais, mês/pessoa, repetição e falhas) e test-ui-scope.mjs passaram; revisão focused_reviewer sem P1/P2. Lint/build executados na integração final. Navegador CUA indisponível nesta sessão: não houve validação visual interativa; conferir respiro/composição e mobile em PRD.
+- Entrega autorizada no main com deploy automático Vercel; conferir SHA/Ready antes de encerrar. Usuário testa Nova UI em https://app-controle-gastos-swart.vercel.app/analise.
+- Próxima etapa separada: docs/design/nosso-mes/PLANO_DESEJOS.md (lista/cenário, sugestão de mês, conversão sem dupla contagem, preço/avisos depois). Não implementada agora. Próximo passo: usuário testar Nova UI com seus dados, configurar limites se desejar e registrar a reserva existente.
+
 ## Proposta — Nosso mês com conferência direta e reserva
 - Versão vigente: docs/design/nosso-mes/limites-opcionais-e-reserva.png e PROPOSTA.md. Limites de categoria opcionais: sem limite, somente gasto/participação, sem “Definir limite”, barra ou pendência. Editor global discreto. Limite consolidado exige cobertura completa; configuração parcial é explicada no editor.
 - Removidos viagem e módulo genérico de metas. Mantida apenas reserva de emergência, com aportes reais e cobertura sobre essenciais; não inferir reserva do saldo projetado. Imagens anteriores são históricas. Valores ilustrativos.
 - Preservar rosca/lista clicável para lançamentos e cartão com categorias/descrições expandidas, edição contextual, filtro pessoa/mês e ícones locais de categorias/serviços com associação corrigível. Casal consolida Vitor e Jaqueline.
-- Estado: proposta visual/documentação, sem mudança funcional ou publicação de nova UI. Imagem conferida; links/diff revisados, lint/build dispensados por ausência de código. Próximo passo: usuário avaliar antes de implementar; manter análises ricas e aplicativo atual.
+- Estado histórico: esta proposta visual orientou a implementação acima; as imagens continuam ilustrativas.
 
 ## Ajuste — respiro vertical conforme a janela
 - Acima de800px de altura, o desktop usa espaço adicional em padding dos painéis, linhas de categorias/contas, separação dos cartões e margens internas. Mantém fontes, gráficos e regras financeiras. Layout compacto de notebook e fluxo mobile preservados.

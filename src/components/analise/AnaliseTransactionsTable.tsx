@@ -12,6 +12,7 @@ import { FilterButton, RangeFilter, RangeFilterPanel, TextFilter, ValuesFilter }
 import { MovementDetailsDialog } from "./MovementDetailsDialog";
 import { BulkEditDialog } from "@/components/cadastro/BulkEditDialog";
 import { Button } from "@/components/ui/Button";
+import { DescriptionIcon } from "@/components/ui/DescriptionIcon";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
 
 type ColumnKey =
@@ -378,7 +379,7 @@ export function AnaliseTransactionsTable({
                   <td className="px-3 py-2 text-(--color-text-secondary)"><span className="reference-label">{t.bank && <CategoryIcon name={labelOf("bank", t)} size={15} />}{labelOf("bank", t)}</span></td>
                   <td className="px-3 py-2 text-(--color-text-secondary)"><span className="inline-flex items-center gap-2"><CategoryIcon name={category?.name ?? "Sem categoria"} size={15} />{category?.name ?? "—"}</span></td>
                   <td className="max-w-[220px] truncate px-3 py-2 text-(--color-text-secondary)" title={t.description ?? ""}>
-                    {t.description ?? "—"}
+                    <span className="reference-label"><DescriptionIcon description={t.description ?? ""} categoryName={category?.name} size={14} />{t.description ?? "—"}</span>
                     {t.origin === "projected" && (
                       <span className="ml-1.5 text-[11px] text-(--color-text-tertiary)">· recorrente</span>
                     )}

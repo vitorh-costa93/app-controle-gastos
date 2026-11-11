@@ -14,6 +14,7 @@ import { FilterButton, RangeFilter, RangeFilterPanel, TextFilter, ValuesFilter }
 import { DeleteRecordDialog, DeleteTarget, deleteTargetFor } from "./DeleteRecordDialog";
 import { BulkEditDialog } from "./BulkEditDialog";
 import { useInterface } from "@/components/layout/InterfaceProvider";
+import { DescriptionIcon } from "@/components/ui/DescriptionIcon";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
 import { PaymentOrganizationDialog } from "@/components/payments/PaymentOrganizationDialog";
 import { targetForOccurrence } from "@/lib/domain/payments";
@@ -254,13 +255,13 @@ export function CadastroRecordsTable({ rows, people, categories, types, onEdit }
           </tr></thead>
           <tbody>{visible.map(({ row, values }) => <tr key={row.key} className="border-t border-(--color-border)">
             <td className="px-1.5 py-2"><input type="checkbox" aria-label={`Selecionar ${row.occurrence.description ?? "lançamento"}`} disabled={!selectable(row)} checked={selected.has(row.key)} onChange={() => toggleSelection(row.key)} /></td>
-            {visibleColumns.map(([column]) => <td key={column} className={cn("px-1.5 py-2 align-top", column === "description" || column === "category" || column === "type" ? "break-words" : "")} title={values[column]}>{column === "considered" ? <RecordConsidered row={row} onChanged={consideredChanged(row)} /> : (column === "category" || (column === "bank" && row.occurrence.bank)) ? <span className="modern-cadastro-category"><CategoryIcon name={values[column]} size={14} />{values[column]}</span> : values[column]}</td>)}
+            {visibleColumns.map(([column]) => <td key={column} className={cn("px-1.5 py-2 align-top", column === "description" || column === "category" || column === "type" ? "break-words" : "")} title={values[column]}>{column === "considered" ? <RecordConsidered row={row} onChanged={consideredChanged(row)} /> : (column === "category" || (column === "bank" && row.occurrence.bank)) ? <span className="modern-cadastro-category"><CategoryIcon name={values[column]} size={14} />{values[column]}</span> : column === "description" ? <span className="reference-label"><DescriptionIcon description={row.occurrence.description ?? ""} categoryName={values.category} size={14} />{values[column]}</span> : values[column]}</td>)}
             <td className="px-1.5 py-2"><RecordActions row={row} onEdit={() => onEdit(row)} onOrganize={() => setPaymentOccurrences([row.occurrence])} /></td>
           </tr>)}</tbody>
         </table>
       </div>
       <div className="divide-y divide-(--color-border) md:hidden">{visible.map(({ row, values }) => <article key={row.key} className="space-y-2 p-3">
-        <label className="flex items-center gap-2 font-medium"><input type="checkbox" aria-label={`Selecionar ${values.description}`} disabled={!selectable(row)} checked={selected.has(row.key)} onChange={() => toggleSelection(row.key)} />{values.description}</label>
+        <label className="flex items-center gap-2 font-medium"><input type="checkbox" aria-label={`Selecionar ${values.description}`} disabled={!selectable(row)} checked={selected.has(row.key)} onChange={() => toggleSelection(row.key)} /><DescriptionIcon description={row.occurrence.description ?? ""} categoryName={values.category} size={14} />{values.description}</label>
         <dl className="grid grid-cols-2 gap-2 text-xs">{COLUMNS.filter(([column]) => column !== "description").map(([column, label]) => <div key={column}><dt className="text-(--color-text-secondary)">{label}</dt><dd>{column === "considered" ? <RecordConsidered row={row} onChanged={consideredChanged(row)} /> : (column === "category" || (column === "bank" && row.occurrence.bank)) ? <span className="modern-cadastro-category"><CategoryIcon name={values[column]} size={14} />{values[column]}</span> : values[column]}</dd></div>)}</dl>
         <RecordActions row={row} onEdit={() => onEdit(row)} onOrganize={() => setPaymentOccurrences([row.occurrence])} />
       </article>)}</div>

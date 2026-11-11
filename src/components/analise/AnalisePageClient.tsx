@@ -27,6 +27,10 @@ import { ModernOverview } from "./ModernOverview";
 import { addMonths } from "@/lib/utils/format";
 import { ConferencePanel } from "./ConferencePanel";
 import { conferenceScope, ConferenceFilters } from "./conference-scope";
+import { getPlanning } from "@/lib/data/planning";
+import type { PlanningData } from "@/lib/planning";
+import { PlanningEditor } from "./PlanningEditor";
+import { InspectionDrawer } from "./InspectionDrawer";
 import "./modern-analysis.css";
 
 type AnalysisTab = "overview" | "analyses" | "conference" | "pivot" | "movements";
@@ -54,6 +58,18 @@ export function AnalisePageClient({
   const [conferenceFilters, setConferenceFilters] = useState<ConferenceFilters>({ bank: "all", category: "all", includeProjected: false });
   const [detailScope, setDetailScope] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [planning, setPlanning] = useState<PlanningData | null>(null);
+  const [planningError, setPlanningError] = useState(false);
+  const [planningRetry, setPlanningRetry] = useState(0);
+  const [planningMode, setPlanningMode] = useState<"limits" | "reserve" | null>(null);
+  const [inspection, setInspection] = useState<ConferenceFilters | null>(null);
+  useEffect(() => {
+    if (!isModern) return;
+    let active = true;
+    setPlanningError(false);
+    getPlanning().then((result) => { if (active) setPlanning(result); }).catch(() => { if (active) setPlanningError(true); });
+    return () => { active = false; };
+  }, [isModern, planningRetry]);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const nextTab = params.get("view");
@@ -85,6 +101,7 @@ export function AnalisePageClient({
   const requestIdRef = useRef(0);
 
   function navigate(nextMonth: string, nextPersonId: string) {
+    setInspection(null); setPlanningMode(null);
     setLoadError(null);
     setMonth(nextMonth);
     setPersonId(nextPersonId);
@@ -162,11 +179,13 @@ export function AnalisePageClient({
         />
       </div></>}
 
-      {loadError ? <div className="ma-panel" role="alert"><p>{loadError}</p><button type="button" className="ma-text-link" onClick={() => navigate(month, personId)}>Atualizar mês</button></div> : isModern && (isPending || data.month !== month) ? <div className="ma-panel ma-loading" role="status">Carregando dados de {personName}…</div> : !hasData && (!isModern || tab === "overview" || tab === "analyses") ? (
+      {loadError ? <div className="ma-panel" role="alert"><p>{loadError}</p><button type="button" className="ma-text-link" onClick={() => navigate(month, personId)}>Atualizar mês</button></div> : isModern && (isPending || data.month !== month) ? <div className="ma-panel ma-loading" role="status">Carregando dados de {personName}…</div> : !hasData && (!isModern || tab === "analyses") ? (
         <EmptyState title="Ainda não existem dados suficientes neste mês para uma análise confiável. Cadastre alguns lançamentos em Cadastro." />
       ) : (
         <div className={"flex min-w-0 flex-col gap-6 transition-opacity" + (isPending ? " opacity-60" : "")}>
-          {isModern && tab === "overview" && <ModernOverview data={data} transactions={monthTransactions} month={month} personId={personId} onInspect={(bank, category, projected = false) => changeView("conference", { bank, category, includeProjected: projected })} />}
+          {isModern && tab === "overview" && (planningError ? <div className="ma-panel" role="alert">Não foi possível carregar os limites e a reserva. <button className="ma-text-link" type="button" onClick={() => setPlanningRetry((v) => v + 1)}>Tentar novamente</button></div> : planning ? <ModernOverview data={data} transactions={monthTransactions} month={month} personId={personId} planning={planning} onEditPlanning={setPlanningMode} onInspect={(bank, category, projected = false) => setInspection({ bank, category, includeProjected: projected })} /> : <div className="ma-panel" role="status">Carregando visão do mês…</div>)}
+          {isModern && planningMode && planning && <PlanningEditor key={`${planningMode}|${personId}|${month}`} mode={planningMode} data={planning} people={data.people} categories={data.categories} month={month} personId={personId} onSaved={setPlanning} onClose={() => setPlanningMode(null)} />}
+          {isModern && inspection && <InspectionDrawer key={`${month}|${personId}|${inspection.bank}|${inspection.category}`} data={data} transactions={monthTransactions} month={month} personId={personId} filters={inspection} onClose={() => setInspection(null)} onChanged={refreshCurrent} onOpenPivot={() => { changeView("pivot", inspection, true); setInspection(null); }} onOpenMovements={() => { changeView("movements", inspection, true); setInspection(null); }} />}
           {isModern && tab === "conference" && <ConferencePanel data={data} transactions={monthTransactions} month={month} personId={personId} filters={conferenceFilters} onFiltersChange={(filters) => changeView("conference", filters)} onChanged={refreshCurrent} onOpenMovements={() => changeView("movements", conferenceFilters, true)} onOpenPivot={() => changeView("pivot", conferenceFilters, true)} />}
           {(!isModern || tab === "analyses") && <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">

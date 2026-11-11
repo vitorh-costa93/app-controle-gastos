@@ -244,6 +244,13 @@ export interface TransactionInput {
   fixedFrequency?: RecurrenceFrequency;
 }
 
+export async function getTransactionForEditing(id: string): Promise<Transaction> {
+  if (!z.string().uuid().safeParse(id).success) throw new Error("Lançamento inválido.");
+  const { data, error } = await createAdminClient().from("transactions").select("*").eq("id", id).is("deleted_at", null).single();
+  if (error || !data) throw new Error("Não foi possível abrir o lançamento. Atualize e tente novamente.");
+  return mapTransactionRow(data as TransactionRow);
+}
+
 export async function listTransactions(
   filters: TransactionFilters = {}
 ): Promise<{ data: Transaction[]; total: number }> {

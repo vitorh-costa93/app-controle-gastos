@@ -4,6 +4,13 @@ Atualizado: 11/11/2026.
 
 - Refinamento da lista de desejos: usuário espera rastreamento automático em várias lojas, comparação e histórico para oportunidades como Black Friday. PLANO_DESEJOS.md atualizado com identificação do produto/variante, cobertura explícita, preço final conhecido e impacto na simulação. Somente planejamento; integração e fontes ainda serão avaliadas, sem prometer cobertura universal.
 
+## Ajuste — valor da rosca e marcas fiéis (11/11/2026)
+- AdaptiveAmount.tsx mede o texto real após carregar Inter Tight e ao redimensionar o gráfico; limita a fonte ao espaço interno com respiro, sem abreviar ou cortar o valor.
+- Identidade compartilhada em lib/brand-icons.ts e BrandIcon/DescriptionIcon/CategoryIcon; arquivos locais em public/brands, fontes em docs/design/BRAND_ASSETS.md. Nubank, PicPay, iRacing, Claude, Unimed, Netflix, Spotify, iFood, Amazon, Prime Video, ChatGPT/OpenAI, Google, Gemini e Apple. Sem letras improvisadas ou busca remota por descrição. Unimed usa emblema extraído do logo original, sem redesenho.
+- Aplicado a cartões físicos, descrições da dinâmica, recorrências/parcelas, detalhes de categoria, listas de maiores gastos e fora do planejado; demais tabelas/pagamentos herdam componentes comuns. Categorias sem marca mantêm símbolos ilustrativos.
+- Lint/build e diff passaram; aliases e integridade dos arquivos verificados na implementação. Publicação autorizada em GitHub/main e Vercel, conferir Ready/SHA. Sem alterações de dados ou cálculos financeiros. Arquivos de ícones conferidos visualmente; navegador CUA indisponível, sem conferência visual interativa da tela nesta sessão.
+- Próximo passo: usuário conferir o tamanho do valor na mesma janela do print e a identificação dos serviços com seus lançamentos reais.
+
 ## Implementação — Nosso mês na Nova UI (11/11/2026)
 - Nova visão geral em ModernOverview.tsx/nosso-mes.css: Inter Tight, matriz de entradas/gastos/sobra por pessoa, distribuição com acesso aos lançamentos, cartões Nubank/PicPay por pessoa, recorrências e reserva. Toggle clássico e análises/Simulação preservados, incluindo evolução mensal/acumulada compartilhada.
 - InspectionDrawer mantém visão geral ao conferir cartão/categoria: grupos expandidos, busca/subtotal, origem real/projetada, parcela, pessoa e edição contextual. Real usa TransactionEditor; projetado usa editor de valor existente. Tabela completa e dinâmica preservam escopo. Ícones locais por descrição com fallback em recorrências, tabelas e pagamentos, sem enviar descrições a serviços externos.

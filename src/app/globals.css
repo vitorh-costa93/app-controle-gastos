@@ -176,3 +176,4 @@ body {
 @media (prefers-reduced-motion:reduce) { [data-interface="modern"] *,[data-interface="modern"] *::before,[data-interface="modern"] *::after { scroll-behavior:auto !important; transition:none !important; animation:none !important; } }
 .person-scope-filter { display:flex; align-items:center; gap:9px; margin-bottom:16px; font-size:12px; color:var(--color-text-secondary); } .person-scope-filter select { border:1px solid var(--color-border); border-radius:8px; background:white; padding:7px 10px; color:var(--color-text-primary); }
 .reference-label { display:inline-flex; align-items:center; gap:6px; vertical-align:middle; } .bank-mini-mark { font-size:14px; line-height:1; letter-spacing:-.08em; } .bank-mini-mark--nubank { font-style:italic; font-family:Arial,sans-serif; } .bank-mini-mark--picpay { font-size:15px; }
+.bank-brand-logo { object-fit:contain; object-position:left center; width:72px; height:32px; filter:brightness(0) invert(1); }

@@ -1,5 +1,7 @@
 "use client";
 
+import { DescriptionIcon } from "@/components/ui/DescriptionIcon";
+
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/Button";
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
@@ -93,7 +95,7 @@ export function MovementDetailsDialog({
         {details.map(([label, value]) => (
           <div key={label} className="contents">
             <dt className="text-(--color-text-tertiary)">{label}</dt>
-            <dd className="font-medium">{value}</dd>
+            <dd className="font-medium">{label === "Descrição" ? <span className="reference-label"><DescriptionIcon description={value} categoryName={category?.name} />{value}</span> : value}</dd>
           </div>
         ))}
       </dl>

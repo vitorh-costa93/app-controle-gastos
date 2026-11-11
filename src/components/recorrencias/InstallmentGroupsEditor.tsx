@@ -1,8 +1,10 @@
 "use client";
 
+import { DescriptionIcon } from "@/components/ui/DescriptionIcon";
+
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CreditCard, X } from "lucide-react";
+import { X } from "lucide-react";
 import { Person, Category, TransactionType } from "@/types/db";
 import { InstallmentGroup, cancelInstallmentGroup } from "@/lib/data/installments";
 import { createTransaction } from "@/lib/data/transactions";
@@ -62,7 +64,7 @@ export function InstallmentGroupsEditor({
             className="flex items-center justify-between gap-3 rounded-(--radius-md) border border-(--color-border) px-3 py-2"
           >
             <div className="flex min-w-0 items-center gap-2">
-              <CreditCard size={14} className="shrink-0 text-(--color-primary)" />
+              <DescriptionIcon description={group.description ?? ""} />
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">{group.description ?? "Compra parcelada"}</p>
                 <p className="text-xs text-(--color-text-tertiary)">

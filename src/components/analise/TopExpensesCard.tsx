@@ -1,4 +1,5 @@
 import { Card } from "@/components/ui/Card";
+import { DescriptionIcon } from "@/components/ui/DescriptionIcon";
 import { MonthlyOccurrence } from "@/types/domain";
 import { Person } from "@/types/db";
 import { formatCurrencyBRL } from "@/lib/utils/format";
@@ -28,7 +29,7 @@ export function TopExpensesCard({ occurrences, people }: { occurrences: MonthlyO
                 className="h-2 w-2 shrink-0 rounded-full"
                 style={{ backgroundColor: peopleById.get(o.personId)?.color ?? "#8e8e93" }}
               />
-              <span className="truncate">{o.description ?? "Sem descrição"}</span>
+              <DescriptionIcon description={o.description ?? ""} /><span className="truncate">{o.description ?? "Sem descrição"}</span>
               <span className="shrink-0 rounded-full bg-(--color-surface-secondary) px-2 py-0.5 text-[11px] font-semibold text-(--color-text-secondary)">
                 {o.installmentTotal > 1
                   ? `${o.installmentCurrent}/${o.installmentTotal}`

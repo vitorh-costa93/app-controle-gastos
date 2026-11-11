@@ -1,5 +1,7 @@
 "use client";
 
+import { DescriptionIcon } from "@/components/ui/DescriptionIcon";
+
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
 
 import { useMemo, useState, useTransition } from "react";
@@ -89,7 +91,7 @@ export function UnplannedCard({
     return (
       <li key={o.id} className="flex items-center justify-between gap-3 py-2 text-sm">
         <span className={cn("min-w-0", excluded && "opacity-50")}>
-          <span className="block truncate">{o.description ?? "Sem descrição"}</span>
+          <span className="reference-label"><DescriptionIcon description={o.description ?? ""} /><span className="truncate">{o.description ?? "Sem descrição"}</span></span>
           <span className="block text-xs text-(--color-text-tertiary)">
             {formatDateBR(o.registrationDate)} · {peopleById.get(o.personId) ?? "—"}
           </span>

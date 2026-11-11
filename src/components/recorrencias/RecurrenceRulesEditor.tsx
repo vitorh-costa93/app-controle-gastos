@@ -1,10 +1,12 @@
 "use client";
 
+import { DescriptionIcon } from "@/components/ui/DescriptionIcon";
+
 import { useEffect, useState, useTransition } from "react";
 import { RecurrenceFrequency } from "@/types/domain";
 import { RECURRENCE_FREQUENCIES, frequencyLabel } from "@/lib/domain/recurrence";
 import { useRouter } from "next/navigation";
-import { X, Repeat, Pencil } from "lucide-react";
+import { X, Pencil } from "lucide-react";
 import { RecurrenceRule } from "@/types/domain";
 import { Person, Category, TransactionType } from "@/types/db";
 import { Card } from "@/components/ui/Card";
@@ -54,7 +56,7 @@ export function RecurrenceRulesEditor({
             className="flex items-center justify-between rounded-(--radius-md) border border-(--color-border) px-3 py-2"
           >
             <div className="flex items-center gap-2">
-              <Repeat size={14} className="text-(--color-primary)" />
+              <DescriptionIcon description={rule.description} categoryName={categories.find((c) => c.id === rule.categoryId)?.name} />
               <div>
                 <p className="text-sm font-medium">{rule.description}</p>
                 <p className="text-xs text-(--color-text-tertiary)">

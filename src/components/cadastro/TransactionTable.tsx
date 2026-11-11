@@ -1,5 +1,7 @@
 "use client";
 
+import { DescriptionIcon } from "@/components/ui/DescriptionIcon";
+
 import { useState, useTransition } from "react";
 import { MoreVertical, Trash2 } from "lucide-react";
 import { Transaction } from "@/types/domain";
@@ -115,7 +117,7 @@ function TransactionRow({
         {type?.name ?? "—"}
       </td>
       <td className="cursor-pointer px-4 py-3 text-(--color-text-secondary)" onClick={onEdit}>
-        {category?.name ?? "—"}
+        <span className="reference-label"><DescriptionIcon description={transaction.description ?? ""} categoryName={category?.name} />{category?.name ?? "—"}</span>
       </td>
       <td className="cursor-pointer px-4 py-3 text-(--color-text-secondary)" onClick={onEdit}>
         {transaction.installmentCurrent}/{transaction.installmentTotal}
@@ -209,7 +211,7 @@ function MobileCard({
   return (
     <button onClick={onEdit} className="flex w-full items-center justify-between px-4 py-3 text-left">
       <div className="flex flex-col gap-0.5">
-        <span className="text-sm font-medium">{category?.name ?? transaction.description ?? "—"}</span>
+        <span className="reference-label text-sm font-medium"><DescriptionIcon description={transaction.description ?? ""} categoryName={category?.name} />{category?.name ?? transaction.description ?? "—"}</span>
         <span className="text-xs text-(--color-text-tertiary)">
           {formatDateTimeBR(transaction.createdAt)} · {person?.name ?? "—"}
         </span>

@@ -1,5 +1,7 @@
 "use client";
 
+import { DescriptionIcon } from "@/components/ui/DescriptionIcon";
+
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
 
 import { useMemo, useState } from "react";
@@ -105,7 +107,7 @@ export function CategoryDonutChart({
   const renderOccurrence = (o: MonthlyOccurrence) => (
     <li key={o.id} className="flex items-center justify-between gap-3 py-2 text-sm">
       <span className="min-w-0">
-        <span className="block truncate">{o.description ?? "Sem descrição"}</span>
+        <span className="reference-label"><DescriptionIcon description={o.description ?? ""} categoryName={o.categoryId ? categoriesById.get(o.categoryId) : undefined} /><span className="truncate">{o.description ?? "Sem descrição"}</span></span>
         <span className="block text-xs text-(--color-text-tertiary)">
           {o.fixedVariable === "fixed" ? "Fixo" : "Variável"} · {peopleById.get(o.personId) ?? "—"}
           {o.installmentTotal > 1 ? ` · parcela ${o.installmentCurrent}/${o.installmentTotal}` : ""}

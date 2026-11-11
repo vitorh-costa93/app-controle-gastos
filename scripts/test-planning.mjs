@@ -60,7 +60,19 @@ assert.equal(domain.getReserveBalance(data, [v, j], month), 70000);
 assert.equal(domain.getReserveBalance(data, [v], "2089-12"), 0);
 assert.equal((await api.saveReserveEntry({ ...deposit, date: "2090-02-30" })).ok, false);
 assert.equal((await api.saveReserveEntry({ ...deposit, amountCents: Number.MAX_SAFE_INTEGER + 1 })).ok, false);
-assert.equal((await api.saveReserveConfig({ essentialCategoryIds: [category], targetMonths: 6 })).ok, true);
+const legacyConfig = { essentialCategoryIds: [category], targetMonths: 6 };
+assert.equal(domain.reserveConfigSchema.parse(legacyConfig).targetAmountCents, null);
+assert.equal(domain.reserveConfigSchema.parse({ ...legacyConfig, targetAmountCents: 125000 }).targetAmountCents, 125000);
+for (const targetAmountCents of [-1, 0, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+  assert.equal(domain.reserveConfigSchema.safeParse({ ...legacyConfig, targetAmountCents }).success, false);
+}
+stored.set("starting_balance", { month: "2089-12", amountCents: 42000 });
+const beforeGoal = new Map([...stored].filter(([key]) => key === "starting_balance" || key.startsWith("planning:entry:")));
+assert.equal((await api.saveReserveConfig({ ...legacyConfig, targetAmountCents: 125000 })).ok, true);
+assert.equal((await api.getPlanning()).reserveConfig.targetAmountCents, 125000);
+assert.deepEqual(new Map([...stored].filter(([key]) => key === "starting_balance" || key.startsWith("planning:entry:"))), beforeGoal);
+assert.equal((await api.saveReserveConfig(legacyConfig)).ok, true);
+assert.equal((await api.getPlanning()).reserveConfig.targetAmountCents, null);
 assert.equal((await api.saveReserveConfig({ essentialCategoryIds: [category, category], targetMonths: 6 })).ok, false);
 await api.deleteReserveEntry(id);
 assert.equal(domain.getReserveBalance(await api.getPlanning(), [v], month), -10000);

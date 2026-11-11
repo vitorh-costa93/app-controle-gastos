@@ -4,6 +4,13 @@ Atualizado: 11/11/2026.
 
 - Refinamento da lista de desejos: usuário espera rastreamento automático em várias lojas, comparação e histórico para oportunidades como Black Friday. PLANO_DESEJOS.md atualizado com identificação do produto/variante, cobertura explícita, preço final conhecido e impacto na simulação. Somente planejamento; integração e fontes ainda serão avaliadas, sem prometer cobertura universal.
 
+## Correção — editar meta da reserva e novas marcas (11/11/2026)
+- Usuário esclareceu que deseja editar a META, não o saldo. PlanningEditor removeu acesso ao saldo de referência; Editar meta abre valor em reais como opção principal, com alternativa por meses essenciais. Configuração compartilhada entre pessoas; saldo segue acumulado automaticamente. Saldo de referência permanece somente em Configurações.
+- reserveConfig.targetAmountCents aceita inteiro positivo ou null; ausência em configurações antigas vira null, preservando metas por meses. Card usa valor explícito se configurado e mostra Meta/progresso separados do saldo. Após salvar, fecha o editor; não altera starting_balance nem movimentos, verificado no test-planning.mjs.
+- Novas marcas locais: 99Food, Vivo Brasil, Savegnago, Shopee, Jaú Serve e Supabase; iFood reconhece também IFD*. Descrição reconhecida prevalece sobre Nubank/NuPay, incluindo prefixos de parcelamento. Origens em docs/design/BRAND_ASSETS.md. Arquivos conferidos visualmente, aliases e integridade validados.
+- Integração: test-planning.mjs e test-balance-projection.mjs passaram; lint/build finais antes de publicar GitHub/main e Vercel. Sem migrations ou alterações nos saldos reais. Navegador interativo indisponível na sessão; conferir UI em PRD.
+- Próximo passo: Nova UI > Reserva > Editar meta; definir objetivo em reais e conferir progresso e novos logos com os lançamentos existentes.
+
 ## Reserva vinculada ao acumulado e marca original (11/11/2026)
 - Usuário confirmou: reserva = TODO saldo acumulado, incluindo rendimento. Substitui a regra anterior de saldo por depósitos/retiradas próprios; registros antigos preservados, sem exclusão, mas não compõem a nova reserva.
 - EmergencyReserve usa balanceSeriesCents pelo mês selecionado, mesma série bruta a 100% do CDI da Simulação. useBalanceProjection compartilha uma carga entre reserva e BalanceEvolution e invalida resultados em mudanças de pessoa/dados/configuração/retry. Fórmula original de BaseCaixinhaYield extraída literalmente para balance-projection.ts, sem alterar análises ricas.

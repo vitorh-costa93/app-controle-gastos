@@ -8,12 +8,12 @@ export const categoryLimitSchema = z.object({ personId: id, categoryId: id, mont
 export const saveCategoryLimitSchema = categoryLimitSchema.extend({ amountCents: cents.positive().nullable() });
 export const reserveEntrySchema = z.object({ id, personId: id, date: dateSchema, amountCents: cents.refine((value) => value !== 0), note: z.string().trim().max(200) });
 export const saveReserveEntrySchema = reserveEntrySchema.extend({ id: id.optional() });
-export const reserveConfigSchema = z.object({ essentialCategoryIds: z.array(id).max(500).refine((ids) => new Set(ids).size === ids.length), targetMonths: z.number().int().min(1).max(120) });
+export const reserveConfigSchema = z.object({ essentialCategoryIds: z.array(id).max(500).refine((ids) => new Set(ids).size === ids.length), targetMonths: z.number().int().min(1).max(120), targetAmountCents: cents.positive().nullable().default(null) });
 export type CategoryLimit = z.infer<typeof categoryLimitSchema>;
 export type ReserveEntry = z.infer<typeof reserveEntrySchema>;
 export type ReserveConfig = z.infer<typeof reserveConfigSchema>;
 export type PlanningData = { limits: CategoryLimit[]; reserveEntries: ReserveEntry[]; reserveConfig: ReserveConfig };
-export const defaultReserveConfig: ReserveConfig = { essentialCategoryIds: [], targetMonths: 6 };
+export const defaultReserveConfig: ReserveConfig = { essentialCategoryIds: [], targetMonths: 6, targetAmountCents: null };
 
 export function getCategoryLimit(data: PlanningData, personIds: string[], categoryId: string, month: string): number | null {
   const ids = [...new Set(personIds)];

@@ -11,3 +11,10 @@ Arquivos locais em `public/brands`; descrições não são enviadas a serviços 
 
 - Google: [favicon oficial](https://www.google.com/favicon.ico), convertido para PNG sem redesenho.
 - Gemini: [ícone público do site oficial](https://www.gstatic.com/lamda/images/gemini_sparkle_4g_512_lt_f94943af3be039176192d.png).
+- Supabase e Shopee: [Simple Icons](https://github.com/simple-icons/simple-icons/tree/develop/icons), com cor aplicada ao SVG.
+- 99Food: [logotipo disponibilizado no repositório oficial para restaurantes](https://restaurantes.99app.com/repositorio/), arquivo `ab72c8e5-99food-logo_10au0au000000000000028.png`.
+- Savegnago: [logotipo do site oficial](https://savemania.savegnago.com.br/imagens/savegnago.png).
+- Jaú Serve: [favicon oficial](https://jauservesupermercados.com.br/wp-content/uploads/2024/08/cropped-Favicon-1-192x192.webp), convertido em PNG.
+- Vivo: [ícone do aplicativo oficial da operadora](https://apps.apple.com/br/app/vivo-fatura-suporte-e-mais/id475915064), convertido em PNG.
+
+Os novos PNGs de estabelecimentos foram redimensionados proporcionalmente para até 96 px, preservando a marca para uso nos ícones da interface.

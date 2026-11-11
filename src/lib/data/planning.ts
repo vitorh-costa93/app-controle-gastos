@@ -85,6 +85,6 @@ export async function deleteReserveEntry(id: string): Promise<Result> {
 }
 export async function saveReserveConfig(input: z.input<typeof reserveConfigSchema>): Promise<Result> {
   const parsed = reserveConfigSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Confira as categorias essenciais e a quantidade de meses (1 a 120)." };
+  if (!parsed.success) return { ok: false, error: "Confira o valor positivo da meta e a configuração das despesas essenciais." };
   try { await ensureReferences([], parsed.data.essentialCategoryIds); return await write(`${prefix}reserve-config`, parsed.data); } catch (error) { return fail(error); }
 }

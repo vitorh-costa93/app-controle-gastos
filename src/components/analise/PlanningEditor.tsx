@@ -1,11 +1,9 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { getPlanning, saveCategoryLimit, saveReserveConfig } from "@/lib/data/planning";
 import { type PlanningData } from "@/lib/planning";
-import { addMonths } from "@/lib/utils/format";
-import { getStartingBalance, setStartingBalance } from "@/lib/data/settings";
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import type { Category, Person } from "@/types/db";
 import "./planning-editor.css";
@@ -24,21 +22,8 @@ export function PlanningEditor({ data, people, categories, month, personId, onSa
   const [current, setCurrent] = useState(data);
   const [person, setPerson] = useState(people.some((p) => p.id === personId) ? personId : people[0]?.id ?? "");
   const [amounts, setAmounts] = useState<Record<string, string>>({});
-  const [baselineMonth, setBaselineMonth] = useState(addMonths(month, -1));
-  const [baselineAmount, setBaselineAmount] = useState(0);
-  const [baselineStatus, setBaselineStatus] = useState<"loading" | "ready" | "error">("loading");
-  const [baselineRetry, setBaselineRetry] = useState(0);
-  useEffect(() => {
-    if (mode !== "reserve") return;
-    let active = true;
-    setBaselineStatus("loading");
-    getStartingBalance(true).then((value) => {
-      if (!active) return;
-      if (value) { setBaselineMonth(value.month); setBaselineAmount(value.amountCents); }
-      setBaselineStatus("ready");
-    }).catch(() => { if (active) setBaselineStatus("error"); });
-    return () => { active = false; };
-  }, [mode, baselineRetry]);
+  const [goalMode, setGoalMode] = useState<"amount" | "months">(data.reserveConfig.targetAmountCents ? "amount" : data.reserveConfig.essentialCategoryIds.length ? "months" : "amount");
+  const [targetAmount, setTargetAmount] = useState(data.reserveConfig.targetAmountCents ?? 0);
   const [essentials, setEssentials] = useState(data.reserveConfig.essentialCategoryIds);
   const [targetMonths, setTargetMonths] = useState(String(data.reserveConfig.targetMonths));
   const [error, setError] = useState("");
@@ -72,21 +57,15 @@ export function PlanningEditor({ data, people, categories, month, personId, onSa
             }}>Salvar</button></div>;
           })}</div>
         </> : <>
-          <p>A reserva corresponde a todo o saldo acumulado, com rendimento bruto a 100% do CDI, no mês e pessoa selecionados. Ela usa a mesma projeção da Simulação.</p>
-          <h3>Meta da reserva</h3><p>Escolha as categorias essenciais para calcular a meta. A configuração vale para todas as pessoas.</p>
-          <label>Meses de despesas essenciais <input type="number" min="1" max="120" value={targetMonths} onChange={(e) => setTargetMonths(e.target.value)} /></label>
-          <div className="planning-categories">{categories.map((category) => <label key={category.id}><input type="checkbox" checked={essentials.includes(category.id)} onChange={(e) => setEssentials(e.target.checked ? [...essentials, category.id] : essentials.filter((id) => id !== category.id))} /> {category.name}</label>)}</div>
-          <button type="button" onClick={() => run(() => saveReserveConfig({ essentialCategoryIds: essentials, targetMonths: Number(targetMonths) }))}>Salvar meta</button>
-          <h3>Saldo de referência</h3>
-          <p>Informe o saldo no fim de um mês. Esse é o ponto de partida do acumulado; depois, entradas, gastos e rendimento atualizam a reserva automaticamente. O mesmo valor é usado em Configurações e na Simulação.</p>
-          {personId ? <p>O saldo de referência pertence à visão Casal. Para alterá-lo, selecione Casal. O acumulado individual parte de zero, conforme a Simulação.</p> : baselineStatus === "loading" ? <p role="status">Carregando saldo de referência…</p> : baselineStatus === "error" ? <p role="alert">Não foi possível carregar o saldo. <button type="button" onClick={() => setBaselineRetry((v) => v + 1)}>Tentar novamente</button></p> : <>
-            <div className="planning-fields">
-              <label>Mês de referência <input type="month" value={baselineMonth} onChange={(e) => setBaselineMonth(e.target.value)} /></label>
-              <label>Saldo no fim do mês (R$) <CurrencyInput valueCents={baselineAmount} onChange={setBaselineAmount} /></label>
-            </div>
-            <button type="button" onClick={() => run(() => setStartingBalance(baselineMonth, baselineAmount))}>Salvar saldo de referência</button>
-          </>}
-
+          <p>Defina quanto deseja alcançar. A meta é compartilhada; o saldo acompanha o acumulado automaticamente.</p>
+          <label>Tipo de meta <select value={goalMode} onChange={(e) => setGoalMode(e.target.value as "amount" | "months")}><option value="amount">Valor em reais</option><option value="months">Meses de despesas essenciais</option></select></label>
+          {goalMode === "amount" ? <label htmlFor="reserve-target">Meta da reserva (R$)<CurrencyInput id="reserve-target" valueCents={targetAmount} onChange={setTargetAmount} /></label> : <label>Meses de despesas essenciais <input type="number" min="1" max="120" value={targetMonths} onChange={(e) => setTargetMonths(e.target.value)} /></label>}
+          {goalMode === "amount" ? <details><summary>Calcular cobertura em meses (opcional)</summary><div className="planning-categories">{categories.map((category) => <label key={category.id}><input type="checkbox" checked={essentials.includes(category.id)} onChange={(e) => setEssentials(e.target.checked ? [...essentials, category.id] : essentials.filter((id) => id !== category.id))} /> {category.name}</label>)}</div></details> : <div className="planning-categories">{categories.map((category) => <label key={category.id}><input type="checkbox" checked={essentials.includes(category.id)} onChange={(e) => setEssentials(e.target.checked ? [...essentials, category.id] : essentials.filter((id) => id !== category.id))} /> {category.name}</label>)}</div>}
+          <button type="button" onClick={() => {
+            if (goalMode === "amount" && (!Number.isSafeInteger(targetAmount) || targetAmount <= 0)) { setError("Informe uma meta positiva."); return; }
+            if (goalMode === "months" && (!essentials.length || !Number.isInteger(Number(targetMonths)) || Number(targetMonths) < 1 || Number(targetMonths) > 120)) { setError("Escolha categorias essenciais e informe entre 1 e 120 meses."); return; }
+            run(() => saveReserveConfig({ essentialCategoryIds: essentials, targetMonths: goalMode === "months" ? Number(targetMonths) : current.reserveConfig.targetMonths, targetAmountCents: goalMode === "amount" ? targetAmount : null }), onClose);
+          }}>Salvar meta</button>
         </>}
       </fieldset>
     </div>

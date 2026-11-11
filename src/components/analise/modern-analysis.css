@@ -9,8 +9,9 @@
 .ma-navigation nav { display: flex; overflow-x: auto; min-width: 0; align-self: stretch; }
 .ma-navigation nav button { white-space: nowrap; padding: 14px 11px 12px; border: 0; border-bottom: 2px solid transparent; background: none; color: #626b7a; font-size: 12px; }
 .ma-navigation nav button.is-active { border-bottom-color: #0969ff; color: #0969ff; font-weight: 600; }
-.ma-navigation > [role="group"] { flex-shrink: 0; }
-.ma-navigation > [role="group"] button { padding: 6px 10px; font-size: 12px; }
+.ma-navigation > [role="group"] { flex-shrink: 0; padding: 2px; margin-block: 3px; border-radius: 8px; }
+.ma-navigation > [role="group"] button { min-height: 28px; padding: 4px 8px; border-radius: 6px; font-size: 11px; line-height: 20px; }
+@media (pointer: coarse) { .ma-navigation > [role="group"] button { min-height: 40px; padding-inline: 10px; font-size: 12px; } }
 .ma-panel { min-width: 0; border: 1px solid #e4e8ef; border-radius: 13px; background: #fff; padding: 18px; box-shadow: 0 2px 8px #1d315004; }
 .ma-panel h2 { margin: 0; color: #20232c; font-size: 15px; font-weight: 600; line-height: 1.35; }
 .ma-panel p { color: #757e8c; font-size: 12px; line-height: 1.5; }

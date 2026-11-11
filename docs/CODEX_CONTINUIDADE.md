@@ -4,6 +4,12 @@ Atualizado: 11/11/2026.
 
 - Refinamento da lista de desejos: usuário espera rastreamento automático em várias lojas, comparação e histórico para oportunidades como Black Friday. PLANO_DESEJOS.md atualizado com identificação do produto/variante, cobertura explícita, preço final conhecido e impacto na simulação. Somente planejamento; integração e fontes ainda serão avaliadas, sem prometer cobertura universal.
 
+## Ajuste — seletor compacto e percentual da reserva (11/11/2026)
+- Seletor Casal/Vitor/Jaqueline da Nova UI: caixa visual32px no desktop, botões28px, texto11px e padding reduzido; em pointer coarse botões40px para toque. Preservadas seleção, teclado e escopo por pessoa.
+- EmergencyReserve exibe porcentagem da meta junto do valor-alvo, com até uma casa decimal em pt-BR. Usa mesmo saldo acumulado/meta; negativos contam0% disponível, ausência de meta/saldo não fabrica percentual, acima da meta permite mostrar mais de100% e limita só a largura da barra. Barra com role progressbar e valores acessíveis.
+- Mudanças em modern-analysis.css, nosso-mes.css e EmergencyReserve.tsx; sem alteração de dados/cálculos da projeção. Lint/build finais antes da publicação main/Vercel; conferir Ready/SHA. Navegador interativo indisponível na sessão.
+- Próximo passo: usuário conferir seletor e porcentagem na Nova UI em PRD.
+
 ## Logos adicionais e ícones pela descrição (11/11/2026)
 - Jaú Serve reconhece também Jau Ser, incluindo nomes abreviados de fatura. Marcas locais adicionadas: Pichau, HBO Max, ExitLag/Exit Lag, Allianz e CBI of Miami (identidade CBI confirmada pelo usuário). Fontes em docs/design/BRAND_ASSETS.md.
 - lib/description-icons.ts centraliza símbolos de serviços. DescriptionIcon prioriza marca da descrição, símbolo da descrição e só então categoria; unhas/sobrancelhas/personal etc. não herdam logo Nubank só por agrupamento de pagamento. CategoryIcon também reutiliza símbolos quando há categoria específica.

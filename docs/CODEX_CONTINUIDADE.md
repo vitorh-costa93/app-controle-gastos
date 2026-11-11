@@ -3,6 +3,7 @@
 Atualizado: 11/11/2026.
 
 ## Proposta — Nosso mês com conferência direta, reserva e metas
+- Refinamento11/11: preservar rosca/lista atual com clique para lançamentos incluídos; limites mensais por categoria/pessoa com excesso e cobertura parcial explícitos no consolidado. Cartão abre categorias e descrições expandidas, no mesmo padrão de conferência. Novo mockup categorias-e-cartoes.png. Ícones por categoria + serviço/estabelecimento reconhecido na descrição, associação corrigível e fallback local; não alterar classificação ou enviar descrições para obter logos. Detalhes na PROPOSTA.md. Ainda somente proposta.
 - Usuário enviou nova referência e pediu ajuda para simplificar a rotina, com entradas/gastos por pessoa, compras no cartão para conferir/corrigir, categorias, reserva e metas. Criado mockup docs/design/nosso-mes/visao-geral.png e especificação PROPOSTA.md no mesmo diretório.
 - Direção: matriz por pessoa no topo, cartões com valores por pessoa, ledger editável na própria visão geral e painéis laterais de reserva/metas/contas. Fontes/titularidade de aportes precisam de contrato real na implementação; nunca inferir reserva do saldo projetado ou contar a mesma quantia em meta e reserva. Valores do desenho ilustrativos.
 - Estado: somente proposta visual, sem alterações funcionais nesta etapa. Manter aplicativo atual e análises ricas. Próximo passo: usuário avaliar a organização antes de implementar.

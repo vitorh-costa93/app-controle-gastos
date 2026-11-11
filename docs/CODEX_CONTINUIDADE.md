@@ -1,6 +1,11 @@
 # Continuidade — MeuDinheiro
 
-Atualizado: 10/11/2026.
+Atualizado: 11/11/2026.
+
+## Proposta — Nosso mês com conferência direta, reserva e metas
+- Usuário enviou nova referência e pediu ajuda para simplificar a rotina, com entradas/gastos por pessoa, compras no cartão para conferir/corrigir, categorias, reserva e metas. Criado mockup docs/design/nosso-mes/visao-geral.png e especificação PROPOSTA.md no mesmo diretório.
+- Direção: matriz por pessoa no topo, cartões com valores por pessoa, ledger editável na própria visão geral e painéis laterais de reserva/metas/contas. Fontes/titularidade de aportes precisam de contrato real na implementação; nunca inferir reserva do saldo projetado ou contar a mesma quantia em meta e reserva. Valores do desenho ilustrativos.
+- Estado: somente proposta visual, sem alterações funcionais nesta etapa. Manter aplicativo atual e análises ricas. Próximo passo: usuário avaliar a organização antes de implementar.
 
 ## Ajuste — respiro vertical conforme a janela
 - Acima de800px de altura, o desktop usa espaço adicional em padding dos painéis, linhas de categorias/contas, separação dos cartões e margens internas. Mantém fontes, gráficos e regras financeiras. Layout compacto de notebook e fluxo mobile preservados.

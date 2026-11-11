@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { MonthSummary } from "@/types/domain";
-import { projectCaixinha } from "@/lib/domain/cash-vs-installments";
+import { projectAccumulatedYield } from "@/lib/domain/balance-projection";
 import { formatCurrencyBRL, formatMonthLabel } from "@/lib/utils/format";
 import { BaseAccumulatedChart, AccumulatedPoint } from "./SimulationCharts";
 
@@ -66,13 +66,7 @@ export function BaseCaixinhaYield({
   onPercentOfCdi: (value: number) => void;
   horizon: { from: string; to: string };
 }) {
-  const projection = useMemo(() => {
-    if (accumulated.length === 0 || summaries.length === 0) return null;
-    // Variação mensal do saldo acumulado (inclui o saldo real ancorado, se houver); o saldo inicial é o que sobra antes do 1º mês.
-    const changes = accumulated.map((p, i) => (i === 0 ? summaries[0].leftoverCents : p.accumulatedCents - accumulated[i - 1].accumulatedCents));
-    const opening = accumulated[0].accumulatedCents - changes[0];
-    return projectCaixinha(opening, changes, cdiAnnualPercent, percentOfCdi);
-  }, [summaries, accumulated, cdiAnnualPercent, percentOfCdi]);
+  const projection = useMemo(() => projectAccumulatedYield(summaries, accumulated, cdiAnnualPercent, percentOfCdi), [summaries, accumulated, cdiAnnualPercent, percentOfCdi]);
 
   return (
     <>

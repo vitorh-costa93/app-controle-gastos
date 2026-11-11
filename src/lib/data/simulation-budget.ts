@@ -15,7 +15,7 @@ export async function getSimulationBudget(personId?: string) {
   }
   const defaultHorizon = getDefaultSimulationHorizon();
   await syncSalaryIncomeTransactions();
-  const consolidatedStartingBalance = await getStartingBalance();
+  const consolidatedStartingBalance = await getStartingBalance(true);
   const startingBalance = personId ? null : consolidatedStartingBalance;
   const afterBaseline = consolidatedStartingBalance ? addMonths(consolidatedStartingBalance.month, 1) : defaultHorizon.from;
   const horizon = { from: afterBaseline < defaultHorizon.from ? afterBaseline : defaultHorizon.from, to: defaultHorizon.to };

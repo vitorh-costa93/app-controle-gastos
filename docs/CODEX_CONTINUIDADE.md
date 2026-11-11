@@ -4,6 +4,14 @@ Atualizado: 11/11/2026.
 
 - Refinamento da lista de desejos: usuário espera rastreamento automático em várias lojas, comparação e histórico para oportunidades como Black Friday. PLANO_DESEJOS.md atualizado com identificação do produto/variante, cobertura explícita, preço final conhecido e impacto na simulação. Somente planejamento; integração e fontes ainda serão avaliadas, sem prometer cobertura universal.
 
+## Reserva vinculada ao acumulado e marca original (11/11/2026)
+- Usuário confirmou: reserva = TODO saldo acumulado, incluindo rendimento. Substitui a regra anterior de saldo por depósitos/retiradas próprios; registros antigos preservados, sem exclusão, mas não compõem a nova reserva.
+- EmergencyReserve usa balanceSeriesCents pelo mês selecionado, mesma série bruta a 100% do CDI da Simulação. useBalanceProjection compartilha uma carga entre reserva e BalanceEvolution e invalida resultados em mudanças de pessoa/dados/configuração/retry. Fórmula original de BaseCaixinhaYield extraída literalmente para balance-projection.ts, sem alterar análises ricas.
+- Editar reserva permite configurar cobertura/essenciais e saldo no fim de um mês, gravando o mesmo starting_balance de Configurações/Simulação. Saldo de referência continua consolidado (editar em Casal); visões individuais partem de zero, regra preexistente. Leitura estrita impede tratar falhas como saldo zero e gravação valida mês/centavos seguros. Fora do horizonte mostra indisponibilidade; saldo negativo mantém valor e não cria cobertura positiva.
+- Sidebar moderna agora reutiliza public/icon.svg, a marca original dos ícones da aba/PWA, em lugar do M tipográfico. Favicon original preservado.
+- Testes test-balance-projection.mjs, test-ui-scope.mjs e test-planning.mjs passaram; focused_reviewer sem P1/P2. Lint/build na integração antes de publicar main/Vercel; conferir Ready/SHA. Sem migrations ou modificações manuais dos dados do usuário. Navegador interativo indisponível nesta sessão.
+- Próximo passo: testar Nova UI > Editar reserva (Casal), informar saldo/mês de referência e comparar a reserva com o ponto do mesmo mês no Acumulado/Simulação.
+
 ## Ajuste — valor da rosca e marcas fiéis (11/11/2026)
 - AdaptiveAmount.tsx mede o texto real após carregar Inter Tight e ao redimensionar o gráfico; limita a fonte ao espaço interno com respiro, sem abreviar ou cortar o valor.
 - Identidade compartilhada em lib/brand-icons.ts e BrandIcon/DescriptionIcon/CategoryIcon; arquivos locais em public/brands, fontes em docs/design/BRAND_ASSETS.md. Nubank, PicPay, iRacing, Claude, Unimed, Netflix, Spotify, iFood, Amazon, Prime Video, ChatGPT/OpenAI, Google, Gemini e Apple. Sem letras improvisadas ou busca remota por descrição. Unimed usa emblema extraído do logo original, sem redesenho.

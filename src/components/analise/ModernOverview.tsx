@@ -1,11 +1,14 @@
 "use client";
 
 import Image from "next/image";
+import { useMemo } from "react";
+import { useBalanceProjection } from "./useBalanceProjection";
+import { EmergencyReserve } from "./EmergencyReserve";
 import { getBrandIcon } from "@/lib/brand-icons";
-import { ArrowDownLeft, ArrowUpRight, ChevronRight, Pencil, ShieldCheck, Wallet, Wifi } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, ChevronRight, Pencil, Wallet, Wifi } from "lucide-react";
 import type { AnalysisData } from "@/lib/data/analysis";
 import type { MonthlyOccurrence } from "@/types/domain";
-import { getCategoryLimit, getReserveBalance, type PlanningData } from "@/lib/planning";
+import { getCategoryLimit, type PlanningData } from "@/lib/planning";
 import { formatCurrencyBRL } from "@/lib/utils/format";
 import { MonthlyPaymentsPanel } from "@/components/payments/MonthlyPaymentsPanel";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
@@ -31,9 +34,9 @@ export function ModernOverview({ data, transactions, month, personId, onInspect,
   const totalForRing = breakdown.reduce((sum, category) => sum + Math.max(0, category.amountCents), 0);
   const expenses = transactions.filter((item) => item.considered && item.direction === "expense");
   const recurrences = expenses.filter((item) => item.recurrenceRuleId).sort((a, b) => a.registrationDate.localeCompare(b.registrationDate)).slice(0, 4);
-  const reserve = getReserveBalance(planning, personIds, month);
+  const balanceKey = useMemo(() => ({ data, planning }), [data, planning]);
+  const balance = useBalanceProjection(personId, balanceKey);
   const essential = expenses.filter((item) => item.categoryId && planning.reserveConfig.essentialCategoryIds.includes(item.categoryId)).reduce((sum, item) => sum + item.amountCents, 0);
-  const target = essential * planning.reserveConfig.targetMonths;
   let offset = 0;
 
   return <div className="nm-overview">
@@ -62,7 +65,7 @@ export function ModernOverview({ data, transactions, month, personId, onInspect,
     <div className="nm-pair"><section className="nm-panel"><div className="nm-heading"><div><h2>Cartões</h2><p>Mês de referência · reais e projetados</p></div></div><div className="nm-banks">{(["nubank", "picpay"] as const).map((bank) => { const bankItems = expenses.filter((item) => item.bank === bank); const total = bankItems.reduce((sum, item) => sum + item.amountCents, 0); return <button type="button" className="nm-bank" key={bank} onClick={() => onInspect(bank, "all", true)}><span className={`nm-bank-art nm-bank-${bank}`}><span className="nm-chip" /><Wifi className="nm-contactless" size={20} aria-hidden="true" /><Image src={getBrandIcon(bank)!.src} alt={bank === "nubank" ? "Nubank" : "PicPay"} width={78} height={34} className="nm-bank-logo" /></span><b>{bank === "nubank" ? "Nubank" : "PicPay"}</b><strong>{money(total)}</strong>{people.map((person) => <span className="nm-bank-person" key={person.id}>{person.name}<span>{money(bankItems.filter((item) => item.personId === person.id).reduce((sum, item) => sum + item.amountCents, 0))}</span></span>)}<span className="nm-bank-action">Conferir compras <ChevronRight size={14} /></span></button>; })}</div><p className="nm-footnote">Totais já incluídos nos gastos.</p></section>
       <section className="nm-panel"><div className="nm-heading"><div><h2>Recorrências do mês</h2><p>Reais e projetadas · já incluídas nos gastos</p></div></div>{recurrences.length ? <div className="nm-recurrences">{recurrences.map((item) => { const name = item.categoryId ? categories.get(item.categoryId) ?? "Categoria inativa" : "Sem categoria"; return <button type="button" key={item.id} onClick={() => onInspect("all", item.categoryId ?? "none", true)}><DescriptionIcon description={item.description ?? ""} categoryName={name} size={18} /><span><b>{item.description || "Recorrência"}</b><small>{data.people.find((person) => person.id === item.personId)?.name ?? "Pessoa"} · {name}{item.origin === "projected" ? " · projetada" : ""}</small></span><strong>{money(item.amountCents)}</strong></button>; })}</div> : <p className="nm-empty">Nenhuma recorrência considerada neste mês.</p>}</section></div>
 
-    <section id="reserva" className="nm-panel nm-reserve"><span className="nm-reserve-icon"><ShieldCheck size={28} /></span><div className="nm-reserve-info"><h2>Reserva de emergência</h2><p><strong>{money(reserve)}</strong>{target > 0 && <> / {money(target)}</>}{essential > 0 && <> · {(reserve / essential).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} meses de cobertura</>}</p><small>{essential > 0 ? `Despesas essenciais: ${money(essential)}/mês · meta: ${planning.reserveConfig.targetMonths} meses` : "Configure as categorias essenciais para calcular a cobertura."}</small></div>{target > 0 && <div className="nm-reserve-progress" aria-label={`Progresso da reserva: ${Math.round(Math.max(0, reserve / target) * 100)}%`}><i style={{ width: `${Math.min(100, Math.max(0, reserve / target * 100))}%` }} /></div>}<button type="button" className="nm-link" onClick={() => onEditPlanning("reserve")}><Pencil size={15} /> Editar reserva</button></section>
-    <div className="nm-lower"><MonthlyPaymentsPanel key={`${month}|${personId}`} month={month} personId={personId} personName={personName} /><BalanceEvolution summaries={data.summaries} month={month} personId={personId} /></div>
+    <EmergencyReserve balance={balance} essential={essential} targetMonths={planning.reserveConfig.targetMonths} month={month} personId={personId} onEdit={() => onEditPlanning("reserve")} />
+    <div className="nm-lower"><MonthlyPaymentsPanel key={`${month}|${personId}`} month={month} personId={personId} personName={personName} /><BalanceEvolution summaries={data.summaries} month={month} personId={personId} shared={balance} /></div>
   </div>;
 }

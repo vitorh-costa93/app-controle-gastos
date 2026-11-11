@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { Modal } from "@/components/ui/Modal";
-import { deleteReserveEntry, getPlanning, saveCategoryLimit, saveReserveConfig, saveReserveEntry } from "@/lib/data/planning";
-import { getReserveBalance, type PlanningData } from "@/lib/planning";
-import { formatCurrencyBRL } from "@/lib/utils/format";
+import { getPlanning, saveCategoryLimit, saveReserveConfig } from "@/lib/data/planning";
+import { type PlanningData } from "@/lib/planning";
+import { addMonths } from "@/lib/utils/format";
+import { getStartingBalance, setStartingBalance } from "@/lib/data/settings";
+import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import type { Category, Person } from "@/types/db";
 import "./planning-editor.css";
 
@@ -22,11 +24,21 @@ export function PlanningEditor({ data, people, categories, month, personId, onSa
   const [current, setCurrent] = useState(data);
   const [person, setPerson] = useState(people.some((p) => p.id === personId) ? personId : people[0]?.id ?? "");
   const [amounts, setAmounts] = useState<Record<string, string>>({});
-  const [entryAmount, setEntryAmount] = useState("");
-  const [entryDate, setEntryDate] = useState(`${month}-01`);
-  const [entryNote, setEntryNote] = useState("");
-  const [entryKind, setEntryKind] = useState<"deposit" | "withdraw">("deposit");
-  const [entryId, setEntryId] = useState(() => crypto.randomUUID());
+  const [baselineMonth, setBaselineMonth] = useState(addMonths(month, -1));
+  const [baselineAmount, setBaselineAmount] = useState(0);
+  const [baselineStatus, setBaselineStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [baselineRetry, setBaselineRetry] = useState(0);
+  useEffect(() => {
+    if (mode !== "reserve") return;
+    let active = true;
+    setBaselineStatus("loading");
+    getStartingBalance(true).then((value) => {
+      if (!active) return;
+      if (value) { setBaselineMonth(value.month); setBaselineAmount(value.amountCents); }
+      setBaselineStatus("ready");
+    }).catch(() => { if (active) setBaselineStatus("error"); });
+    return () => { active = false; };
+  }, [mode, baselineRetry]);
   const [essentials, setEssentials] = useState(data.reserveConfig.essentialCategoryIds);
   const [targetMonths, setTargetMonths] = useState(String(data.reserveConfig.targetMonths));
   const [error, setError] = useState("");
@@ -42,7 +54,6 @@ export function PlanningEditor({ data, people, categories, month, personId, onSa
       } catch { setError("Não foi possível atualizar o planejamento. Recarregue a página para conferir o resultado."); }
     });
   }
-  const selectedIds = people.some((p) => p.id === personId) ? [personId] : people.map((p) => p.id);
   return <Modal open onClose={() => { if (!pending) onClose(); }} title={mode === "limits" ? "Limites por categoria" : "Reserva de emergência"} size="lg">
     <div className="planning-editor">
       {error && <p role="alert" className="planning-error">{error}</p>}
@@ -61,19 +72,21 @@ export function PlanningEditor({ data, people, categories, month, personId, onSa
             }}>Salvar</button></div>;
           })}</div>
         </> : <>
-          <p>Saldo da seleção até {month}: <strong>{formatCurrencyBRL(getReserveBalance(current, selectedIds, month))}</strong></p>
+          <p>A reserva corresponde a todo o saldo acumulado, com rendimento bruto a 100% do CDI, no mês e pessoa selecionados. Ela usa a mesma projeção da Simulação.</p>
           <h3>Meta da reserva</h3><p>Escolha as categorias essenciais para calcular a meta. A configuração vale para todas as pessoas.</p>
           <label>Meses de despesas essenciais <input type="number" min="1" max="120" value={targetMonths} onChange={(e) => setTargetMonths(e.target.value)} /></label>
           <div className="planning-categories">{categories.map((category) => <label key={category.id}><input type="checkbox" checked={essentials.includes(category.id)} onChange={(e) => setEssentials(e.target.checked ? [...essentials, category.id] : essentials.filter((id) => id !== category.id))} /> {category.name}</label>)}</div>
           <button type="button" onClick={() => run(() => saveReserveConfig({ essentialCategoryIds: essentials, targetMonths: Number(targetMonths) }))}>Salvar meta</button>
-          <h3>Registrar movimento</h3><div className="planning-fields">
-            <label>Pessoa <select value={person} onChange={(e) => setPerson(e.target.value)}>{people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
-            <label>Data <input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} /></label>
-            <label>Tipo <select value={entryKind} onChange={(e) => setEntryKind(e.target.value as "deposit" | "withdraw")}><option value="deposit">Depósito</option><option value="withdraw">Retirada</option></select></label>
-            <label>Valor (R$) <input inputMode="decimal" value={entryAmount} onChange={(e) => setEntryAmount(e.target.value)} /></label>
-            <label>Observação <input maxLength={200} value={entryNote} onChange={(e) => setEntryNote(e.target.value)} /></label>
-          </div><button type="button" onClick={() => { const cents = parseAmount(entryAmount); if (cents === null) { setError("Informe um valor positivo com até duas casas decimais."); return; } run(() => saveReserveEntry({ id: entryId, personId: person, date: entryDate, amountCents: entryKind === "withdraw" ? -cents : cents, note: entryNote }), () => { setEntryId(crypto.randomUUID()); setEntryAmount(""); setEntryNote(""); }); }}>Adicionar movimento</button>
-          <h3>Movimentos até {month}</h3><div className="planning-list">{current.reserveEntries.filter((entry) => selectedIds.includes(entry.personId) && entry.date.slice(0, 7) <= month).sort((a, b) => b.date.localeCompare(a.date)).map((entry) => <div className="planning-entry" key={entry.id}><span>{entry.date.split("-").reverse().join("/")} · {people.find((p) => p.id === entry.personId)?.name ?? "Pessoa"} · {formatCurrencyBRL(entry.amountCents)}{entry.note && ` · ${entry.note}`}</span><button type="button" onClick={() => { if (window.confirm("Excluir este movimento da reserva?")) run(() => deleteReserveEntry(entry.id)); }}>Excluir</button></div>)}</div>
+          <h3>Saldo de referência</h3>
+          <p>Informe o saldo no fim de um mês. Esse é o ponto de partida do acumulado; depois, entradas, gastos e rendimento atualizam a reserva automaticamente. O mesmo valor é usado em Configurações e na Simulação.</p>
+          {personId ? <p>O saldo de referência pertence à visão Casal. Para alterá-lo, selecione Casal. O acumulado individual parte de zero, conforme a Simulação.</p> : baselineStatus === "loading" ? <p role="status">Carregando saldo de referência…</p> : baselineStatus === "error" ? <p role="alert">Não foi possível carregar o saldo. <button type="button" onClick={() => setBaselineRetry((v) => v + 1)}>Tentar novamente</button></p> : <>
+            <div className="planning-fields">
+              <label>Mês de referência <input type="month" value={baselineMonth} onChange={(e) => setBaselineMonth(e.target.value)} /></label>
+              <label>Saldo no fim do mês (R$) <CurrencyInput valueCents={baselineAmount} onChange={setBaselineAmount} /></label>
+            </div>
+            <button type="button" onClick={() => run(() => setStartingBalance(baselineMonth, baselineAmount))}>Salvar saldo de referência</button>
+          </>}
+
         </>}
       </fieldset>
     </div>

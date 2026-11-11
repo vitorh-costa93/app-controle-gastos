@@ -1,5 +1,7 @@
 # Nosso mês — proposta de visão geral
 
+Atualização aprovada em 11/11/2026: a reserva agora corresponde a todo o saldo acumulado com rendimento bruto a 100% do CDI, compartilhado com a Simulação. O editor grava o saldo de referência comum; a regra anterior de aportes separados descrita abaixo é histórica. Não somar movimentos manuais antigos ao acumulado.
+
 11/11/2026. Mockup solicitado pelo usuário após nova referência; escopo refinado para reserva de emergência e limites opcionais por categoria. Proposta visual, sem alteração funcional do aplicativo.
 
 ![Proposta atual — limites opcionais e reserva de emergência](limites-opcionais-e-reserva.png)

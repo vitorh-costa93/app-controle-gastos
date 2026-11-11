@@ -2,11 +2,11 @@
 
 Atualizado: 11/11/2026.
 
-## Proposta — Nosso mês com conferência direta, reserva e metas
-- Refinamento11/11: preservar rosca/lista atual com clique para lançamentos incluídos; limites mensais por categoria/pessoa com excesso e cobertura parcial explícitos no consolidado. Cartão abre categorias e descrições expandidas, no mesmo padrão de conferência. Novo mockup categorias-e-cartoes.png. Ícones por categoria + serviço/estabelecimento reconhecido na descrição, associação corrigível e fallback local; não alterar classificação ou enviar descrições para obter logos. Detalhes na PROPOSTA.md. Ainda somente proposta.
-- Usuário enviou nova referência e pediu ajuda para simplificar a rotina, com entradas/gastos por pessoa, compras no cartão para conferir/corrigir, categorias, reserva e metas. Criado mockup docs/design/nosso-mes/visao-geral.png e especificação PROPOSTA.md no mesmo diretório.
-- Direção: matriz por pessoa no topo, cartões com valores por pessoa, ledger editável na própria visão geral e painéis laterais de reserva/metas/contas. Fontes/titularidade de aportes precisam de contrato real na implementação; nunca inferir reserva do saldo projetado ou contar a mesma quantia em meta e reserva. Valores do desenho ilustrativos.
-- Estado: somente proposta visual, sem alterações funcionais nesta etapa. Manter aplicativo atual e análises ricas. Próximo passo: usuário avaliar a organização antes de implementar.
+## Proposta — Nosso mês com conferência direta e reserva
+- Versão vigente: docs/design/nosso-mes/limites-opcionais-e-reserva.png e PROPOSTA.md. Limites de categoria opcionais: sem limite, somente gasto/participação, sem “Definir limite”, barra ou pendência. Editor global discreto. Limite consolidado exige cobertura completa; configuração parcial é explicada no editor.
+- Removidos viagem e módulo genérico de metas. Mantida apenas reserva de emergência, com aportes reais e cobertura sobre essenciais; não inferir reserva do saldo projetado. Imagens anteriores são históricas. Valores ilustrativos.
+- Preservar rosca/lista clicável para lançamentos e cartão com categorias/descrições expandidas, edição contextual, filtro pessoa/mês e ícones locais de categorias/serviços com associação corrigível. Casal consolida Vitor e Jaqueline.
+- Estado: proposta visual/documentação, sem mudança funcional ou publicação de nova UI. Imagem conferida; links/diff revisados, lint/build dispensados por ausência de código. Próximo passo: usuário avaliar antes de implementar; manter análises ricas e aplicativo atual.
 
 ## Ajuste — respiro vertical conforme a janela
 - Acima de800px de altura, o desktop usa espaço adicional em padding dos painéis, linhas de categorias/contas, separação dos cartões e margens internas. Mantém fontes, gráficos e regras financeiras. Layout compacto de notebook e fluxo mobile preservados.

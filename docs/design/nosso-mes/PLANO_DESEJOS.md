@@ -25,8 +25,12 @@ Solicitado em 11/11/2026. Planejamento somente: não implementado nesta entrega.
 
 ## 4. Acompanhamento de preço
 
-- Avaliar fontes permitidas e cobertura por loja antes de escolher a integração. Primeira versão pode aceitar atualização manual e histórico; não prometer captura universal de qualquer link.
+- Refinamento do usuário: rastreamento em várias lojas é parte central da função desejada, incluindo oportunidades de Black Friday. A referência sugere acompanhamento de preço, mas sua campanha não comprova cobertura universal da internet.
+- Identificar o produto a partir do nome/link e, quando disponíveis, marca, modelo e identificador de catálogo. Buscar ofertas equivalentes em múltiplas lojas por fontes permitidas, APIs e catálogos; acompanhar também os links escolhidos. Mostrar quais lojas/fontes foram consultadas e a última atualização, sem chamar cobertura parcial de busca completa da internet.
+- Avaliar fontes permitidas, cobertura por loja e custo antes de escolher a integração. A lista manual é a primeira entrega da organização financeira, não substitui o objetivo posterior de rastreamento automático e comparação entre lojas.
 - Definir preço desejado, frequência de atualização, histórico com data/fonte e aviso de preço desatualizado. Comparar o mesmo produto/variante e distinguir preço à vista, frete e condições de pagamento.
+- Mostrar menor oferta encontrada, loja/vendedor, disponibilidade e preço final conhecido; indicar frete ou condições ainda desconhecidos. Não misturar usados, variantes diferentes e vendedores distintos como se fossem a mesma oferta.
+- Em campanhas como Black Friday, usar histórico realmente coletado para contextualizar a redução e avisar quando não houver histórico suficiente; não concluir que uma oferta é boa só pelo desconto anunciado. Atualizar o impacto na Simulação com o preço escolhido, sem criar compra real automaticamente.
 - Alertas primeiro dentro do aplicativo. Outros canais ficam para uma etapa com configuração e autorização próprias. Proteger consultas de URLs contra acesso a redes privadas, limitar tamanho/tempo das respostas e manter segredos no servidor.
 - Avaliar consumo e limites gratuitos de Vercel/Supabase; cache e tarefas com limite de frequência, sem uma consulta por produto a cada abertura da página.
 
@@ -35,6 +39,6 @@ Solicitado em 11/11/2026. Planejamento somente: não implementado nesta entrega.
 1. Lista manual e cenário na Simulação: conferir vista/parcelas, titularidade, datas e cálculos atuais; nenhuma compra real criada por simular.
 2. Sugestão de mês: testar prioridades, meses sem renda, nenhuma data viável, cenários combinados e dinheiro reservado protegido.
 3. Conversão em compra: testar falhas, repetição, vínculo às parcelas e ausência de dupla contagem.
-4. Preço e avisos: validar fonte/variante, indisponibilidade, preço antigo, segurança de links e limites de consumo.
+4. Rastreamento em várias lojas e avisos: validar correspondência do produto, cobertura explícita, histórico, preço final/condições, indisponibilidade, preço antigo, segurança de links e limites de consumo.
 
 Cada etapa terá lint/build e testes dos contratos alterados antes da publicação em produção. O acompanhamento de preço depende da avaliação de fontes; as primeiras etapas não dependem dessa integração.

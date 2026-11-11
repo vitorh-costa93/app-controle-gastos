@@ -2,6 +2,8 @@
 
 Atualizado: 11/11/2026.
 
+- Refinamento da lista de desejos: usuário espera rastreamento automático em várias lojas, comparação e histórico para oportunidades como Black Friday. PLANO_DESEJOS.md atualizado com identificação do produto/variante, cobertura explícita, preço final conhecido e impacto na simulação. Somente planejamento; integração e fontes ainda serão avaliadas, sem prometer cobertura universal.
+
 ## Implementação — Nosso mês na Nova UI (11/11/2026)
 - Nova visão geral em ModernOverview.tsx/nosso-mes.css: Inter Tight, matriz de entradas/gastos/sobra por pessoa, distribuição com acesso aos lançamentos, cartões Nubank/PicPay por pessoa, recorrências e reserva. Toggle clássico e análises/Simulação preservados, incluindo evolução mensal/acumulada compartilhada.
 - InspectionDrawer mantém visão geral ao conferir cartão/categoria: grupos expandidos, busca/subtotal, origem real/projetada, parcela, pessoa e edição contextual. Real usa TransactionEditor; projetado usa editor de valor existente. Tabela completa e dinâmica preservam escopo. Ícones locais por descrição com fallback em recorrências, tabelas e pagamentos, sem enviar descrições a serviços externos.

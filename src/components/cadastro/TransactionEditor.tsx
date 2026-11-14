@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useInterface } from "@/components/layout/InterfaceProvider";
@@ -540,14 +541,17 @@ function EditorContainer({ modern, open, onClose, title, children }: { modern: b
   }, [modern, open]);
   if (!modern) return <Modal open={open} onClose={onClose} title={title}>{children}</Modal>;
   if (!open) return null;
-  return <div className="fixed inset-0 z-50 flex justify-end bg-black/30">
+  // Portal para o shell: evita que o BottomNav (z-40) fique por cima do editor por causa de contexto de empilhamento.
+  const host = typeof document === "undefined" ? null : document.querySelector<HTMLElement>(".interface-shell") ?? document.body;
+  if (!host) return null;
+  return createPortal(<div className="fixed inset-0 z-[60] flex justify-end bg-black/30">
     <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={title} className="modern-editor-dialog h-full w-full overflow-y-auto bg-(--color-surface) shadow-(--shadow-lg)">
       <div className="sticky top-0 z-10 flex items-center justify-between border-b border-(--color-border) bg-(--color-surface) px-5 py-4">
         <h2 className="text-[17px] font-semibold">{title}</h2>
         <button type="button" onClick={onClose} aria-label="Fechar" className="rounded-full p-1.5 text-(--color-text-tertiary) hover:bg-black/5"><X size={18} /></button>
-      </div><div className="p-5">{children}</div>
+      </div><div className="p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">{children}</div>
     </div>
-  </div>;
+  </div>, host);
 }
 
 function buildInitialForm(

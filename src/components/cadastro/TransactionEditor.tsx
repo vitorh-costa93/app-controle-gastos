@@ -15,6 +15,7 @@ import { getPaymentOrganization, savePaymentOrganization } from "@/lib/data/paym
 import { PaymentOrganizationFields } from "@/components/payments/PaymentOrganizationFields";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { DeleteActions } from "./DeleteRecordDialog";
 import { FieldGroup, Input, Select } from "@/components/ui/Field";
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
@@ -453,7 +454,7 @@ function TransactionEditorSession({ open, onClose, people, categories, types, tr
       </div>}
 
       {!isModern && duplicateNotice}
-      <div className="mt-6 flex items-center justify-between gap-3">
+      <div className={`mt-6 flex items-center justify-between gap-3 ${confirmingDelete && transaction?.recurrenceRuleId ? "flex-col items-stretch" : ""}`}>
         <div className="text-xs">
           {saveState === "saving" && <span className="text-(--color-text-tertiary)">Salvando...</span>}
           {saveState === "saved" && <span className="text-(--color-positive)">Salvo</span>}
@@ -469,7 +470,7 @@ function TransactionEditorSession({ open, onClose, people, categories, types, tr
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className={`flex items-center gap-2 ${confirmingDelete && transaction?.recurrenceRuleId ? "w-full" : ""}`}>
           {committed ? <><Button variant="secondary" onClick={onClose} disabled={busy} type="button">Fechar, lançamento já salvo</Button><Button onClick={retryPayment} disabled={busy} type="button">Tentar salvar organização novamente</Button></> : <>
           {transaction && !confirmingDelete && (
             <Button
@@ -482,7 +483,17 @@ function TransactionEditorSession({ open, onClose, people, categories, types, tr
               Excluir
             </Button>
           )}
-          {transaction && confirmingDelete && (
+          {transaction && confirmingDelete && transaction.recurrenceRuleId && (
+            <div className="flex w-full flex-col gap-2">
+              <span className="text-xs text-(--color-text-secondary)">Este lançamento é recorrente. O que você quer excluir?</span>
+              <DeleteActions
+                target={{ kind: "recurring", ruleId: transaction.recurrenceRuleId, month: transaction.referenceMonth, label: transaction.description ?? "este lançamento" }}
+                onCancel={() => setConfirmingDelete(false)}
+                onDone={onClose}
+              />
+            </div>
+          )}
+          {transaction && confirmingDelete && !transaction.recurrenceRuleId && (
             <>
               <span className="text-xs text-(--color-text-secondary)">Excluir mesmo?</span>
               <Button variant="ghost" onClick={() => setConfirmingDelete(false)} disabled={isDeleting || busy} type="button">

@@ -1,9 +1,15 @@
 # Continuidade — MeuDinheiro
 
-Atualizado: 11/11/2026.
+Atualizado: 16/11/2026.
 
 - Refinamento da lista de desejos: usuário espera rastreamento automático em várias lojas, comparação e histórico para oportunidades como Black Friday. PLANO_DESEJOS.md atualizado com identificação do produto/variante, cobertura explícita, preço final conhecido e impacto na simulação. Somente planejamento; integração e fontes ainda serão avaliadas, sem prometer cobertura universal.
 
+## Ajustes — reserva compartilhada, contas pertinentes e alturas (16/11/2026)
+- Reserva sempre usa useBalanceProjection sem pessoa, com saldo inicial consolidado e rendimento da Simulação. Cobertura/meta por meses usa householdCategoryBreakdown calculado na análise com fontes já carregadas, incluindo projeções e ambas pessoas, sem novas consultas. Card identificado Casal. Evolução continua individual e carrega sua própria projeção apenas no modo Acumulado quando filtrada.
+- MonthlyPaymentsPanel oculta grupos sem valor ou itens e deriva contagem/progresso/total/pendente da lista visível. Confirmação de pagamento segue exclusiva da visão Casal; configurações dos grupos preservadas.
+- Desktop >=1600px: coluna Cartões/Recorrências distribui altura em duas linhas proporcionais até alinhar com os blocos vizinhos; cartões e linhas de recorrências aproveitam a altura adicional. Layout menor preservado.
+- Validação: test-reserve-scope, test-payment-visibility, test-ui-scope, test-balance-projection, lint e build aprovados. Testes isolados sem gravações financeiras. Automação Chrome inventariou navegador mas falhou ao abrir aba (timeoutMs); sem validação visual interativa nesta etapa.
+- Publicar em main/Vercel e confirmar Ready/SHA. Próximo passo: usuário conferir os três filtros e espaçamento em PRD.
 ## Ajuste — avatar centralizado e sem contorno (11/11/2026)
 - Rodapé da Nova UI centraliza avatar, nome e descrição. Recorte circular em CSS remove a borda azul incorporada ao PNG, preservando o arquivo original e a ilustração aprovada; chevron permanece à direita.
 - Alteração somente em globals.css; sem mudanças de dados. Lint e build de produção verificados antes da publicação em main/Vercel.

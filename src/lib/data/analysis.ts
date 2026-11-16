@@ -29,6 +29,8 @@ export interface AnalysisData {
   currentSummary: MonthSummary;
   previousSummary: MonthSummary | null;
   categoryBreakdown: { categoryId: string | null; amountCents: number; percent: number }[];
+  /** Despesas do casal para a cobertura da reserva, independente do filtro de pessoa. */
+  householdCategoryBreakdown: { categoryId: string | null; amountCents: number; percent: number }[];
   typeBreakdown: { key: string | null; amountCents: number; percent: number }[];
   personBreakdown: { key: string | null; amountCents: number; percent: number }[];
   /** Renda × gastos fixos/parcelas/variáveis do mês selecionado e dos 5 seguintes (o primeiro item é o mês selecionado). */
@@ -103,6 +105,11 @@ async function computeAnalysisData(month: string, personId?: string): Promise<An
 
   const currentOccurrences = withSalary(month, buildMonthOccurrences(month, transactions, rules));
   const categoryBreakdown = breakdownByCategory(currentOccurrences, "expense");
+  // Reutiliza as fontes já carregadas; a reserva é sempre compartilhada pelo casal.
+  const householdCategoryBreakdown = personId ? breakdownByCategory([
+    ...buildMonthOccurrences(month, allTransactions, allRules),
+    ...(estimatesByMonth.get(month) ?? []),
+  ], "expense") : categoryBreakdown;
   const unplannedByCategory = breakdownByCategory(currentOccurrences.filter((o) => isUnplannedExpense(o, unplannedExclusions)), "expense");
   const typeBreakdown = breakdownByKey(currentOccurrences, "typeId", "expense");
   const personBreakdown = breakdownByKey(currentOccurrences, "personId", "expense");
@@ -155,6 +162,7 @@ async function computeAnalysisData(month: string, personId?: string): Promise<An
     currentSummary,
     previousSummary,
     categoryBreakdown,
+    householdCategoryBreakdown,
     typeBreakdown,
     personBreakdown,
     commitments,

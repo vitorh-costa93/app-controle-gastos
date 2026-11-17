@@ -96,6 +96,71 @@ export interface InstallmentGroupPatch {
   typeId: string | null;
 }
 
+export async function updateInstallmentGroupWithScope(
+  groupId: string,
+  transactionId: string,
+  fromMonth: string,
+  patch: InstallmentGroupPatch,
+  scope: "month" | "all" | "following"
+): Promise<{ ok: true; updated: number } | { ok: false; error: string }> {
+  if (patch.amountCents <= 0) return { ok: false, error: "Informe um valor maior que zero." };
+  const supabase = createAdminClient();
+  let query = supabase
+    .from("transactions")
+    .update({
+      description: patch.description,
+      amount: centsToReaisString(patch.amountCents),
+      category_id: patch.categoryId,
+      type_id: patch.typeId,
+    })
+    .is("deleted_at", null);
+
+  if (scope === "month") {
+    query = query.eq("id", transactionId);
+  } else if (scope === "following") {
+    query = query.eq("installment_group_id", groupId).gte("reference_month", fromMonth);
+  } else {
+    query = query.eq("installment_group_id", groupId);
+  }
+
+  const { data, error } = await query.select("id");
+  if (error) {
+    console.error("updateInstallmentGroupWithScope failed:", error);
+    return { ok: false, error: "Não foi possível atualizar a compra parcelada." };
+  }
+  revalidateAll();
+  return { ok: true, updated: data?.length ?? 0 };
+}
+
+export async function deleteInstallmentGroupWithScope(
+  groupId: string,
+  transactionId: string,
+  fromMonth: string,
+  scope: "month" | "all" | "following"
+): Promise<{ ok: true; deleted: number } | { ok: false; error: string }> {
+  const supabase = createAdminClient();
+  let query = supabase
+    .from("transactions")
+    .update({ deleted_at: new Date().toISOString() })
+    .is("deleted_at", null);
+
+  if (scope === "month") {
+    query = query.eq("id", transactionId);
+  } else if (scope === "following") {
+    query = query.eq("installment_group_id", groupId).gte("reference_month", fromMonth);
+  } else {
+    query = query.eq("installment_group_id", groupId);
+  }
+
+  const { data, error } = await query.select("id");
+  if (error) {
+    console.error("deleteInstallmentGroupWithScope failed:", error);
+    return { ok: false, error: "Não foi possível excluir as parcelas." };
+  }
+  revalidateAll();
+  return { ok: true, deleted: data?.length ?? 0 };
+}
+
 /** Altera a compra parcelada a partir de `fromMonth` (inclusive): as parcelas anteriores ficam como estavam. */
 export async function updateInstallmentGroupFrom(
   groupId: string,

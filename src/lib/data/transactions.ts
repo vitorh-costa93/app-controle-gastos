@@ -611,6 +611,225 @@ export async function setTransactionConsidered(
   return { ok: true };
 }
 
+export async function setTransactionValidated(
+  id: string,
+  validated: boolean
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("transactions").update({ validated }).eq("id", id);
+  if (error) {
+    console.error("setTransactionValidated failed:", error);
+    return { ok: false, error: "Não foi possível atualizar a validação." };
+  }
+
+  revalidatePath("/cadastro");
+  revalidateTag("analysis");
+  revalidatePath("/analise");
+  return { ok: true };
+}
+
+export type EditScope = "month" | "all" | "following";
+
+export async function updateTransactionWithScope(
+  id: string,
+  input: Partial<TransactionInput>,
+  scope: EditScope
+): Promise<{ ok: true; data: Transaction } | { ok: false; error: string }> {
+  const supabase = createAdminClient();
+  const { data: before } = await supabase
+    .from("transactions")
+    .select("*")
+    .eq("id", id)
+    .single();
+
+  if (!before) return { ok: false, error: "Lançamento não encontrado." };
+
+  const patch: Record<string, unknown> = {};
+  if (input.bank !== undefined) patch.bank = input.bank;
+  if (input.registrationDate !== undefined) patch.registration_date = input.registrationDate;
+  if (input.referenceMonth !== undefined) patch.reference_month = input.referenceMonth;
+  if (input.personId !== undefined) patch.person_id = input.personId;
+  if (input.direction !== undefined) patch.direction = input.direction;
+  if (input.fixedVariable !== undefined) patch.fixed_variable = input.fixedVariable;
+  if (input.typeId !== undefined) patch.type_id = input.typeId;
+  if (input.categoryId !== undefined) patch.category_id = input.categoryId;
+  if (input.installmentCurrent !== undefined) patch.installment_current = input.installmentCurrent;
+  if (input.installmentTotal !== undefined) patch.installment_total = input.installmentTotal;
+  if (input.amountCents !== undefined) patch.amount = centsToReaisString(input.amountCents);
+  if (input.description !== undefined) patch.description = input.description;
+  if (input.considered !== undefined) patch.considered = input.considered;
+
+  const isRecurring = Boolean(before.recurrence_rule_id);
+  const isInstallment = Boolean(before.installment_group_id && before.installment_total > 1);
+
+  if (scope === "month" && isRecurring) {
+    // Altera apenas a ocorrência deste mês sem propagar para a regra.
+    const { data, error } = await supabase.from("transactions").update(patch).eq("id", id).select("*").single();
+    if (error || !data) return { ok: false, error: "Não foi possível salvar as alterações." };
+    revalidatePath("/cadastro");
+    revalidatePath("/simulacao");
+    revalidateTag("analysis");
+    revalidatePath("/analise");
+    return { ok: true, data: mapTransactionRow(data as TransactionRow) };
+  }
+
+  if (scope === "month" || (!isRecurring && !isInstallment)) {
+    return updateTransaction(id, input);
+  }
+
+  // Multi-mês ("all" ou "following"): não sobrescreve reference_month nem installment_current dos demais meses.
+  const multiPatch = { ...patch };
+  delete multiPatch.reference_month;
+  delete multiPatch.registration_date;
+  delete multiPatch.installment_current;
+
+  if (isInstallment && before.installment_group_id) {
+    const { data: updatedCurrent, error: currentError } = await supabase
+      .from("transactions")
+      .update(patch)
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (currentError || !updatedCurrent) return { ok: false, error: "Não foi possível salvar as alterações." };
+
+    let groupQuery = supabase
+      .from("transactions")
+      .update(multiPatch)
+      .eq("installment_group_id", before.installment_group_id)
+      .neq("id", id)
+      .is("deleted_at", null);
+    if (scope === "following") {
+      groupQuery = groupQuery.gte("reference_month", before.reference_month);
+    }
+    const { error: groupError } = await groupQuery;
+    if (groupError) return { ok: false, error: "Não foi possível atualizar todas as parcelas selecionadas." };
+
+    revalidatePath("/cadastro");
+    revalidatePath("/simulacao");
+    revalidateTag("analysis");
+    revalidatePath("/analise");
+    return { ok: true, data: mapTransactionRow(updatedCurrent as TransactionRow) };
+  }
+
+  // Recorrente: "all" ou "following"
+  const ruleId = before.recurrence_rule_id as string;
+  const { data: updatedCurrent, error: currentError } = await supabase
+    .from("transactions")
+    .update(patch)
+    .eq("id", id)
+    .select("*")
+    .single();
+  if (currentError || !updatedCurrent) return { ok: false, error: "Não foi possível salvar as alterações." };
+
+  let recQuery = supabase
+    .from("transactions")
+    .update(multiPatch)
+    .eq("recurrence_rule_id", ruleId)
+    .neq("id", id)
+    .is("deleted_at", null);
+  if (scope === "following") {
+    recQuery = recQuery.gte("reference_month", before.reference_month);
+  }
+  const { error: recError } = await recQuery;
+  if (recError) return { ok: false, error: "Não foi possível atualizar os demais meses da recorrência." };
+
+  const row = updatedCurrent as TransactionRow;
+  const finalFixedVariable = input.fixedVariable ?? before.fixed_variable;
+  if (finalFixedVariable === "fixed") {
+    const { data: existingRule } = await supabase
+      .from("recurrence_rules")
+      .select("end_date")
+      .eq("id", ruleId)
+      .single();
+    const recurrenceFields: RecurrenceFields = {
+      bank: input.bank !== undefined ? input.bank : before.bank ?? null,
+      personId: input.personId ?? before.person_id,
+      direction: input.direction ?? before.direction,
+      typeId: input.typeId !== undefined ? input.typeId : before.type_id,
+      categoryId: input.categoryId !== undefined ? input.categoryId : before.category_id,
+      amountCents: input.amountCents ?? reaisStringToCents(before.amount),
+      registrationDate: input.registrationDate ?? before.registration_date,
+      description: input.description !== undefined ? input.description : before.description,
+      endDate: input.fixedEndDate !== undefined ? input.fixedEndDate : existingRule?.end_date ?? null,
+      frequency: input.fixedFrequency,
+    };
+    await syncFixedRecurrence(supabase, ruleId, recurrenceFields);
+    if (scope === "all" && input.amountCents !== undefined) {
+      await supabase.from("recurrence_rule_amount_versions")
+        .update({ amount: centsToReaisString(input.amountCents) })
+        .eq("recurrence_rule_id", ruleId);
+    }
+  } else {
+    await deactivateFixedRecurrence(supabase, ruleId);
+  }
+
+  revalidatePath("/cadastro");
+  revalidatePath("/simulacao");
+  revalidateTag("recurrence-rules");
+  revalidateTag("analysis");
+  revalidatePath("/analise");
+  return { ok: true, data: mapTransactionRow(row) };
+}
+
+export async function deleteTransactionWithScope(
+  id: string,
+  scope: EditScope
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = createAdminClient();
+  const { data: before } = await supabase
+    .from("transactions")
+    .select("recurrence_rule_id, installment_group_id, installment_total, reference_month")
+    .eq("id", id)
+    .single();
+
+  if (!before) return { ok: false, error: "Lançamento não encontrado." };
+
+  const now = new Date().toISOString();
+
+  if (before.recurrence_rule_id) {
+    if (scope === "month" || scope === "following") {
+      const { error } = await supabase.rpc("delete_recurring_occurrence", {
+        p_rule_id: before.recurrence_rule_id,
+        p_month: before.reference_month,
+        p_scope: scope,
+      });
+      if (error) return { ok: false, error: "Não foi possível excluir a recorrência." };
+    } else {
+      const { error: txErr } = await supabase
+        .from("transactions")
+        .update({ deleted_at: now })
+        .eq("recurrence_rule_id", before.recurrence_rule_id)
+        .is("deleted_at", null);
+      if (txErr) return { ok: false, error: "Não foi possível excluir todos os meses da recorrência." };
+      await deactivateFixedRecurrence(supabase, before.recurrence_rule_id);
+    }
+  } else if (before.installment_group_id && before.installment_total > 1) {
+    let query = supabase
+      .from("transactions")
+      .update({ deleted_at: now })
+      .is("deleted_at", null);
+    if (scope === "month") {
+      query = query.eq("id", id);
+    } else if (scope === "following") {
+      query = query.eq("installment_group_id", before.installment_group_id).gte("reference_month", before.reference_month);
+    } else {
+      query = query.eq("installment_group_id", before.installment_group_id);
+    }
+    const { error } = await query;
+    if (error) return { ok: false, error: "Não foi possível excluir as parcelas selecionadas." };
+  } else {
+    const { error } = await supabase.from("transactions").update({ deleted_at: now }).eq("id", id);
+    if (error) return { ok: false, error: "Não foi possível excluir este lançamento." };
+  }
+
+  revalidatePath("/cadastro");
+  revalidateTag("recurrence-rules");
+  revalidateTag("analysis");
+  revalidatePath("/analise");
+  revalidatePath("/simulacao");
+  return { ok: true };
+}
+
 export async function deleteTransaction(
   id: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {

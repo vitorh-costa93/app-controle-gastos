@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDown, ArrowUp, ArrowUpDown, Pencil, Trash2, SlidersHorizontal } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Pencil, Trash2 } from "lucide-react";
 import { MonthRow } from "@/lib/domain/month-rows";
 import { Person, Category, TransactionType } from "@/types/db";
 import { formatCurrencyBRL, formatDateTimeBR, formatReferenceMonthShort } from "@/lib/utils/format";
@@ -256,14 +256,14 @@ export function CadastroRecordsTable({ rows, people, categories, types, onEdit }
           <tbody>{visible.map(({ row, values }) => <tr key={row.key} className="border-t border-(--color-border)">
             <td className="px-1.5 py-2"><input type="checkbox" aria-label={`Selecionar ${row.occurrence.description ?? "lançamento"}`} disabled={!selectable(row)} checked={selected.has(row.key)} onChange={() => toggleSelection(row.key)} /></td>
             {visibleColumns.map(([column]) => <td key={column} className={cn("px-1.5 py-2 align-top", column === "description" || column === "category" || column === "type" ? "break-words" : "")} title={values[column]}>{column === "considered" ? <RecordConsidered row={row} onChanged={consideredChanged(row)} /> : (column === "category" || (column === "bank" && row.occurrence.bank)) ? <span className="modern-cadastro-category"><CategoryIcon name={values[column]} size={14} />{values[column]}</span> : column === "description" ? <span className="reference-label"><DescriptionIcon description={row.occurrence.description ?? ""} categoryName={values.category} size={14} />{values[column]}</span> : values[column]}</td>)}
-            <td className="px-1.5 py-2"><RecordActions row={row} onEdit={() => onEdit(row)} onOrganize={() => setPaymentOccurrences([row.occurrence])} /></td>
+            <td className="px-1.5 py-2"><RecordActions row={row} onEdit={() => onEdit(row)} /></td>
           </tr>)}</tbody>
         </table>
       </div>
       <div className="divide-y divide-(--color-border) md:hidden">{visible.map(({ row, values }) => <article key={row.key} className="space-y-2 p-3">
         <label className="flex items-center gap-2 font-medium"><input type="checkbox" aria-label={`Selecionar ${values.description}`} disabled={!selectable(row)} checked={selected.has(row.key)} onChange={() => toggleSelection(row.key)} /><DescriptionIcon description={row.occurrence.description ?? ""} categoryName={values.category} size={14} />{values.description}</label>
         <dl className="grid grid-cols-2 gap-2 text-xs">{COLUMNS.filter(([column]) => column !== "description").map(([column, label]) => <div key={column}><dt className="text-(--color-text-secondary)">{label}</dt><dd>{column === "considered" ? <RecordConsidered row={row} onChanged={consideredChanged(row)} /> : (column === "category" || (column === "bank" && row.occurrence.bank)) ? <span className="modern-cadastro-category"><CategoryIcon name={values[column]} size={14} />{values[column]}</span> : values[column]}</dd></div>)}</dl>
-        <RecordActions row={row} onEdit={() => onEdit(row)} onOrganize={() => setPaymentOccurrences([row.occurrence])} />
+        <RecordActions row={row} onEdit={() => onEdit(row)} />
       </article>)}</div>
       {!filtered.length && <p className="p-6 text-center text-sm">Nenhum lançamento encontrado com esses filtros.</p>}
     </div>
@@ -300,12 +300,11 @@ function RecordConsidered({ row, onChanged }: { row: MonthRow; onChanged: (value
   }} />{error && <span role="alert" className="text-xs text-(--color-negative)">{error}</span>}</>;
 }
 
-function RecordActions({ row, onEdit, onOrganize }: { row: MonthRow; onEdit: () => void; onOrganize: () => void }) {
+function RecordActions({ row, onEdit }: { row: MonthRow; onEdit: () => void }) {
   const [target, setTarget] = useState<DeleteTarget | null>(null);
   const deleteTarget = deleteTargetFor(row.occurrence, row.transaction);
   return <div className="flex items-center gap-0.5">
     <button className="rounded-full p-1.5 hover:bg-black/5" aria-label="Editar lançamento" onClick={onEdit}><Pencil size={15} /></button>
-    {row.occurrence.direction === "expense" && targetForOccurrence(row.occurrence) && <button className="rounded-full p-1.5 hover:bg-black/5" aria-label="Organizar pagamento" title="Organizar pagamento" onClick={onOrganize}><SlidersHorizontal size={15} /></button>}
     {deleteTarget && <button className="rounded-full p-1.5 hover:bg-black/5" aria-label="Excluir lançamento" onClick={() => setTarget(deleteTarget)}><Trash2 size={15} /></button>}
     <DeleteRecordDialog target={target} onClose={() => setTarget(null)} />
   </div>;

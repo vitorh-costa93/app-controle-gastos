@@ -53,8 +53,8 @@ export async function getPaymentOrganization(target: PaymentTarget): Promise<{ o
     return { ok: true, settings: resolveOrganization(resolved.occurrence, profiles, new Map(categories.map((category) => [category.id, category.name]))).settings };
   } catch (error) { return { ok: false, error: error instanceof Error ? error.message : "Não foi possível carregar a organização." }; }
 }
-export async function savePaymentOrganization(input: { targets: PaymentTarget[]; settings: PaymentOrganization; scope: "month" | "following" }): Promise<{ ok: true } | { ok: false; error: string }> {
-  const parsed = z.object({ targets: z.array(targetSchema).min(1).max(500), settings: organizationSchema, scope: z.enum(["month", "following"]) }).safeParse(input);
+export async function savePaymentOrganization(input: { targets: PaymentTarget[]; settings: PaymentOrganization; scope: "month" | "all" | "following" }): Promise<{ ok: true } | { ok: false; error: string }> {
+  const parsed = z.object({ targets: z.array(targetSchema).min(1).max(500), settings: organizationSchema, scope: z.enum(["month", "all", "following"]) }).safeParse(input);
   if (!parsed.success) return { ok: false, error: "Confira a organização, os vencimentos e os registros selecionados (máximo de 500)." };
   const settings = normalizeOrganization(parsed.data.settings);
   if (settings.showAtMonthStart && !settings.groupName) return { ok: false, error: "Informe um nome para o grupo de pagamento." };
@@ -82,22 +82,25 @@ export async function savePaymentOrganization(input: { targets: PaymentTarget[];
     }
     const writes = new Map<string, { key: string; value: PaymentProfile; updated_at: string }>();
     for (const { target, kind, id } of resolved) {
-      const value: PaymentProfile = { kind, id, month: target.month, scope: parsed.data.scope, settings };
-      const key = `payment_org:${kind}:${id}:${value.scope}:${target.month}`;
+      const effectiveScope = parsed.data.scope === "all" ? "following" : parsed.data.scope;
+      const effectiveMonth = parsed.data.scope === "all" ? "2000-01" : target.month;
+      const value: PaymentProfile = { kind, id, month: effectiveMonth, scope: effectiveScope, settings };
+      const key = `payment_org:${kind}:${id}:${value.scope}:${effectiveMonth}`;
       writes.set(key, { key, value, updated_at: new Date().toISOString() });
-      // Uma nova decisão "neste mês e seguintes" substitui a exceção do próprio mês,
+      // Uma nova decisão "neste mês e seguintes" (ou "todos os meses") substitui a exceção do próprio mês,
       // sem apagar exceções que o usuário configurou explicitamente em outros meses.
-      if (value.scope === "following") {
-        const current = { ...value, scope: "month" as const };
+      if (effectiveScope === "following") {
+        const current = { ...value, month: target.month, scope: "month" as const };
         const currentKey = `payment_org:${kind}:${id}:month:${target.month}`;
         writes.set(currentKey, { key: currentKey, value: current, updated_at: new Date().toISOString() });
       }
       if (isCardMethod(settings.method)) {
         // Exibir/ocultar afeta o cartão inteiro; os itens não são parcialmente
         // excluídos de uma fatura que continua visível no resumo.
-        for (const scope of value.scope === "following" ? ["following", "month"] as const : ["month"] as const) {
-          const card: PaymentProfile = { kind: "card", id: settings.method, month: target.month, scope, settings };
-          const key = `payment_org:card:${settings.method}:${scope}:${target.month}`;
+        for (const scope of effectiveScope === "following" ? ["following", "month"] as const : ["month"] as const) {
+          const cardMonth = scope === "following" ? effectiveMonth : target.month;
+          const card: PaymentProfile = { kind: "card", id: settings.method, month: cardMonth, scope, settings };
+          const key = `payment_org:card:${settings.method}:${scope}:${cardMonth}`;
           writes.set(key, { key, value: card, updated_at: new Date().toISOString() });
         }
       }

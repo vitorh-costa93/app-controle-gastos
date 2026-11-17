@@ -78,6 +78,7 @@ export function transactionMonthRow(t: Transaction): MonthRow {
       amountCents: t.amountCents,
       description: t.description,
       considered: t.considered,
+      validated: t.validated,
       recurrenceRuleId: t.recurrenceRuleId,
       installmentGroupId: t.installmentGroupId,
       unplannedExcluded: t.unplannedExcluded,

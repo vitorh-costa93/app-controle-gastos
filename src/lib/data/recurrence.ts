@@ -213,7 +213,29 @@ export async function setRecurrenceMonthOverride(
   return { ok: true };
 }
 
-export type RecurringDeleteScope = "month" | "following";
+export async function updateRecurrenceAmountAllMonths(
+  ruleId: string,
+  amountCents: number
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (amountCents <= 0) return { ok: false, error: "Informe um valor maior que zero." };
+  const supabase = createAdminClient();
+  const amount = centsToReaisString(amountCents);
+  const { error: ruleError } = await supabase.from("recurrence_rules").update({ amount }).eq("id", ruleId);
+  if (ruleError) return { ok: false, error: "Não foi possível atualizar a recorrência." };
+
+  await supabase.from("recurrence_rule_amount_versions").update({ amount }).eq("recurrence_rule_id", ruleId);
+  await supabase.from("transactions").update({ amount }).eq("recurrence_rule_id", ruleId).is("deleted_at", null);
+
+  revalidateTag("recurrence-rules");
+  revalidateTag("analysis");
+  revalidatePath("/configuracoes");
+  revalidatePath("/cadastro");
+  revalidatePath("/analise");
+  revalidatePath("/simulacao");
+  return { ok: true };
+}
+
+export type RecurringDeleteScope = "month" | "all" | "following";
 
 /**
  * Exclui um registro recorrente:
@@ -221,15 +243,32 @@ export type RecurringDeleteScope = "month" | "following";
  *   para a projeção não voltar; os outros meses seguem normais.
  * - "following": aquele mês e todos os seguintes — apaga os lançamentos reais daí em diante e encerra a regra no
  *   mês anterior (ou a desativa, se aquele era o primeiro mês dela).
+ * - "all": todos os meses — apaga todos os lançamentos reais vinculados e desativa a regra.
  */
 export async function deleteRecurringOccurrence(
   ruleId: string,
   referenceMonth: string,
   scope: RecurringDeleteScope
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { error } = await createAdminClient().rpc("delete_recurring_occurrence", { p_rule_id: ruleId, p_month: referenceMonth, p_scope: scope });
-  if (error) {
-    return { ok: false, error: error.message.startsWith("Lote:") ? error.message.slice(5).trim() : "Não foi possível concluir a operação. Nenhum registro foi alterado." };
+  const supabase = createAdminClient();
+  if (scope === "all") {
+    const now = new Date().toISOString();
+    const { error: txErr } = await supabase
+      .from("transactions")
+      .update({ deleted_at: now })
+      .eq("recurrence_rule_id", ruleId)
+      .is("deleted_at", null);
+    if (txErr) return { ok: false, error: "Não foi possível excluir todos os meses da recorrência." };
+    const { error: ruleErr } = await supabase
+      .from("recurrence_rules")
+      .update({ active: false })
+      .eq("id", ruleId);
+    if (ruleErr) return { ok: false, error: "Não foi possível desativar a recorrência." };
+  } else {
+    const { error } = await supabase.rpc("delete_recurring_occurrence", { p_rule_id: ruleId, p_month: referenceMonth, p_scope: scope });
+    if (error) {
+      return { ok: false, error: error.message.startsWith("Lote:") ? error.message.slice(5).trim() : "Não foi possível concluir a operação. Nenhum registro foi alterado." };
+    }
   }
 
   revalidateTag("recurrence-rules");

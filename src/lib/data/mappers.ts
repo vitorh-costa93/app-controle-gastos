@@ -31,6 +31,7 @@ export function mapTransactionRow(row: TransactionRow): Transaction {
     amountCents: reaisStringToCents(row.amount),
     description: row.description,
     considered: row.considered,
+    validated: row.validated ?? false,
     source: row.source,
     aiConfidence: row.ai_confidence,
     recurrenceRuleId: row.recurrence_rule_id,

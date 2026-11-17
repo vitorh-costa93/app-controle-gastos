@@ -1,13 +1,25 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { RecurrenceRule, RecurrenceFrequency } from "@/types/domain";
 import { RECURRENCE_FREQUENCIES } from "@/lib/domain/recurrence";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { FieldGroup, Input, Select } from "@/components/ui/Field";
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
-import { addRecurrenceAmountVersion, setRecurrenceMonthOverride, setRecurrenceEndDate, setRecurrenceFrequency } from "@/lib/data/recurrence";
+import {
+  addRecurrenceAmountVersion,
+  setRecurrenceMonthOverride,
+  setRecurrenceEndDate,
+  setRecurrenceFrequency,
+  updateRecurrenceAmountAllMonths,
+  deleteRecurringOccurrence,
+} from "@/lib/data/recurrence";
+import { defaultOrganization, type PaymentOrganization } from "@/lib/domain/payments";
+import { getPaymentOrganization, savePaymentOrganization } from "@/lib/data/payments";
+import { PaymentOrganizationFields } from "@/components/payments/PaymentOrganizationFields";
+import { ScopeConfirmModal } from "@/components/cadastro/ScopeConfirmModal";
+import type { EditScope } from "@/lib/data/transactions";
 import { formatCurrencyBRL, formatReferenceMonthShort, toReferenceMonth } from "@/lib/utils/format";
 
 export function RecurrenceRuleEditModal({
@@ -25,193 +37,157 @@ export function RecurrenceRuleEditModal({
   const now = initialMonth ?? toReferenceMonth(new Date());
 
   const [newAmountCents, setNewAmountCents] = useState(rule.amountCents);
-  const [effectiveFrom, setEffectiveFrom] = useState(now);
-  const [isPending, startTransition] = useTransition();
-  const [savedVersion, setSavedVersion] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const [overrideMonth, setOverrideMonth] = useState(now);
-  const [overrideAmountCents, setOverrideAmountCents] = useState(rule.amountCents);
-  const [isOverridePending, startOverrideTransition] = useTransition();
-  const [savedOverride, setSavedOverride] = useState(false);
-  const [overrideError, setOverrideError] = useState<string | null>(null);
-
+  const [frequency, setFrequency] = useState<RecurrenceFrequency>(rule.frequency ?? "monthly");
+  const [endMonth, setEndMonth] = useState(rule.endDate ? rule.endDate.slice(0, 7) : "");
   const [history, setHistory] = useState(rule.amountHistory);
   const sortedHistory = [...history].sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom));
 
-  const [frequency, setFrequency] = useState<RecurrenceFrequency>(rule.frequency ?? "monthly");
-  const [isFrequencyPending, startFrequencyTransition] = useTransition();
-  const [frequencySaved, setFrequencySaved] = useState(false);
-  const [frequencyError, setFrequencyError] = useState<string | null>(null);
+  const isExpense = rule.direction === "expense";
+  const [payment, setPayment] = useState<PaymentOrganization>(() =>
+    defaultOrganization({ bank: rule.bank ?? null, description: rule.description })
+  );
+  const [paymentDirty, setPaymentDirty] = useState(false);
+  const [paymentLoading, setPaymentLoading] = useState(isExpense);
 
-  const [endMonth, setEndMonth] = useState(rule.endDate ? rule.endDate.slice(0, 7) : "");
-  const [isEndDatePending, startEndDateTransition] = useTransition();
-  const [endDateSaved, setEndDateSaved] = useState(false);
-  const [endDateError, setEndDateError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [confirmMode, setConfirmMode] = useState<"save" | "delete" | null>(null);
 
-  function handleSaveVersion() {
+  useEffect(() => {
+    if (!isExpense) return;
+    let active = true;
+    void getPaymentOrganization({ kind: "recurrence", id: rule.id, month: now })
+      .then((res) => {
+        if (!active) return;
+        if (res.ok) setPayment(res.settings);
+      })
+      .finally(() => {
+        if (active) setPaymentLoading(false);
+      });
+    return () => { active = false; };
+  }, [isExpense, rule.id, now]);
+
+  function executeConfirm(scope: EditScope) {
     setError(null);
-    setSavedVersion(false);
     startTransition(async () => {
-      const result = await addRecurrenceAmountVersion(rule.id, effectiveFrom, newAmountCents);
-      if (!result.ok) {
-        setError(result.error);
+      if (confirmMode === "delete") {
+        const res = await deleteRecurringOccurrence(rule.id, now, scope);
+        if (!res.ok) {
+          setError(res.error);
+          setConfirmMode(null);
+          return;
+        }
+        setConfirmMode(null);
+        onChanged();
+        onClose();
         return;
       }
-      setHistory((prev) => [...prev.filter((v) => v.effectiveFrom !== effectiveFrom), { effectiveFrom, amountCents: newAmountCents }]);
-      setSavedVersion(true);
-      onChanged();
-    });
-  }
 
-  function handleSaveOverride() {
-    setOverrideError(null);
-    setSavedOverride(false);
-    startOverrideTransition(async () => {
-      const result = await setRecurrenceMonthOverride(rule.id, overrideMonth, overrideAmountCents);
-      if (!result.ok) {
-        setOverrideError(result.error);
-        return;
+      if (scope === "month") {
+        if (newAmountCents !== rule.amountCents || !paymentDirty) {
+          const res = await setRecurrenceMonthOverride(rule.id, now, newAmountCents);
+          if (!res.ok) {
+            setError(res.error);
+            setConfirmMode(null);
+            return;
+          }
+        }
+      } else if (scope === "following") {
+        if (newAmountCents !== rule.amountCents) {
+          const res = await addRecurrenceAmountVersion(rule.id, now, newAmountCents);
+          if (!res.ok) {
+            setError(res.error);
+            setConfirmMode(null);
+            return;
+          }
+          setHistory((prev) => [...prev.filter((v) => v.effectiveFrom !== now), { effectiveFrom: now, amountCents: newAmountCents }]);
+        }
+      } else {
+        if (newAmountCents !== rule.amountCents) {
+          const res = await updateRecurrenceAmountAllMonths(rule.id, newAmountCents);
+          if (!res.ok) {
+            setError(res.error);
+            setConfirmMode(null);
+            return;
+          }
+          setHistory([{ effectiveFrom: rule.startDate.slice(0, 7), amountCents: newAmountCents }]);
+        }
       }
-      setSavedOverride(true);
-      onChanged();
-    });
-  }
 
-  function handleSaveFrequency() {
-    setFrequencyError(null);
-    setFrequencySaved(false);
-    startFrequencyTransition(async () => {
-      const result = await setRecurrenceFrequency(rule.id, frequency);
-      if (!result.ok) {
-        setFrequencyError(result.error);
-        return;
+      if (scope !== "month") {
+        if (frequency !== (rule.frequency ?? "monthly")) {
+          const freqRes = await setRecurrenceFrequency(rule.id, frequency);
+          if (!freqRes.ok) {
+            setError(freqRes.error);
+            setConfirmMode(null);
+            return;
+          }
+        }
+        const initialEnd = rule.endDate ? rule.endDate.slice(0, 7) : "";
+        if (endMonth !== initialEnd) {
+          const endRes = await setRecurrenceEndDate(rule.id, endMonth ? `${endMonth}-01` : null);
+          if (!endRes.ok) {
+            setError(endRes.error);
+            setConfirmMode(null);
+            return;
+          }
+        }
       }
-      setFrequencySaved(true);
-      onChanged();
-    });
-  }
 
-  function handleSaveEndDate() {
-    setEndDateError(null);
-    setEndDateSaved(false);
-    const endDate = endMonth ? `${endMonth}-01` : null;
-    startEndDateTransition(async () => {
-      const result = await setRecurrenceEndDate(rule.id, endDate);
-      if (!result.ok) {
-        setEndDateError(result.error);
-        return;
+      if (isExpense && paymentDirty) {
+        const payRes = await savePaymentOrganization({
+          targets: [{ kind: "recurrence", id: rule.id, month: now }],
+          settings: payment,
+          scope,
+        });
+        if (!payRes.ok) {
+          setError(payRes.error);
+          setConfirmMode(null);
+          return;
+        }
       }
-      setEndDateSaved(true);
+
+      setConfirmMode(null);
       onChanged();
+      onClose();
     });
   }
 
   return (
-    <Modal open onClose={onClose} title={rule.description}>
-      <div className="flex flex-col gap-6">
-        <section>
-          <h4 className="mb-1 text-sm font-semibold">Alterar valor a partir de um mês</h4>
-          <p className="mb-3 text-xs text-(--color-text-tertiary)">
-            Nunca retroativo — os meses anteriores ao escolhido continuam com o valor que já estava vigente.
-          </p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_auto]">
-            <FieldGroup label="Novo valor">
-              <CurrencyInput valueCents={newAmountCents} onChange={setNewAmountCents} />
-            </FieldGroup>
-            <FieldGroup label="A partir de">
-              <Input type="month" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />
-            </FieldGroup>
-            <div className="flex items-end">
-              <Button onClick={handleSaveVersion} disabled={isPending || newAmountCents <= 0} type="button">
-                Salvar
-              </Button>
-            </div>
-          </div>
-          {error && <p className="mt-2 text-xs text-(--color-negative)">{error}</p>}
-          {savedVersion && <p className="mt-2 text-xs text-(--color-positive)">Novo valor salvo.</p>}
-        </section>
+    <Modal open onClose={onClose} title={rule.description} size="lg">
+      <div className="flex flex-col gap-5">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <FieldGroup label="Valor">
+            <CurrencyInput valueCents={newAmountCents} onChange={setNewAmountCents} />
+          </FieldGroup>
+          <FieldGroup label="Frequência">
+            <Select value={frequency} onChange={(e) => setFrequency(e.target.value as RecurrenceFrequency)}>
+              {RECURRENCE_FREQUENCIES.map((f) => (
+                <option key={f.value} value={f.value}>
+                  {f.label}
+                </option>
+              ))}
+            </Select>
+          </FieldGroup>
+          <FieldGroup label="Mês final (opcional)">
+            <Input type="month" value={endMonth} onChange={(e) => setEndMonth(e.target.value)} />
+          </FieldGroup>
+        </div>
 
-        <section className="border-t border-(--color-border) pt-4">
-          <h4 className="mb-1 text-sm font-semibold">Valor real de um mês específico</h4>
-          <p className="mb-3 text-xs text-(--color-text-tertiary)">
-            Ex.: valor real da conta que veio diferente da estimativa. Vale só para esse mês — os demais continuam
-            com o valor estimado (inclusive na simulação).
-          </p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_auto]">
-            <FieldGroup label="Valor real">
-              <CurrencyInput valueCents={overrideAmountCents} onChange={setOverrideAmountCents} />
-            </FieldGroup>
-            <FieldGroup label="Mês">
-              <Input type="month" value={overrideMonth} onChange={(e) => setOverrideMonth(e.target.value)} />
-            </FieldGroup>
-            <div className="flex items-end">
-              <Button
-                onClick={handleSaveOverride}
-                disabled={isOverridePending || overrideAmountCents <= 0}
-                type="button"
-                variant="secondary"
-              >
-                Salvar
-              </Button>
-            </div>
+        {isExpense && (
+          <div>
+            <h3 className="modern-editor-section-title">Organização do pagamento</h3>
+            {paymentLoading ? (
+              <p className="text-sm text-(--color-text-tertiary)">Carregando organização de pagamento...</p>
+            ) : (
+              <PaymentOrganizationFields
+                value={payment}
+                onChange={(value) => { setPayment(value); setPaymentDirty(true); }}
+                disabled={isPending}
+              />
+            )}
           </div>
-          {overrideError && <p className="mt-2 text-xs text-(--color-negative)">{overrideError}</p>}
-          {savedOverride && (
-            <p className="mt-2 text-xs text-(--color-positive)">
-              Valor lançado. Edite ou remova em Cadastro se precisar corrigir.
-            </p>
-          )}
-        </section>
-
-        <section className="border-t border-(--color-border) pt-4">
-          <h4 className="mb-1 text-sm font-semibold">Frequência</h4>
-          <p className="mb-3 text-xs text-(--color-text-tertiary)">
-            A cada quantos meses o valor acontece, contando a partir do mês inicial da recorrência.
-          </p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_auto]">
-            <FieldGroup label="Ocorre">
-              <Select value={frequency} onChange={(e) => setFrequency(e.target.value as RecurrenceFrequency)}>
-                {RECURRENCE_FREQUENCIES.map((f) => (
-                  <option key={f.value} value={f.value}>
-                    {f.label}
-                  </option>
-                ))}
-              </Select>
-            </FieldGroup>
-            <div className="flex items-end">
-              <Button onClick={handleSaveFrequency} disabled={isFrequencyPending} type="button" variant="secondary">
-                Salvar
-              </Button>
-            </div>
-          </div>
-          {frequencyError && <p className="mt-2 text-xs text-(--color-negative)">{frequencyError}</p>}
-          {frequencySaved && <p className="mt-2 text-xs text-(--color-positive)">Frequência salva.</p>}
-        </section>
-
-        <section className="border-t border-(--color-border) pt-4">
-          <h4 className="mb-1 text-sm font-semibold">Mês final</h4>
-          <p className="mb-3 text-xs text-(--color-text-tertiary)">
-            Vazio = reproduz indefinidamente. Se preencher, o custo/entrada some a partir do mês seguinte ao
-            escolhido.
-          </p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_auto]">
-            <FieldGroup label="Até">
-              <Input type="month" value={endMonth} onChange={(e) => setEndMonth(e.target.value)} />
-            </FieldGroup>
-            <div className="flex items-end">
-              <Button onClick={handleSaveEndDate} disabled={isEndDatePending} type="button" variant="secondary">
-                Salvar
-              </Button>
-            </div>
-          </div>
-          {endDateError && <p className="mt-2 text-xs text-(--color-negative)">{endDateError}</p>}
-          {endDateSaved && (
-            <p className="mt-2 text-xs text-(--color-positive)">
-              {endMonth ? "Mês final salvo." : "Data de término removida — volta a reproduzir sem fim."}
-            </p>
-          )}
-        </section>
+        )}
 
         <section className="border-t border-(--color-border) pt-4">
           <h4 className="mb-2 text-sm font-semibold">Histórico de valores</h4>
@@ -233,12 +209,43 @@ export function RecurrenceRuleEditModal({
           )}
         </section>
 
-        <div className="flex justify-end border-t border-(--color-border) pt-4">
-          <Button variant="secondary" onClick={onClose} type="button">
-            Fechar
+        {error && <p className="text-sm text-(--color-negative)">{error}</p>}
+
+        <div className="flex items-center justify-between gap-2 border-t border-(--color-border) pt-4">
+          <Button
+            variant="ghost"
+            type="button"
+            disabled={isPending}
+            className="text-(--color-negative) hover:bg-(--color-negative-soft)"
+            onClick={() => setConfirmMode("delete")}
+          >
+            Excluir
           </Button>
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={onClose} type="button" disabled={isPending}>
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              disabled={isPending || newAmountCents <= 0 || paymentLoading}
+              onClick={() => setConfirmMode("save")}
+            >
+              Salvar
+            </Button>
+          </div>
         </div>
       </div>
+
+      {confirmMode && (
+        <ScopeConfirmModal
+          open
+          mode={confirmMode}
+          allowMultiMonth
+          busy={isPending}
+          onClose={() => setConfirmMode(null)}
+          onConfirm={executeConfirm}
+        />
+      )}
     </Modal>
   );
 }

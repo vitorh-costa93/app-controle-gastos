@@ -14,6 +14,8 @@ import { BulkEditDialog } from "@/components/cadastro/BulkEditDialog";
 import { Button } from "@/components/ui/Button";
 import { DescriptionIcon } from "@/components/ui/DescriptionIcon";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
+import { Toggle } from "@/components/ui/Toggle";
+import { setTransactionValidated } from "@/lib/data/transactions";
 
 type ColumnKey =
   | "date"
@@ -26,7 +28,8 @@ type ColumnKey =
   | "description"
   | "installment"
   | "amount"
-  | "considered";
+  | "considered"
+  | "validated";
 
 type FilterKind = "values" | "text" | "range" | null;
 
@@ -49,6 +52,7 @@ const COLUMNS: ColumnDef[] = [
   { key: "installment", label: "Parcela", filter: null },
   { key: "amount", label: "Valor", filter: "range", align: "right" },
   { key: "considered", label: "Considerado", filter: "values", align: "center" },
+  { key: "validated", label: "Validação", filter: "values", align: "center" },
 ];
 
 interface Sort {
@@ -77,6 +81,18 @@ export function AnaliseTransactionsTable({
   const [selected, setSelected] = useState<MonthlyOccurrence | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [validatedOverrides, setValidatedOverrides] = useState<Record<string, boolean>>({});
+  const isValidated = (t: MonthlyOccurrence) => validatedOverrides[t.id] ?? Boolean(t.validated);
+  async function handleToggleValidated(t: MonthlyOccurrence, next: boolean) {
+    if (t.origin !== "real") return;
+    setValidatedOverrides((prev) => ({ ...prev, [t.id]: next }));
+    const res = await setTransactionValidated(t.id, next);
+    if (!res.ok) {
+      setValidatedOverrides((prev) => ({ ...prev, [t.id]: !next }));
+    } else {
+      onChanged();
+    }
+  }
   const eligible = (t: MonthlyOccurrence) => t.origin === "real" || Boolean(t.recurrenceRuleId);
   const selectedOccurrences = transactions.filter((t) => selectedIds.has(t.id) && eligible(t));
   function toggleSelected(id: string) {
@@ -116,6 +132,8 @@ export function AnaliseTransactionsTable({
         return (t.categoryId && categoriesById.get(t.categoryId)?.name) || "—";
       case "considered":
         return t.considered ? "Sim" : "Não";
+      case "validated":
+        return isValidated(t) ? "Sim" : "Não";
       case "description":
         return t.description ?? "";
       default:
@@ -397,6 +415,19 @@ export function AnaliseTransactionsTable({
                       <span className="text-(--color-positive)">Sim</span>
                     ) : (
                       <span className="text-(--color-text-tertiary)">Não</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    {t.origin === "real" ? (
+                      <div className="inline-flex justify-center">
+                        <Toggle
+                          checked={isValidated(t)}
+                          onChange={(value) => void handleToggleValidated(t, value)}
+                          ariaLabel={`Validar ${t.description ?? "lançamento"}`}
+                        />
+                      </div>
+                    ) : (
+                      <span className="text-(--color-text-tertiary)" title="Disponível apenas para lançamentos reais">—</span>
                     )}
                   </td>
                   <td className="px-2 py-2 text-center">

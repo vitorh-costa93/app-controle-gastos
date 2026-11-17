@@ -69,6 +69,7 @@ export interface TransactionRow {
   amount: string; // numeric from postgres
   description: string | null;
   considered: boolean;
+  validated?: boolean;
   source: TransactionSource;
   ai_confidence: Record<string, FieldConfidence> | null;
   recurrence_rule_id: string | null;

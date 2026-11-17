@@ -16,6 +16,7 @@ export interface Transaction {
   amountCents: number;
   description: string | null;
   considered: boolean;
+  validated: boolean;
   source: TransactionSource;
   aiConfidence: Record<string, FieldConfidence> | null;
   recurrenceRuleId: string | null;
@@ -70,6 +71,7 @@ export interface MonthlyOccurrence {
   amountCents: number;
   description: string | null;
   considered: boolean;
+  validated?: boolean;
   recurrenceRuleId: string | null;
   /** Só lançamentos reais: marcação manual de "não foi fora do planejado". */
   unplannedExcluded?: boolean;

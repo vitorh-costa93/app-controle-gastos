@@ -13,9 +13,9 @@ import { conferenceScope, type ConferenceFilters } from "./conference-scope";
 import { formatCurrencyBRL, formatDateBR, formatMonthLabel } from "@/lib/utils/format";
 import "./inspection-drawer.css";
 
-export function InspectionDrawer({ data, transactions, month, personId, filters, onClose, onChanged, onOpenPivot, onOpenMovements }: {
+export function InspectionDrawer({ data, transactions, month, personId, filters, onClose, onChanged, onOpenPivot }: {
   data: AnalysisData; transactions: MonthlyOccurrence[]; month: string; personId: string; filters: ConferenceFilters;
-  onClose: () => void; onChanged: () => Promise<void>; onOpenPivot: () => void; onOpenMovements: () => void;
+  onClose: () => void; onChanged: () => Promise<void>; onOpenPivot: () => void;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
@@ -71,7 +71,7 @@ export function InspectionDrawer({ data, transactions, month, personId, filters,
         {!collapsed.has(group.id) && <ul>{group.rows.map((row) => <li key={row.id}><DescriptionIcon description={row.description ?? ""} categoryName={categoryName(group.id)} /><div><span>{row.description || "Sem descrição"}</span><small>{data.people.find((p) => p.id === row.personId)?.name ?? "Pessoa inativa"} · {formatDateBR(row.registrationDate)}{row.installmentTotal > 1 ? ` · ${row.installmentCurrent}/${row.installmentTotal}` : ""}{row.origin === "projected" ? " · Projetado" : ""}</small></div><b>{formatCurrencyBRL(row.amountCents)}</b><button type="button" disabled={opening} aria-label={`Editar ${row.description || "lançamento"}`} onClick={() => void edit(row)}><Pencil size={15} /></button></li>)}</ul>}
       </section>)}</div>
       {!groups.length && <p className="ni-empty">Nenhum lançamento encontrado neste escopo.</p>}
-      <footer><span>Total do escopo<strong>{formatCurrencyBRL(scope.totalCents)}</strong></span><button type="button" onClick={onOpenPivot}>Abrir na tabela dinâmica</button><button type="button" onClick={onOpenMovements}>Ver todas as movimentações →</button></footer>
+      <footer><span>Total do escopo<strong>{formatCurrencyBRL(scope.totalCents)}</strong></span><button type="button" onClick={onOpenPivot}>Abrir na tabela dinâmica</button></footer>
     </aside>
     {transaction && <TransactionEditor open transaction={transaction} people={data.people} categories={data.categories} types={data.types} recurrenceRules={data.recurrenceRules} onClose={() => setTransaction(null)} onSaved={() => void changed()} />}
     {projected && <MovementDetailsDialog occurrence={projected} rule={data.recurrenceRules.find((r) => r.id === projected.recurrenceRuleId)} people={data.people} categories={data.categories} types={data.types} onClose={() => setProjected(null)} onChanged={() => void changed()} />}

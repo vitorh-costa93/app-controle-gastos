@@ -1,21 +1,19 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
-import { createPortal } from "react-dom";
-import { X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useInterface } from "@/components/layout/InterfaceProvider";
 import { RecurrenceFrequency } from "@/types/domain";
 import { RECURRENCE_FREQUENCIES } from "@/lib/domain/recurrence";
 import { Bank, Person, Category, TransactionType } from "@/types/db";
 import { Transaction, RecurrenceRule } from "@/types/domain";
-import { createTransaction, updateTransaction, deleteTransaction, checkManualTransactionDuplicates, type ManualDuplicateResult, TransactionInput } from "@/lib/data/transactions";
+import { createTransaction, updateTransactionWithScope, deleteTransactionWithScope, checkManualTransactionDuplicates, type ManualDuplicateResult, type EditScope, TransactionInput } from "@/lib/data/transactions";
 import { defaultOrganization, type PaymentOrganization } from "@/lib/domain/payments";
 import { getPaymentOrganization, savePaymentOrganization } from "@/lib/data/payments";
 import { PaymentOrganizationFields } from "@/components/payments/PaymentOrganizationFields";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import { DeleteActions } from "./DeleteRecordDialog";
+import { ScopeConfirmModal } from "./ScopeConfirmModal";
 import { FieldGroup, Input, Select } from "@/components/ui/Field";
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
@@ -49,14 +47,14 @@ function TransactionEditorSession({ open, onClose, people, categories, types, tr
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [confirmModal, setConfirmModal] = useState<{ mode: "save"; confirmed?: "matches" | "error" } | { mode: "delete" } | null>(null);
   const [isDeleting, startDeleteTransition] = useTransition();
   const [payment, setPayment] = useState<PaymentOrganization>(() => defaultOrganization({ bank: transaction?.bank ?? null, description: transaction?.description ?? null, categoryName: categories.find((category) => category.id === transaction?.categoryId)?.name }));
   const [paymentDirty, setPaymentDirty] = useState(false);
-  const [paymentScope, setPaymentScope] = useState<"month" | "following">(!transaction ? "following" : "month");
+  const paymentScope: EditScope = "following";
   const [paymentLoad, setPaymentLoad] = useState<{ month: string; error: string | null } | null>(null);
   const [paymentRetry, setPaymentRetry] = useState(0);
-  const [committed, setCommitted] = useState<{ transaction: Transaction; settings: PaymentOrganization; month: string; scope: "month" | "following" } | null>(null);
+  const [committed, setCommitted] = useState<{ transaction: Transaction; settings: PaymentOrganization; month: string; scope: EditScope } | null>(null);
   const paymentRequest = useRef(0);
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
@@ -115,7 +113,7 @@ function TransactionEditorSession({ open, onClose, people, categories, types, tr
     setSaveState("idle");
   }
 
-  function handleSave(confirmed?: "matches" | "error") {
+  function handleSave(confirmed?: "matches" | "error", chosenScope: EditScope = "month") {
     if (saveLock.current) return;
     saveLock.current = true;
     setSaveState("saving");
@@ -163,10 +161,11 @@ function TransactionEditorSession({ open, onClose, people, categories, types, tr
       }
       let result: Awaited<ReturnType<typeof createTransaction>>;
       try {
-        result = transaction ? await updateTransaction(transaction.id, input) : await createTransaction(input);
+        result = transaction ? await updateTransactionWithScope(transaction.id, input, chosenScope) : await createTransaction(input);
       } catch {
         if (!mounted.current) return;
         saveLock.current = false;
+        setConfirmModal(null);
         setSaveState("error");
         setErrorMessage("Não foi possível confirmar o salvamento. Verifique os lançamentos existentes antes de tentar novamente.");
         return;
@@ -174,16 +173,22 @@ function TransactionEditorSession({ open, onClose, people, categories, types, tr
       if (!mounted.current) return;
       if (!result.ok) {
         saveLock.current = false;
+        setConfirmModal(null);
         setSaveState("error");
         setErrorMessage(result.error);
         return;
       }
       if (isExpense && paymentDirty) {
-        const pending = { transaction: result.data, settings: effectivePayment, month: form.referenceMonth, scope: paymentScope };
+        const effectiveScope: EditScope = transaction ? chosenScope : paymentScope;
+        const pending = { transaction: result.data, settings: effectivePayment, month: form.referenceMonth, scope: effectiveScope };
         setCommitted(pending);
         const saved = await persistPayment(pending);
-        if (!saved) return;
+        if (!saved) {
+          setConfirmModal(null);
+          return;
+        }
       }
+      setConfirmModal(null);
       finishSave(result.data);
     });
   }
@@ -221,15 +226,19 @@ function TransactionEditorSession({ open, onClose, people, categories, types, tr
     });
   }
 
-  function handleDelete() {
+  function handleDelete(chosenScope: EditScope) {
     if (!transaction) return;
     startDeleteTransition(async () => {
-      const result = await deleteTransaction(transaction.id);
+      const result = await deleteTransactionWithScope(transaction.id, chosenScope);
       if (!mounted.current) return;
+      setConfirmModal(null);
       if (!result.ok) {
         setErrorMessage(result.error);
+        setSaveState("error");
         return;
       }
+      onSaved?.(transaction);
+      router.refresh();
       onClose();
     });
   }
@@ -450,11 +459,10 @@ function TransactionEditorSession({ open, onClose, people, categories, types, tr
         {!validDueDay && <p className="text-sm text-(--color-negative)">Informe um dia de vencimento entre 1 e 31.</p>}
         {!transaction && !paymentDirty && (effectivePayment.method === "nubank" || effectivePayment.method === "picpay") && <p className="mb-2 text-sm text-(--color-text-secondary)">Sem edição, segue a organização existente da fatura.</p>}
         <PaymentOrganizationFields value={effectivePayment} onChange={(value) => { setPayment(value); setPaymentDirty(true); }} disabled={busy || Boolean(committed) || paymentLoading} />
-        {transaction?.recurrenceRuleId && paymentDirty && <fieldset disabled={busy || Boolean(committed)} className="mt-3 flex gap-4 text-sm"><legend>Aplicar organização</legend><label><input type="radio" checked={paymentScope === "month"} onChange={() => setPaymentScope("month")} /> Este mês</label><label><input type="radio" checked={paymentScope === "following"} onChange={() => setPaymentScope("following")} /> Este e próximos meses</label></fieldset>}
       </div>}
 
       {!isModern && duplicateNotice}
-      <div className={`mt-6 flex items-center justify-between gap-3 ${confirmingDelete && transaction?.recurrenceRuleId ? "flex-col items-stretch" : ""}`}>
+      <div className="mt-6 flex items-center justify-between gap-3">
         <div className="text-xs">
           {saveState === "saving" && <span className="text-(--color-text-tertiary)">Salvando...</span>}
           {saveState === "saved" && <span className="text-(--color-positive)">Salvo</span>}
@@ -463,19 +471,19 @@ function TransactionEditorSession({ open, onClose, people, categories, types, tr
               {committed ? `Lançamento salvo; organização não pôde ser salva. ${errorMessage ?? ""}` : errorMessage ?? "Não foi possível salvar. Tentar novamente."}
             </span>
           )}
-          {saveState === "idle" && !confirmingDelete && missingFields.length > 0 && (
+          {saveState === "idle" && missingFields.length > 0 && (
             <span className="text-(--color-text-tertiary)">
               Preencha: {missingFields.join(", ")}
             </span>
           )}
         </div>
 
-        <div className={`flex items-center gap-2 ${confirmingDelete && transaction?.recurrenceRuleId ? "w-full" : ""}`}>
+        <div className="flex items-center gap-2">
           {committed ? <><Button variant="secondary" onClick={onClose} disabled={busy} type="button">Fechar, lançamento já salvo</Button><Button onClick={retryPayment} disabled={busy} type="button">Tentar salvar organização novamente</Button></> : <>
-          {transaction && !confirmingDelete && (
+          {transaction && (
             <Button
               variant="ghost"
-              onClick={() => setConfirmingDelete(true)}
+              onClick={() => setConfirmModal({ mode: "delete" })}
               disabled={isDeleting || busy}
               type="button"
               className="text-(--color-negative) hover:bg-(--color-negative-soft)"
@@ -483,40 +491,43 @@ function TransactionEditorSession({ open, onClose, people, categories, types, tr
               Excluir
             </Button>
           )}
-          {transaction && confirmingDelete && transaction.recurrenceRuleId && (
-            <div className="flex w-full flex-col gap-2">
-              <span className="text-xs text-(--color-text-secondary)">Este lançamento é recorrente. O que você quer excluir?</span>
-              <DeleteActions
-                target={{ kind: "recurring", ruleId: transaction.recurrenceRuleId, month: transaction.referenceMonth, label: transaction.description ?? "este lançamento" }}
-                onCancel={() => setConfirmingDelete(false)}
-                onDone={onClose}
-              />
-            </div>
-          )}
-          {transaction && confirmingDelete && !transaction.recurrenceRuleId && (
-            <>
-              <span className="text-xs text-(--color-text-secondary)">Excluir mesmo?</span>
-              <Button variant="ghost" onClick={() => setConfirmingDelete(false)} disabled={isDeleting || busy} type="button">
-                Não
-              </Button>
-              <Button variant="danger" onClick={handleDelete} disabled={isDeleting || busy} type="button">
-                Sim, excluir
-              </Button>
-            </>
-          )}
-          {!confirmingDelete && (
-            <>
-              <Button variant="secondary" onClick={onClose} disabled={busy} type="button">
-                Cancelar
-              </Button>
-              <Button onClick={() => handleSave(visibleResult ? (visibleResult.ok && visibleResult.matches.length ? "matches" : !visibleResult.ok ? "error" : undefined) : undefined)} disabled={!canSave || busy} type="button">
-                {visibleResult ? (visibleResult.ok && visibleResult.matches.length ? "Manter ambos e salvar" : !visibleResult.ok ? "Continuar e salvar" : "Salvar") : "Salvar"}
-              </Button>
-            </>
-          )}
+          <Button variant="secondary" onClick={onClose} disabled={busy} type="button">
+            Cancelar
+          </Button>
+          <Button
+            onClick={() => {
+              const dupMode = visibleResult ? (visibleResult.ok && visibleResult.matches.length ? "matches" : !visibleResult.ok ? "error" : undefined) : undefined;
+              if (transaction) {
+                setConfirmModal({ mode: "save", confirmed: dupMode });
+              } else {
+                handleSave(dupMode);
+              }
+            }}
+            disabled={!canSave || busy}
+            type="button"
+          >
+            {visibleResult ? (visibleResult.ok && visibleResult.matches.length ? "Manter ambos e salvar" : !visibleResult.ok ? "Continuar e salvar" : "Salvar") : "Salvar"}
+          </Button>
           </>}
         </div>
       </div>
+
+      {transaction && confirmModal && (
+        <ScopeConfirmModal
+          open
+          mode={confirmModal.mode}
+          allowMultiMonth={Boolean(transaction.recurrenceRuleId || (transaction.installmentGroupId && transaction.installmentTotal > 1))}
+          busy={busy || isDeleting}
+          onClose={() => setConfirmModal(null)}
+          onConfirm={(chosenScope) => {
+            if (confirmModal.mode === "delete") {
+              handleDelete(chosenScope);
+            } else {
+              handleSave(confirmModal.confirmed, chosenScope);
+            }
+          }}
+        />
+      )}
     </EditorContainer>
   );
 }
@@ -526,43 +537,8 @@ async function safeCheckDuplicates(input: Parameters<typeof checkManualTransacti
   catch { return { ok: false, error: "Não foi possível consultar possíveis duplicados." }; }
 }
 
-function EditorContainer({ modern, open, onClose, title, children }: { modern: boolean; open: boolean; onClose: () => void; title: string; children: ReactNode }) {
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const closeRef = useRef(onClose);
-  closeRef.current = onClose;
-  useEffect(() => {
-    if (!modern || !open) return;
-    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const dialog = dialogRef.current;
-    const focusable = () => Array.from(dialog?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])') ?? []);
-    (focusable().find((element) => element.tagName === "INPUT") ?? focusable()[0])?.focus();
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") { event.preventDefault(); closeRef.current(); return; }
-      if (event.key !== "Tab") return;
-      const controls = focusable();
-      if (!controls.length) { event.preventDefault(); return; }
-      const first = controls[0], last = controls[controls.length - 1];
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
-    };
-    document.addEventListener("keydown", onKey);
-    return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = previousOverflow; previousFocus?.focus(); };
-  }, [modern, open]);
-  if (!modern) return <Modal open={open} onClose={onClose} title={title}>{children}</Modal>;
-  if (!open) return null;
-  // Portal para o shell: evita que o BottomNav (z-40) fique por cima do editor por causa de contexto de empilhamento.
-  const host = typeof document === "undefined" ? null : document.querySelector<HTMLElement>(".interface-shell") ?? document.body;
-  if (!host) return null;
-  return createPortal(<div className="fixed inset-0 z-[60] flex justify-end bg-black/30">
-    <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={title} className="modern-editor-dialog h-full w-full overflow-y-auto bg-(--color-surface) shadow-(--shadow-lg)">
-      <div className="sticky top-0 z-10 flex items-center justify-between border-b border-(--color-border) bg-(--color-surface) px-5 py-4">
-        <h2 className="text-[17px] font-semibold">{title}</h2>
-        <button type="button" onClick={onClose} aria-label="Fechar" className="rounded-full p-1.5 text-(--color-text-tertiary) hover:bg-black/5"><X size={18} /></button>
-      </div><div className="p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">{children}</div>
-    </div>
-  </div>, host);
+function EditorContainer({ open, onClose, title, children }: { modern: boolean; open: boolean; onClose: () => void; title: string; children: ReactNode }) {
+  return <Modal open={open} onClose={onClose} title={title} size="lg">{children}</Modal>;
 }
 
 function buildInitialForm(

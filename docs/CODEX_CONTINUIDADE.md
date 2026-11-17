@@ -1,6 +1,15 @@
 # Continuidade — MeuDinheiro
 
-Atualizado: 16/11/2026.
+Atualizado: 17/11/2026.
+
+## Consolidação da Nova UI, Conferência e Pop-up de Escopo (17/11/2026)
+- Nova UI consolidada de forma definitiva: removido `InterfaceToggle` do cabeçalho (`ModernHeader.tsx`) e fixado `isModern: true` em `InterfaceProvider.tsx`.
+- Sub-abas de `/analise` reduzidas para **Visão geral**, **Conferência** e **Tabela dinâmica** (removidas **Análises** e **Todas as movimentações** de `AnalisePageClient.tsx`, `ConferencePanel.tsx`, `InspectionDrawer.tsx` e `analise/page.tsx`).
+- Conferência (`ConferencePanel.tsx` + `modern-analysis.css`): removidos os painéis **Gastos por categoria** e **Lançamentos do banco**; reduzida a altura do `BankCard` ao lado de **Conferir com o banco** e expandida a tabela `AnaliseTransactionsTable` para 100% da largura.
+- Adicionada coluna **Validação** (toggle) em `AnaliseTransactionsTable.tsx` persistida em `meudinheiro.transactions.validated` (migration `20261117164500_add_transaction_validated.sql` aplicada via `supabase db query --remote --yes` somente no schema `meudinheiro`), com `setTransactionValidated` em `transactions.ts`.
+- Removido o botão de sliders (`Organizar pagamento`) da coluna **Ações** em `CadastroRecordsTable.tsx`, mantendo a organização de pagamento embutida dentro do fluxo do lápis (`TransactionEditor`, `InstallmentEditModal` e `RecurrenceRuleEditModal`).
+- `TransactionEditor.tsx` agora abre como pop-up centralizado (`Modal size="lg"`), não mais menu lateral direito. Ao clicar em **Salvar** ou **Excluir** em `TransactionEditor`, `InstallmentEditModal` ou `RecurrenceRuleEditModal`, abre `ScopeConfirmModal` perguntando se a mudança vale para **Esse mês**, **Todos os meses** ou **Esse mês e os próximos** (`updateTransactionWithScope`, `deleteTransactionWithScope`, `updateInstallmentGroupWithScope`, `deleteInstallmentGroupWithScope`, `updateRecurrenceAmountAllMonths`, `deleteRecurringOccurrence` e `savePaymentOrganization`).
+- Verificação: `test-transaction-editor.mjs`, `test-ui-scope.mjs` e `test-payments.mjs` passaram.
 
 - Refinamento da lista de desejos: usuário espera rastreamento automático em várias lojas, comparação e histórico para oportunidades como Black Friday. PLANO_DESEJOS.md atualizado com identificação do produto/variante, cobertura explícita, preço final conhecido e impacto na simulação. Somente planejamento; integração e fontes ainda serão avaliadas, sem prometer cobertura universal.
 

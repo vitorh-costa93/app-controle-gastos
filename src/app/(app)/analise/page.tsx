@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-import { fetchAnalysisPageData, getMonthInsight } from "@/lib/data/analysis";
+import { fetchAnalysisPageData } from "@/lib/data/analysis";
 import { syncSalaryIncomeTransactions } from "@/lib/data/salary";
 import { toReferenceMonth, addMonths } from "@/lib/utils/format";
 import { AnalisePageClient } from "@/components/analise/AnalisePageClient";
@@ -21,10 +21,7 @@ export default async function AnalisePage({
   // real e ele fica preso no valor de quando foi criado, ignorando o psi mudar depois.
   await syncSalaryIncomeTransactions();
 
-  const [{ data, transactions }, insight] = await Promise.all([
-    fetchAnalysisPageData(month, personId || undefined),
-    getMonthInsight(month, personId || undefined),
-  ]);
+  const { data, transactions } = await fetchAnalysisPageData(month, personId || undefined);
 
   return (
     <AnalisePageClient
@@ -32,7 +29,6 @@ export default async function AnalisePage({
       initialPersonId={personId}
       initialData={data}
       initialTransactions={transactions}
-      initialInsight={insight}
     />
   );
 }

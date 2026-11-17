@@ -223,6 +223,7 @@ function buildMovementRows(real: Transaction[], projected: MonthlyOccurrence[]):
     amountCents: t.amountCents,
     description: t.description,
     considered: t.considered,
+    validated: t.validated,
     recurrenceRuleId: t.recurrenceRuleId,
     unplannedExcluded: t.unplannedExcluded,
     installmentGroupId: t.installmentGroupId,

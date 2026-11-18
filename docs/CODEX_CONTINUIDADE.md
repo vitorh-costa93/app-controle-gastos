@@ -1,6 +1,11 @@
 # Continuidade — MeuDinheiro
 
-Atualizado: 17/11/2026.
+Atualizado: 18/11/2026.
+
+## Ajustes — Contas no mobile primeiro e Parcela X/Y (18/11/2026)
+- `nosso-mes.css` (`@media (max-width: 850px)`): `.nm-lower` usa `display: contents` e `.modern-payments` recebe `order: -1`, exibindo **Contas do início do mês** em primeiro no mobile e mantendo o layout desktop intacto.
+- `payments.ts`, `MonthlyPaymentsPanel.tsx` e `InspectionDrawer.tsx`: itens parcelados (`installmentTotal > 1`) passam a exibir `Parcela X/Y` (sem duplicar quando a descrição já contém `X/Y`).
+- Validação: `test-payments.mjs`, `npm run lint` e `npm run build` aprovados antes do push em `main`/Vercel.
 
 ## Consolidação da Nova UI, Conferência e Pop-up de Escopo (17/11/2026)
 - Nova UI consolidada de forma definitiva: removido `InterfaceToggle` do cabeçalho (`ModernHeader.tsx`) e fixado `isModern: true` em `InterfaceProvider.tsx`.

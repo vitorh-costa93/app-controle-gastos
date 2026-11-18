@@ -12,7 +12,7 @@ export type PaymentProfile = { kind: "transaction" | "recurrence" | "installment
 export type PaymentGroup = {
   id: string; label: string; amountCents: number | null; method: PaymentOrganization["method"];
   dueDay: number | null; paid: boolean; fingerprint: string; projected: boolean; suggested: boolean;
-  items: { id: string; description: string; amountCents: number; origin: "real" | "projected" }[];
+  items: { id: string; description: string; amountCents: number; origin: "real" | "projected"; installmentCurrent?: number; installmentTotal?: number }[];
 };
 export const MONTH_START_GROUPS = ["Luz", "Água", "Internet", "Nubank", "PicPay", "Plano de Saúde", "Condomínio"];
 const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase().replace(/\s+/g, " ");
@@ -78,7 +78,14 @@ export function buildPaymentGroups(occurrences: MonthlyOccurrence[], profiles: P
     group.suggested ||= suggested;
     // Um grupo pode reunir contas com vencimentos distintos: mostramos o primeiro dia conhecido.
     if (settings.dueDay !== null) group.dueDay = group.dueDay === null ? settings.dueDay : Math.min(group.dueDay, settings.dueDay);
-    group.items.push({ id: o.id, description: o.description ?? "Sem descrição", amountCents: o.amountCents, origin: o.origin });
+    group.items.push({
+      id: o.id,
+      description: o.description ?? "Sem descrição",
+      amountCents: o.amountCents,
+      origin: o.origin,
+      installmentCurrent: o.installmentCurrent,
+      installmentTotal: o.installmentTotal,
+    });
   }
   for (const label of MONTH_START_GROUPS) {
     if ((label === "Nubank" || label === "PicPay") && !cardIsVisible(label === "Nubank" ? "nubank" : "picpay", month, profiles)) continue;

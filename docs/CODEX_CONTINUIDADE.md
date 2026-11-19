@@ -3,7 +3,8 @@
 Atualizado: 19/11/2026.
 
 ## Ajustes — Evolução do saldo, layout notebook e ordem mobile (19/11/2026)
-- `balance-evolution.css`, `modern-analysis.css` e `nosso-mes.css`: removida regra que zerava `.ma-evolution-chart` (`height: 0` em `>= 1100px`) e `grid-area: evolution` órfão que ocultava **Evolução do saldo** (Mensal e Acumulado) no notebook/desktop.
+- `BalanceEvolution.tsx`, `balance-evolution.css` e `nosso-mes.css`: gráficos Mensal e Acumulado agora usam altura explícita (`190px`) em vez de `height="100%"` dentro de flex sem altura fixa (que resolvia para `0px` no Recharts).
+- `nosso-mes.css` (`1100px–1599px`): `.nm-overview` usa `align-items: stretch` e `.modern-payments` estica até a base da linha 3 (`height: 100%`), eliminando o espaço vazio abaixo de **Contas do início do mês**.
 - `nosso-mes.css`: no mobile (`<= 850px`), ordem definida como KPIs (`.nm-month`, `order: 0`) → **Contas do início do mês** (`.modern-payments`, `order: 1`) → demais cards. Em notebook (`1100px–1599px`), layout em 2 colunas organizadas com Reserva ao lado dos KPIs e Contas ao lado de Distribuição/Cartões.
 - Validação: `npm run lint` e `npm run build` aprovados antes do push em `main`/Vercel.
 

@@ -27,9 +27,9 @@ export function BalanceEvolution({ summaries, month, personId, shared }: { summa
           <button type="button" aria-pressed={mode === "accumulated"} onClick={() => setMode("accumulated")}>Acumulado</button>
         </div>
       </div>
-      {mode === "monthly" ? <div className="ma-evolution-chart"><MonthlyEvolutionChart summaries={summaries} selectedMonth={month} height="100%" /></div> : <>
+      {mode === "monthly" ? <div className="ma-evolution-chart"><MonthlyEvolutionChart summaries={summaries} selectedMonth={month} height={190} /></div> : <>
         <div className="ma-evolution-chart">
-          {budget ? <BaseCaixinhaYield summaries={budget.baseSummaries} accumulated={accumulated} cdiAnnualPercent={cdi} onCdiAnnualPercent={() => {}} percentOfCdi={percentOfCdi} onPercentOfCdi={setPercentOfCdi} horizon={budget.horizon} compact chartHeight="100%" /> : state.status === "error" ? <p className="balance-evolution-status">Não foi possível carregar. <button type="button" onClick={state.retry}>Tentar novamente</button></p> : <p className="balance-evolution-status" role="status">Carregando projeção…</p>}
+          {budget ? <BaseCaixinhaYield summaries={budget.baseSummaries} accumulated={accumulated} cdiAnnualPercent={cdi} onCdiAnnualPercent={() => {}} percentOfCdi={percentOfCdi} onPercentOfCdi={setPercentOfCdi} horizon={budget.horizon} compact chartHeight={190} /> : state.status === "error" ? <p className="balance-evolution-status">Não foi possível carregar. <button type="button" onClick={state.retry}>Tentar novamente</button></p> : <p className="balance-evolution-status" role="status">Carregando projeção…</p>}
         </div>
         <p className="balance-evolution-caption">Saldo · <span>rendimento bruto (100% do CDI; CDI {cdi ? cdi.toLocaleString("pt-BR") : "—"}% a.a.)</span>{personId ? " · saldo inicial individual: R$ 0" : ""} · <Link href={link}>Ver Simulação</Link></p>
       </>}

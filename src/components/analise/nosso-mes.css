@@ -18,11 +18,11 @@
 .nm-reserve { display: flex; align-items: center; gap: 15px; }.nm-reserve-icon { width: 52px; height: 52px; }.nm-reserve-info { min-width: 230px; }.nm-reserve-info p { color: #354157; font-size: 14px; }.nm-reserve-info p strong { color: #151d2c; font-size: 18px; }.nm-reserve-info small { display: block; margin-top: 4px; color: #78849a; font-size: 12px; }.nm-reserve-progress { flex: 1; min-width: 80px; }.nm-reserve-progress i { background: #17bd5b; }.nm-lower { display: grid; grid-template-columns: minmax(260px, .7fr) minmax(0, 1.3fr); align-items: start; gap: 16px; }
 @media (max-width: 850px) { .nm-distribution-content { grid-template-columns: 170px minmax(0, 1fr); gap: 12px; }.nm-category { grid-template-columns: auto minmax(65px, 1fr) auto auto auto; }.nm-category-limit { grid-column: 2 / -2; grid-row: 2; }.nm-lower { display: contents; }.nm-month { order: 0; }.nm-lower > .modern-payments { order: 1; }.nm-distribution { order: 2; }.nm-pair { order: 3; }.nm-reserve { order: 4; }.nm-lower > .ma-evolution { order: 5; } }
 @media (max-width: 600px) { .nm-panel { padding: 16px; }.nm-totals { gap: 10px; }.nm-totals > div { display: block; padding: 0 8px; }.nm-total-icon { margin-bottom: 7px; }.nm-totals strong { font-size: 16px; }.nm-distribution-content, .nm-pair { grid-template-columns: 1fr; }.nm-ring { width: 180px; }.nm-category { grid-template-columns: auto minmax(50px, 1fr) auto auto auto; gap: 6px; }.nm-category-amount { font-size: 12px; }.nm-reserve { flex-wrap: wrap; }.nm-reserve-info { flex: 1; min-width: 180px; }.nm-reserve-progress { flex-basis: 65%; }.nm-heading { flex-wrap: wrap; } }
-.nm-lower .ma-evolution { grid-area: auto; display:flex; flex-direction:column; min-height:280px; }
-.nm-lower .ma-evolution-chart { flex:1; height:210px; min-height:190px; }
+.nm-lower .ma-evolution { grid-area: auto; display:flex; flex-direction:column; }
+.nm-lower .ma-evolution-chart { width:100%; min-height:190px; }
 .nm-ring svg circle { pointer-events:stroke; }
 @media (min-width: 1100px) and (max-width: 1599px) {
-  .nm-overview { grid-template-columns: minmax(0, 1.45fr) minmax(290px, .85fr); gap: 14px; align-items: start; }
+  .nm-overview { grid-template-columns: minmax(0, 1.45fr) minmax(290px, .85fr); gap: 14px; align-items: stretch; }
   .nm-month { grid-column: 1; grid-row: 1; }
   .nm-reserve { grid-column: 2; grid-row: 1; flex-wrap: wrap; align-content: center; gap: 10px; height: 100%; }
   .nm-reserve-icon { width: 38px; height: 38px; }
@@ -31,9 +31,9 @@
   .nm-distribution { grid-column: 1; grid-row: 2; }
   .nm-pair { grid-column: 1; grid-row: 3; }
   .nm-lower { display: contents; }
-  .nm-lower > .modern-payments { grid-column: 2; grid-row: 2 / 4; }
-  .nm-lower > .ma-evolution { grid-column: 1 / -1; grid-row: 4; min-height: 260px; }
-  .nm-lower .ma-evolution-chart { height: 190px; min-height: 175px; }
+  .nm-lower > .modern-payments { grid-column: 2; grid-row: 2 / 4; height: 100%; display: flex; flex-direction: column; }
+  .nm-lower > .modern-payments .modern-payments-footer { margin-top: auto; }
+  .nm-lower > .ma-evolution { grid-column: 1 / -1; grid-row: 4; }
 }
 @media (min-width:1600px) {
   .nm-overview { grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) minmax(0,1fr); gap:14px; align-items:stretch; }

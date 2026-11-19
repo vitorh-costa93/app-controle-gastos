@@ -2,7 +2,7 @@
 .balance-evolution-toggle { display: flex; flex-shrink: 0; border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden; }
 .balance-evolution-toggle button { padding: 4px 7px; font-size: 11px; color: var(--color-text-secondary); cursor: pointer; }
 .balance-evolution-toggle button[aria-pressed="true"] { background: var(--chart-1); color: white; }
-.ma-evolution-chart { flex: 1; height: 224px; min-height: 180px; }
+.ma-evolution-chart { width: 100%; min-height: 190px; }
 .balance-evolution-caption, .balance-evolution-status { font-size: 10px; color: var(--color-text-secondary); }
 .balance-evolution-caption span { color: var(--color-positive); }
 .balance-evolution-caption a, .balance-evolution-status button { text-decoration: underline; }

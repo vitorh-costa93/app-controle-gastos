@@ -2,6 +2,11 @@
 
 Atualizado: 19/11/2026.
 
+## Nova regra da Reserva de Emergência e salário por data (19/11/2026)
+- `simulation-baseline.ts`, `salary.ts` e `simulation-analysis.ts`: até o dia 15 do mês atual (Brasília), o mês seguinte usa o salário estimado (ano anterior × YoY); após o dia 15, o mês seguinte usa o valor real reportado em entradas (mantendo os meses posteriores estimados).
+- `simulation-budget.ts` e `EmergencyReserve.tsx`: o saldo real da caixinha (`starting_balance`) ancora o mês atual (`currentMonth`), fazendo o saldo inicial do mês seguinte partir exatamente do final real do mês atual. O card **Reserva de emergência** exibe o saldo acumulado sem CDI (reserva real + sobras futuras), enquanto o rendimento CDI permanece nos gráficos de **Evolução do saldo** e **Simulação**.
+- Validação: `test-reserve-scope.mjs`, `test-balance-projection.mjs`, `test-ui-scope.mjs`, `npm run lint` e `npm run build` aprovados antes do push em `main`/Vercel.
+
 ## Ajustes — Evolução do saldo, layout notebook e ordem mobile (19/11/2026)
 - `BalanceEvolution.tsx`, `balance-evolution.css` e `nosso-mes.css`: gráficos Mensal e Acumulado agora usam altura explícita (`190px`) em vez de `height="100%"` dentro de flex sem altura fixa (que resolvia para `0px` no Recharts).
 - `nosso-mes.css` (`1100px–1599px`): `.nm-overview` usa `align-items: stretch` e `.modern-payments` estica até a base da linha 3 (`height: 100%`), eliminando o espaço vazio abaixo de **Contas do início do mês**.

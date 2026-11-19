@@ -47,7 +47,7 @@ const { getBaseMonthSummaries } = load("src/lib/data/simulation-analysis.ts", {
   "./salary": { getEstimatedSalaryOccurrences: async () => ({ personId: "j", byMonth: new Map() }), getSalaryProjectionOccurrences: async () => new Map() },
   "./estimates": { getEstimatedExpenseOccurrences: async () => new Map() },
   "@/lib/domain/recurrence": { monthRange: () => months },
-  "@/lib/domain/simulation-baseline": { isOpenMonth: () => true, buildSimulationMonthOccurrences: (input) => {
+  "@/lib/domain/simulation-baseline": { getBrazilTodayParts: () => ({ month: "2089-12", day: 10 }), isOpenMonth: () => true, buildSimulationMonthOccurrences: (input) => {
     // Both people must reach the existing assembler before person selection, preserving suppression rules.
     assert.equal(input.transactions.length, 2); assert.equal(input.rules.length, 2); assemblies++;
     return [...input.transactions, row("projected-v", "v", null, null, 3000, "recurring"), row("income-v", "v", null, null, 50000, "real", { direction: "income" }), row("income-j", "j", null, null, 70000, "real", { direction: "income" })];
@@ -80,13 +80,14 @@ const { getSimulationBudget } = load("src/lib/data/simulation-budget.ts", {
   "@/lib/data/reference": { listPeople: async () => [{ id: "v" }, { id: "j" }] },
   "@/lib/data/cdi": { getCdiRate: async () => ({ annualPercent: 13.65 }) },
   "@/lib/domain/horizon": { getDefaultSimulationHorizon: () => ({ from: "2026-11", to: "2027-12" }) },
-  "@/lib/utils/format": { addMonths: (month, count) => { assert.equal(month, "2026-09"); assert.equal(count, 1); return "2026-10"; } },
+  "@/lib/domain/simulation-baseline": { getBrazilTodayParts: () => ({ month: "2026-11", day: 19 }) },
 });
 const sharedBudget = await getSimulationBudget();
-assert.equal(sharedBudget.horizon.from, "2026-10");
+assert.equal(sharedBudget.horizon.from, "2026-11");
 assert.equal(sharedBudget.horizon.to, "2027-12");
 assert.equal(sharedBudget.startingBalance.amountCents, 120000);
-assert.equal(sharedBudget.baseSummaries[0].referenceMonth, "2026-10");
+assert.equal(sharedBudget.startingBalance.month, "2026-11");
+assert.equal(sharedBudget.baseSummaries[0].referenceMonth, "2026-11");
 assert.equal(sharedBudget.cdi.annualPercent, 13.65);
 const personalBudget = await getSimulationBudget("v");
 assert.equal(personalBudget.startingBalance, null);

@@ -158,18 +158,32 @@ export async function getEstimatedSalaryOccurrences(
   const person = findVariableSalaryPerson(people);
   if (!person) return { personId: null, byMonth: new Map() };
 
-  const currentMonth = toReferenceMonth(new Date());
-  const closedEntries = (await listEffectiveSalaryEntries(person.id)).filter((e) => e.referenceMonth <= currentMonth);
+  const { month: currentMonth, day: dayOfMonth } = (() => {
+    const now = new Date();
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Sao_Paulo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(now);
+    const year = parts.find((p) => p.type === "year")?.value ?? String(now.getFullYear());
+    const month = parts.find((p) => p.type === "month")?.value ?? String(now.getMonth() + 1).padStart(2, "0");
+    const day = Number(parts.find((p) => p.type === "day")?.value ?? now.getDate());
+    return { month: `${year}-${month}`, day };
+  })();
+  const estimateThreshold = dayOfMonth > 15 ? addMonths(currentMonth, 1) : currentMonth;
+  const projectFromMonth = addMonths(estimateThreshold, 1);
+  const closedEntries = (await listEffectiveSalaryEntries(person.id)).filter((e) => e.referenceMonth <= estimateThreshold);
   const typeId = types.find((t) => /sal[aá]rio/i.test(t.name))?.id ?? null;
 
   const occurrences = buildProjectedSalaryOccurrences({
-    months: months.filter((m) => m > currentMonth),
+    months: months.filter((m) => m > estimateThreshold),
     currentMonth,
     personId: person.id,
     typeId,
     salaryEntries: closedEntries,
     monthsWithRealIncome: new Set(),
-    projectFromMonth: addMonths(currentMonth, 1),
+    projectFromMonth,
   });
 
   const byMonth = new Map<string, MonthlyOccurrence[]>();

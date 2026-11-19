@@ -6,13 +6,13 @@ import { listActiveRecurrenceRules } from "./recurrence";
 import { listPeople, listTransactionTypes } from "./reference";
 import { getEstimatedSalaryOccurrences, getSalaryProjectionOccurrences } from "./salary";
 import { monthRange } from "@/lib/domain/recurrence";
-import { buildSimulationMonthOccurrences, isOpenMonth } from "@/lib/domain/simulation-baseline";
+import { buildSimulationMonthOccurrences, getBrazilTodayParts, isOpenMonth } from "@/lib/domain/simulation-baseline";
 import { summarizeMonth } from "@/lib/domain/finance";
 import { summarizeScenarioImpact, ScenarioComparisonMonth } from "@/lib/domain/simulation";
 import { MonthSummary, MonthlyOccurrence, Simulation } from "@/types/domain";
 import { isAiConfigured, generateSimulationSummary, generateCashVsInstallmentSummary } from "@/lib/ai/openai";
 import { compareCashVsInstallments, CashVsInstallmentInput } from "@/lib/domain/cash-vs-installments";
-import { formatCurrencyBRL, formatMonthLabel, toReferenceMonth } from "@/lib/utils/format";
+import { formatCurrencyBRL, formatMonthLabel } from "@/lib/utils/format";
 
 import { SimulationHorizon } from "@/lib/domain/horizon";
 export type { SimulationHorizon } from "@/lib/domain/horizon";
@@ -21,7 +21,7 @@ export async function getBaseMonthSummaries(
   horizon: SimulationHorizon,
   personId?: string
 ): Promise<Map<string, MonthSummary>> {
-  const currentMonth = toReferenceMonth(new Date());
+  const { month: currentMonth, day: dayOfMonth } = getBrazilTodayParts();
   const [rules, transactions, people, types] = await Promise.all([
     listActiveRecurrenceRules(),
     listConsideredTransactionsInRange(horizon.from, horizon.to),
@@ -30,9 +30,9 @@ export async function getBaseMonthSummaries(
   ]);
 
   const months = monthRange(horizon.from, horizon.to);
-  // Gastos e entradas seguem exatamente Análise. Só o salário variável (Jaqueline) é estimado do mês
-  // seguinte em diante: mesmo mês do ano anterior × YoY acumulado. Até o mês atual vale a regra de Análise.
-  const currentOrPast = months.filter((m) => !isOpenMonth(m, currentMonth));
+  // Até dia 15: do mês seguinte em diante estima o salário variável (ano anterior × YoY).
+  // Após dia 15: o mês seguinte usa o valor real já reportado em entradas; só os meses posteriores são estimados.
+  const currentOrPast = months.filter((m) => !isOpenMonth(m, currentMonth, dayOfMonth));
   const [estimatedSalary, analysisSalaryByMonth] = await Promise.all([
     getEstimatedSalaryOccurrences(months, people, types),
     currentOrPast.length > 0
@@ -48,6 +48,7 @@ export async function getBaseMonthSummaries(
     const occurrences = buildSimulationMonthOccurrences({
       month,
       currentMonth,
+      dayOfMonth,
       transactions,
       rules,
       salaryOccurrences: salaryByMonth.get(month) ?? [],

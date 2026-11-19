@@ -1,17 +1,29 @@
 "use client";
 
 import { Pencil, ShieldCheck } from "lucide-react";
-import { formatCurrencyBRL, formatMonthLabel } from "@/lib/utils/format";
+import { formatCurrencyBRL, formatMonthLabel, toReferenceMonth } from "@/lib/utils/format";
 import type { BalanceProjectionState } from "./useBalanceProjection";
 
 export function EmergencyReserve({ balance, essential, targetMonths, targetAmountCents, month, onEdit }: {
   balance: BalanceProjectionState; essential: number; targetMonths: number; targetAmountCents: number | null; month: string; onEdit: () => void;
 }) {
+  const currentMonth = toReferenceMonth(new Date());
   const index = balance.accumulated.findIndex((point) => point.referenceMonth === month);
-  // A Reserva de Emergência usa o saldo acumulado sem CDI (saldo real do mês atual + sobras futuras);
-  // o rendimento do CDI incide apenas nos gráficos de Evolução do Saldo.
-  const reserve = index >= 0 ? (balance.accumulated[index]?.accumulatedCents ?? balance.projection?.balanceSeriesCents[index] ?? null)
-    : balance.budget?.startingBalance?.month === month ? balance.budget.startingBalance.amountCents : null;
+  const currentIndex = balance.accumulated.findIndex((point) => point.referenceMonth === currentMonth);
+  // Até o mês atual: inclui o rendimento CDI já ocorrido desde a âncora.
+  // Para meses futuros (> mês atual): parte do valor do mês atual e soma apenas as sobras previstas (sem CDI futuro).
+  let reserve: number | null = null;
+  if (index >= 0) {
+    if (month > currentMonth && currentIndex >= 0 && balance.projection && balance.accumulated[index]?.accumulatedCents !== undefined && balance.accumulated[currentIndex]?.accumulatedCents !== undefined) {
+      const currentValue = balance.projection.balanceSeriesCents[currentIndex];
+      const deltaFromCurrent = balance.accumulated[index].accumulatedCents - balance.accumulated[currentIndex].accumulatedCents;
+      reserve = currentValue + deltaFromCurrent;
+    } else {
+      reserve = balance.projection?.balanceSeriesCents[index] ?? balance.accumulated[index]?.accumulatedCents ?? null;
+    }
+  } else if (balance.budget?.startingBalance?.month === month) {
+    reserve = balance.budget.startingBalance.amountCents;
+  }
   const target = targetAmountCents ?? essential * targetMonths;
   const available = Math.max(0, reserve ?? 0);
   const progress = target > 0 ? available / target * 100 : 0;

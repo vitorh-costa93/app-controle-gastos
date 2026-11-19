@@ -36,7 +36,7 @@ assert.deepEqual(results.map((data) => data.currentSummary.expenseCents), [33000
 for (const data of results) assert.equal(data.householdCategoryBreakdown[0].amountCents, 33000);
 
 const balance = { status: "ready", budget: null, accumulated: [{ referenceMonth: month }], projection: { balanceSeriesCents: [90000] } };
-const { EmergencyReserve } = load("src/components/analise/EmergencyReserve.tsx", { "lucide-react": { Pencil: () => null, ShieldCheck: () => null }, "@/lib/utils/format": { formatCurrencyBRL: (v) => `money:${v}`, formatMonthLabel: (v) => v } });
+const { EmergencyReserve } = load("src/components/analise/EmergencyReserve.tsx", { "lucide-react": { Pencil: () => null, ShieldCheck: () => null }, "@/lib/utils/format": { formatCurrencyBRL: (v) => `money:${v}`, formatMonthLabel: (v) => v, toReferenceMonth: () => month } });
 let calls = [];
 const marker = (type) => function ScopeMarker(props) { return React.createElement("span", { "data-test": type, "data-person": props.personId || "casal", "data-shared": Boolean(props.shared) }); };
 const { ModernOverview } = load("src/components/analise/ModernOverview.tsx", {

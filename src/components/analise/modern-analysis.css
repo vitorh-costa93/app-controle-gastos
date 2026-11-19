@@ -183,7 +183,7 @@
   .ma-balance { grid-area: balance; }
   .ma-people-panel { grid-area: people; }
   .ma-cards-panel { grid-area: cards; }
-  .ma-evolution { grid-area: evolution; }
+  /* evolution area handled by nosso-mes.css */
   .ma-overview .modern-payments { grid-area: payments; }
   .ma-housing { grid-area: housing; }
   .ma-overview .ma-panel, .ma-page .ma-overview .modern-payments { padding: 12px 14px; }

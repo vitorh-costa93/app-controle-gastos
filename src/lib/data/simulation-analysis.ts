@@ -40,8 +40,8 @@ export async function getBaseMonthSummaries(
       : Promise.resolve(new Map<string, MonthlyOccurrence[]>()),
   ]);
   const salaryByMonth = new Map([...analysisSalaryByMonth, ...estimatedSalary.byMonth]);
-  // Gastos estimados (supermercado, combustível...): do mês seguinte em diante, o maior entre o real e a média dos 2 últimos meses fechados.
-  const estimatesByMonth = await getEstimatedExpenseOccurrences(months, "simulation", transactions);
+  // Até dia 15: o mês seguinte usa gastos estimados ("simulation"); após dia 15, segue o real da Análise ("analysis").
+  const estimatesByMonth = await getEstimatedExpenseOccurrences(months, dayOfMonth > 15 ? "analysis" : "simulation", transactions);
 
   const map = new Map<string, MonthSummary>();
   for (const month of months) {

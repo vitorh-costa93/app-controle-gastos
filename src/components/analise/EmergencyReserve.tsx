@@ -39,6 +39,6 @@ export function EmergencyReserve({ balance, essential, targetMonths, targetAmoun
       </>}
     </div>
     {balance.status === "ready" && reserve !== null && target > 0 && <div className="nm-reserve-progress" role="progressbar" aria-label="Progresso da reserva" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, progress)} aria-valuetext={`${progressLabel}% da meta`}><i style={{ width: `${Math.min(100, progress)}%` }} /></div>}
-    <button type="button" className="nm-link" onClick={onEdit}><Pencil size={15} /> Editar meta</button>
+    <button type="button" className="nm-link" onClick={onEdit}><Pencil size={15} /> Editar reserva</button>
   </section>;
 }

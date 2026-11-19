@@ -4,7 +4,7 @@ Atualizado: 19/11/2026.
 
 ## Nova regra da Reserva de Emergência e salário por data (19/11/2026)
 - `simulation-baseline.ts`, `salary.ts` e `simulation-analysis.ts`: até o dia 15 do mês atual (Brasília), o mês seguinte usa o salário estimado (ano anterior × YoY) e gastos estimados (`"simulation"`); após o dia 15, o mês seguinte usa o valor real reportado em entradas e os gastos reais da Análise (`"analysis"`), mantendo os meses posteriores estimados.
-- `simulation-budget.ts` e `EmergencyReserve.tsx`: preservada a âncora original de `starting_balance` (`2026-09`) com CDI até o mês atual (`currentMonth`), e para meses futuros (`> currentMonth`) a Reserva soma apenas as sobras previstas sem CDI futuro (mantendo o CDI futuro nos gráficos de **Evolução do saldo** e **Simulação**).
+- `EmergencyReserve.tsx`, `PlanningEditor.tsx` e `AnalisePageClient.tsx`: **Editar reserva** agora permite informar e salvar o saldo real da caixinha no mês atual (`setStartingBalance`), ancorando o mês atual e os meses seguintes e atualizando a tela imediatamente.
 - Validação: `test-reserve-scope.mjs`, `test-balance-projection.mjs`, `test-ui-scope.mjs`, `npm run lint` e `npm run build` aprovados antes do push em `main`/Vercel.
 
 ## Ajustes — Evolução do saldo, layout notebook e ordem mobile (19/11/2026)

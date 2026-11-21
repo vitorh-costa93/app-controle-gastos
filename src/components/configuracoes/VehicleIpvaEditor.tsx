@@ -12,6 +12,7 @@ import {
   analyzeVehiclePdf,
   chooseIpva,
   clearVehicle,
+  recalculateIpva,
   listFipeBrands,
   listFipeModels,
   listFipeYears,
@@ -506,6 +507,28 @@ export function VehicleIpvaEditor({
                     : `${vehicle.ipvaChosen.installments ?? IPVA_RULES.maxInstallments} cotas`}{" "}
               (a partir de {vehicle.ipvaChosen.year}). Ele repete todo ano em Cadastro → Recorrências.
             </p>
+          )}
+          {vehicle?.ipvaChosen && !pdfAnalysis && (
+            <div className="mt-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={saving}
+                type="button"
+                onClick={() =>
+                  run(recalculateIpva, (r) => {
+                    setVehicle(r.vehicle);
+                    setMessage(r.summary);
+                  })
+                }
+              >
+                {saving ? "Recalculando..." : `Recalcular IPVA ${nextIpvaYear(new Date())}`}
+              </Button>
+              <p className="mt-1 text-xs text-(--color-text-tertiary)">
+                Busca a FIPE atual e atualiza o valor das cotas a partir do próximo exercício. O licenciamento não muda: ajuste em
+                Recorrências.
+              </p>
+            </div>
           )}
         </div>
       )}

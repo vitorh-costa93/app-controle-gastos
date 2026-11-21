@@ -13,7 +13,8 @@ import {
 import { extractPdfText } from "@/lib/pdf/extract";
 import { extractVehicleLicensingFromPdfText, isAiConfigured } from "@/lib/ai/openai";
 import { createSimulation, deleteSimulation } from "./simulations";
-import { createRecurrenceRule } from "./recurrence";
+import { addRecurrenceAmountVersion, createRecurrenceRule } from "./recurrence";
+import { splitInstallments } from "@/lib/domain/ipva";
 
 const VEHICLE_KEY = "vehicle";
 const FIPE_BASE = "https://parallelum.com.br/fipe/api/v1/carros/marcas";
@@ -544,4 +545,85 @@ export async function chooseIpva(
   revalidatePath("/cadastro");
   revalidatePath("/analise");
   return { ok: true, vehicle: null };
+}
+
+/**
+ * Atualiza o IPVA para o próximo exercício: busca de novo o valor FIPE do veículo salvo, refaz a conta
+ * e grava uma nova versão de valor (vigente a partir do mês de cada cota) nas recorrências já criadas.
+ * Não cria lançamentos novos nem mexe nos meses anteriores. O licenciamento não é recalculado
+ * (não há fonte pública de preço): ajuste o valor dele em Recorrências quando mudar.
+ */
+export async function recalculateIpva(): Promise<
+  { ok: true; vehicle: VehicleSettings; summary: string } | { ok: false; error: string }
+> {
+  const vehicle = await getVehicle();
+  if (!vehicle?.ipvaChosen) return { ok: false, error: "Escolha primeiro a forma de pagamento do IPVA." };
+
+  const refreshed = await saveVehicle({
+    brandId: vehicle.brandId,
+    brandName: vehicle.brandName,
+    modelId: vehicle.modelId,
+    modelName: vehicle.modelName,
+    yearId: vehicle.yearId,
+    yearName: vehicle.yearName,
+  });
+  if (!refreshed.ok) return refreshed;
+
+  const { data, error } = await createAdminClient()
+    .from("recurrence_rules")
+    .select("id, description, start_date")
+    .eq("active", true)
+    .eq("frequency", "annual")
+    .ilike("description", "IPVA%");
+  if (error) return { ok: false, error: "Não foi possível localizar os lançamentos do IPVA." };
+  const rules = (data ?? []) as { id: string; description: string; start_date: string }[];
+
+  const plan = computeIpva(refreshed.vehicle.fipeCents);
+  const targetYear = nextIpvaYear(new Date());
+  const option = vehicle.ipvaChosen.option;
+
+  let expected: { description: string; cents: number }[];
+  if (option === "installments") {
+    const quotas = rules
+      .map((r) => /^IPVA cota (\d+)\/(\d+)$/.exec(r.description))
+      .filter((m): m is RegExpExecArray => m !== null);
+    const count = Number(quotas[0]?.[2] ?? vehicle.ipvaChosen.installments ?? 0);
+    if (!count) return { ok: false, error: "Não encontrei as cotas do IPVA em Recorrências." };
+    expected = splitInstallments(plan.fullCents, count).map((cents, i) => ({
+      description: `IPVA cota ${i + 1}/${count}`,
+      cents,
+    }));
+  } else if (option === "cash_full") {
+    expected = [{ description: "IPVA (à vista s/ desconto)", cents: plan.fullCents }];
+  } else if (option === "cash_discount") {
+    expected = [{ description: "IPVA (à vista c/ desconto)", cents: plan.cashCents }];
+  } else {
+    expected = [{ description: "IPVA (à vista)", cents: plan.cashCents }];
+  }
+
+  const targets = expected.map((e) => ({ ...e, rule: rules.find((r) => r.description === e.description) }));
+  const missing = targets.filter((t) => !t.rule);
+  if (missing.length > 0) {
+    return { ok: false, error: `Não encontrei em Recorrências: ${missing.map((m) => m.description).join(", ")}.` };
+  }
+
+  for (const t of targets) {
+    const month = t.rule!.start_date.slice(5, 7);
+    const result = await addRecurrenceAmountVersion(t.rule!.id, `${targetYear}-${month}`, t.cents);
+    if (!result.ok) return { ok: false, error: result.error };
+  }
+
+  const next: VehicleSettings = {
+    ...refreshed.vehicle,
+    ipvaChosen: { ...vehicle.ipvaChosen, year: targetYear },
+  };
+  if (!(await writeVehicle(next))) return { ok: false, error: "Valores atualizados, mas não foi possível salvar o ano." };
+  revalidatePath("/configuracoes");
+
+  const total = targets.reduce((sum, t) => sum + t.cents, 0);
+  return {
+    ok: true,
+    vehicle: next,
+    summary: `FIPE ${refreshed.vehicle.fipeMonth}: IPVA ${targetYear} atualizado para ${(total / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} (${targets.length === 1 ? "cota única" : `${targets.length} cotas`}), a partir de ${targetYear}.`,
+  };
 }

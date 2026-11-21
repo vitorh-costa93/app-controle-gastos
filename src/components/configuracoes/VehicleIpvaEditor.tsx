@@ -18,7 +18,7 @@ import {
   saveVehicle,
   simulateIpva,
 } from "@/lib/data/vehicle";
-import { IPVA_RULES, computeIpva, nextIpvaYear } from "@/lib/domain/ipva";
+import { IPVA_RULES, computeIpva, installmentOptions, nextIpvaYear } from "@/lib/domain/ipva";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { FieldGroup, Input, Select } from "@/components/ui/Field";
@@ -59,6 +59,8 @@ export function VehicleIpvaEditor({
   const [includeLicensing, setIncludeLicensing] = useState(true);
   const [licensingInput, setLicensingInput] = useState(centsToInputBRL(IPVA_RULES.licensingCents));
   const [launchedFromPdf, setLaunchedFromPdf] = useState<string | null>(null);
+  const [candidateIdx, setCandidateIdx] = useState("");
+  const [pending, setPending] = useState<{ option: IpvaChoiceOption; cents: number[]; label: string } | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, startLoading] = useTransition();
@@ -148,6 +150,8 @@ export function VehicleIpvaEditor({
     setError(null);
     setMessage(null);
     setLaunchedFromPdf(null);
+    setPending(null);
+    setCandidateIdx("");
     setAnalyzingPdf(true);
     try {
       const fd = new FormData();
@@ -160,14 +164,13 @@ export function VehicleIpvaEditor({
       const analysis = result.analysis;
       setPdfAnalysis(analysis);
       setLicensingInput(centsToInputBRL(analysis.licensingCents));
-      if (analysis.cashWithoutDiscountCents === null) {
-        setEditing(true);
-      } else {
-        setEditing(false);
-      }
+      setEditing(false);
       setMessage(
-        analysis.notes || "PDF analisado! Confira os valores abaixo e escolha a opção para lançar."
+        analysis.candidates.length > 0
+          ? "PDF lido. Confirme o veículo abaixo antes de escolher uma opção."
+          : "Não consegui identificar o veículo na tabela FIPE. Selecione-o manualmente abaixo."
       );
+      if (analysis.candidates.length === 0 && analysis.pdfCashWithoutDiscountCents === null) setEditing(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao enviar o PDF.");
     } finally {
@@ -176,27 +179,36 @@ export function VehicleIpvaEditor({
     }
   }
 
-  const plan = vehicle ? computeIpva(vehicle.fipeCents) : null;
+  const candidate = pdfAnalysis && candidateIdx !== "" ? (pdfAnalysis.candidates[Number(candidateIdx)] ?? null) : null;
+  const needsVehicleConfirm = Boolean(pdfAnalysis && pdfAnalysis.candidates.length > 0 && !candidate);
   const year = pdfAnalysis?.year ?? nextIpvaYear(new Date());
   const imposto = types.find((t) => t.name.toLowerCase().includes("imposto"))?.id ?? null;
   const categoriaIpva = categories.find((c) => c.name.toLowerCase().includes("ipva"))?.id ?? null;
   const hasSimulations = (vehicle?.ipvaSimulationIds.length ?? 0) > 0;
   const visibleModels = models.filter((m) => m.name.toLowerCase().includes(modelFilter.trim().toLowerCase()));
 
-  const cashWithDiscountCents = pdfAnalysis?.cashWithDiscountCents ?? plan?.cashCents ?? null;
-  const cashWithoutDiscountCents = pdfAnalysis?.cashWithoutDiscountCents ?? plan?.fullCents ?? null;
-  const installmentCents = pdfAnalysis?.installmentCents ?? plan?.installmentCents ?? null;
+  const fipeCents = candidate?.fipeCents ?? pdfAnalysis?.pdfFipeCents ?? (pdfAnalysis ? null : (vehicle?.fipeCents ?? null));
+  const plan = fipeCents ? computeIpva(fipeCents) : null;
+  const cashWithoutDiscountCents = pdfAnalysis?.pdfCashWithoutDiscountCents ?? plan?.fullCents ?? null;
+  const cashWithDiscountCents =
+    pdfAnalysis?.pdfCashWithDiscountCents ??
+    (cashWithoutDiscountCents !== null
+      ? Math.round(cashWithoutDiscountCents * (1 - IPVA_RULES.cashDiscountPct / 100))
+      : null);
+  const installments = cashWithoutDiscountCents !== null ? installmentOptions(cashWithoutDiscountCents) : [];
   const licensingCents = parseInputBRLToCents(licensingInput) || IPVA_RULES.licensingCents;
+  const canChoose = !needsVehicleConfirm && !launchedFromPdf && (!vehicle?.ipvaChosen || Boolean(pdfAnalysis));
 
-  function handleChoose(option: IpvaChoiceOption) {
-    if (cashWithDiscountCents === null || cashWithoutDiscountCents === null || !installmentCents) return;
+  function handleConfirmChoice() {
+    if (!pending || cashWithDiscountCents === null || cashWithoutDiscountCents === null) return;
+    const { option, cents, label } = pending;
     run(
       () =>
         chooseIpva(option, personId, imposto, categoriaIpva, {
-          matchedFipe: pdfAnalysis?.matchedFipe ?? null,
+          matchedFipe: candidate,
           cashWithDiscountCents,
           cashWithoutDiscountCents,
-          installmentCents,
+          installmentCents: option === "installments" ? cents : undefined,
           licensingCents,
           includeLicensing,
           year,
@@ -206,12 +218,7 @@ export function VehicleIpvaEditor({
         }),
       (r) => {
         if (r.vehicle) setVehicle(r.vehicle);
-        const label =
-          option === "cash_discount"
-            ? "à vista com desconto"
-            : option === "cash_full"
-              ? "à vista sem desconto"
-              : `${installmentCents.length}x`;
+        setPending(null);
         const licMsg = includeLicensing ? " + Licenciamento anual" : "";
         const doneText = `Lançamentos criados: IPVA (${label})${licMsg} em Cadastro → Recorrências.`;
         setLaunchedFromPdf(doneText);
@@ -220,8 +227,41 @@ export function VehicleIpvaEditor({
     );
   }
 
-  const showOptions =
-    cashWithDiscountCents !== null && cashWithoutDiscountCents !== null && installmentCents !== null && (!editing || Boolean(pdfAnalysis));
+  function pickRow(option: IpvaChoiceOption, cents: number[], label: string) {
+    setPending({ option, cents, label });
+  }
+
+  const rows: { key: string; option: IpvaChoiceOption; label: string; detail: string; cents: number[]; main: string }[] =
+    cashWithDiscountCents !== null && cashWithoutDiscountCents !== null
+      ? [
+          {
+            key: "cash_discount",
+            option: "cash_discount",
+            label: "À vista com desconto",
+            detail: `${IPVA_RULES.cashDiscountPct}% off, cota única em janeiro`,
+            cents: [cashWithDiscountCents],
+            main: formatCurrencyBRL(cashWithDiscountCents),
+          },
+          {
+            key: "cash_full",
+            option: "cash_full",
+            label: "À vista sem desconto",
+            detail: "cota única, valor cheio",
+            cents: [cashWithoutDiscountCents],
+            main: formatCurrencyBRL(cashWithoutDiscountCents),
+          },
+          ...installments.map((o) => ({
+            key: `inst_${o.count}`,
+            option: "installments" as IpvaChoiceOption,
+            label: `${o.count}x sem desconto`,
+            detail: `total ${formatCurrencyBRL(o.cents.reduce((sum, v) => sum + v, 0))} · de janeiro a ${["", "", "fevereiro", "março", "abril", "maio"][o.count]}`,
+            cents: o.cents,
+            main: `${o.count}x de ${formatCurrencyBRL(o.cents[0])}`,
+          })),
+        ]
+      : [];
+
+  const showOptions = rows.length > 0 && (!editing || Boolean(pdfAnalysis));
 
   return (
     <Card className="p-5">
@@ -252,22 +292,39 @@ export function VehicleIpvaEditor({
         {pdfAnalysis && (
           <span className="inline-flex items-center gap-1 text-xs text-(--color-text-secondary)">
             <FileText size={14} />
-            {pdfAnalysis.vehicleSummary}
+            Lido no PDF: {[pdfAnalysis.extracted.brand, pdfAnalysis.extracted.model, pdfAnalysis.extracted.yearModel]
+              .filter(Boolean)
+              .join(" ") || "veículo não identificado"}
             {pdfAnalysis.plate ? ` · Placa ${pdfAnalysis.plate}` : ""}
             {pdfAnalysis.uf ? ` (${pdfAnalysis.uf})` : ""}
           </span>
         )}
       </div>
 
-      {pdfAnalysis?.matchedFipe && (
-        <div className="mb-3 rounded-(--radius-md) border border-(--color-border) p-3">
-          <p className="text-sm font-medium">
-            {pdfAnalysis.matchedFipe.brandName} {pdfAnalysis.matchedFipe.modelName} · {pdfAnalysis.matchedFipe.yearName}
-          </p>
-          <p className="text-xs text-(--color-text-tertiary)">
-            FIPE {formatCurrencyBRL(pdfAnalysis.matchedFipe.fipeCents)} · referência {pdfAnalysis.matchedFipe.fipeMonth} · código{" "}
-            {pdfAnalysis.matchedFipe.fipeCode}
-          </p>
+      {pdfAnalysis && pdfAnalysis.candidates.length > 0 && (
+        <div className="mb-3">
+          <FieldGroup label="Confirme o veículo (o valor do IPVA depende dele)">
+            <Select value={candidateIdx} onChange={(e) => { setCandidateIdx(e.target.value); setPending(null); }}>
+              <option value="">Selecione o veículo correto…</option>
+              {pdfAnalysis.candidates.map((c, i) => (
+                <option key={`${c.modelId}-${c.yearId}`} value={String(i)}>
+                  {c.brandName} {c.modelName} · {c.yearName} — FIPE {formatCurrencyBRL(c.fipeCents)}
+                </option>
+              ))}
+            </Select>
+          </FieldGroup>
+          {candidate && (
+            <p className="mt-1 text-xs text-(--color-text-tertiary)">
+              referência {candidate.fipeMonth} · código {candidate.fipeCode}
+            </p>
+          )}
+          <button
+            type="button"
+            className="mt-1 text-xs text-(--color-primary) hover:underline"
+            onClick={() => setEditing(true)}
+          >
+            Nenhum desses? Escolher manualmente
+          </button>
         </div>
       )}
 
@@ -331,102 +388,40 @@ export function VehicleIpvaEditor({
 
       {showOptions && (
         <div className="mb-4">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="flex flex-col justify-between rounded-(--radius-md) border border-(--color-border) p-3">
-              <div>
-                <p className="text-xs text-(--color-text-tertiary)">IPVA {year} — à vista c/ desconto</p>
-                <p className="text-lg font-semibold tabular-nums">{formatCurrencyBRL(cashWithDiscountCents)}</p>
-                <p className="text-xs text-(--color-text-tertiary)">
-                  {IPVA_RULES.cashDiscountPct}% de desconto (cota única)
-                </p>
-              </div>
-              {(!vehicle?.ipvaChosen || pdfAnalysis) && !launchedFromPdf && (
-                <Button
-                  size="sm"
-                  className="mt-3 w-full"
-                  disabled={saving || !personId}
-                  onClick={() => handleChoose("cash_discount")}
-                  type="button"
-                >
-                  Escolher c/ desconto
-                </Button>
-              )}
-            </div>
-
-            <div className="flex flex-col justify-between rounded-(--radius-md) border border-(--color-border) p-3">
-              <div>
-                <p className="text-xs text-(--color-text-tertiary)">IPVA {year} — à vista s/ desconto</p>
-                <p className="text-lg font-semibold tabular-nums">{formatCurrencyBRL(cashWithoutDiscountCents)}</p>
-                <p className="text-xs text-(--color-text-tertiary)">valor cheio em cota única</p>
-              </div>
-              {(!vehicle?.ipvaChosen || pdfAnalysis) && !launchedFromPdf && (
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  className="mt-3 w-full"
-                  disabled={saving || !personId}
-                  onClick={() => handleChoose("cash_full")}
-                  type="button"
-                >
-                  Escolher s/ desconto
-                </Button>
-              )}
-            </div>
-
-            <div className="flex flex-col justify-between rounded-(--radius-md) border border-(--color-border) p-3">
-              <div>
-                <p className="text-xs text-(--color-text-tertiary)">
-                  IPVA {year} — {installmentCents.length} parcelas
-                </p>
-                <p className="text-lg font-semibold tabular-nums">
-                  {installmentCents.length}x de {formatCurrencyBRL(installmentCents[0])}
-                </p>
-                <p className="text-xs text-(--color-text-tertiary)">
-                  total {formatCurrencyBRL(installmentCents.reduce((s, v) => s + v, 0))}
-                </p>
-              </div>
-              {(!vehicle?.ipvaChosen || pdfAnalysis) && !launchedFromPdf && (
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  className="mt-3 w-full"
-                  disabled={saving || !personId}
-                  onClick={() => handleChoose("installments")}
-                  type="button"
-                >
-                  Escolher {installmentCents.length}x
-                </Button>
-              )}
-            </div>
-
-            <div className="flex flex-col justify-between rounded-(--radius-md) border border-(--color-border) p-3">
-              <div>
-                <p className="text-xs text-(--color-text-tertiary)">Licenciamento {year}</p>
-                <div className="mt-1 flex items-center gap-1">
-                  <span className="text-sm text-(--color-text-tertiary)">R$</span>
-                  <Input
-                    value={licensingInput}
-                    onChange={(e) => setLicensingInput(e.target.value)}
-                    aria-label="Valor do licenciamento"
-                    className="h-8 text-sm font-semibold tabular-nums"
-                  />
+          <p className="mb-2 text-xs text-(--color-text-tertiary)">
+            IPVA {year}
+            {pdfAnalysis?.pdfCashWithoutDiscountCents ? " (valores do PDF)" : " (alíquota 4% sobre a FIPE — estimativa)"}
+            . Parcelado em até {IPVA_RULES.maxInstallments}x é sem desconto.
+          </p>
+          <ul className="divide-y divide-(--color-border) rounded-(--radius-md) border border-(--color-border)">
+            {rows.map((row) => (
+              <li key={row.key} className="flex items-center justify-between gap-3 p-3">
+                <div>
+                  <p className="text-sm font-medium">{row.label}</p>
+                  <p className="text-xs text-(--color-text-tertiary)">{row.detail}</p>
                 </div>
-                <p className="mt-1 text-xs text-(--color-text-tertiary)">
-                  {pdfAnalysis?.licensingFromPdf ? "lido do PDF" : `referência ${pdfAnalysis?.uf ?? IPVA_RULES.uf}`}
-                </p>
-              </div>
-              <label className="mt-3 flex cursor-pointer items-center gap-2 text-xs text-(--color-text-secondary)">
-                <input
-                  type="checkbox"
-                  checked={includeLicensing}
-                  onChange={(e) => setIncludeLicensing(e.target.checked)}
-                />
-                Lançar licenciamento junto
-              </label>
-            </div>
-          </div>
+                <div className="flex items-center gap-3">
+                  <p className="text-sm font-semibold tabular-nums">{row.main}</p>
+                  {canChoose && (
+                    <Button
+                      size="sm"
+                      variant={pending?.option === row.option && pending.label === row.label ? "primary" : "secondary"}
+                      disabled={saving || !personId}
+                      onClick={() => pickRow(row.option, row.cents, row.label)}
+                      type="button"
+                    >
+                      Escolher
+                    </Button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+          {needsVehicleConfirm && (
+            <p className="mt-2 text-xs text-(--color-text-secondary)">Confirme o veículo acima para liberar a escolha.</p>
+          )}
 
-          <div className="mt-3 grid grid-cols-1 items-end gap-3 sm:grid-cols-[220px_auto_auto]">
+          <div className="mt-3 grid grid-cols-1 items-end gap-3 sm:grid-cols-[220px_220px]">
             <FieldGroup label="Lançar para quem?">
               <Select value={personId} onChange={(e) => setPersonId(e.target.value)}>
                 {people.map((p) => (
@@ -436,34 +431,68 @@ export function VehicleIpvaEditor({
                 ))}
               </Select>
             </FieldGroup>
-
-            {vehicle && !vehicle.ipvaChosen && (
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={saving}
-                  onClick={() =>
-                    run(simulateIpva, (r) => {
-                      setVehicle(r.vehicle);
-                      setMessage("Cenários criados. Compare o impacto no saldo em Simulação.");
-                    })
-                  }
-                  type="button"
-                >
-                  {hasSimulations ? "Refazer simulação" : "Simular à vista × parcelado"}
-                </Button>
-                {hasSimulations && (
-                  <Link
-                    href="/simulacao"
-                    className="inline-flex h-9 items-center rounded-(--radius-md) px-3 text-xs font-medium text-(--color-primary) hover:bg-black/5"
-                  >
-                    Ver em Simulação
-                  </Link>
-                )}
-              </div>
-            )}
+            <FieldGroup label={`Licenciamento ${year} (R$)`}>
+              <Input
+                value={licensingInput}
+                onChange={(e) => setLicensingInput(e.target.value)}
+                aria-label="Valor do licenciamento"
+                className="tabular-nums"
+              />
+            </FieldGroup>
           </div>
+          <label className="mt-2 flex cursor-pointer items-center gap-2 text-xs text-(--color-text-secondary)">
+            <input type="checkbox" checked={includeLicensing} onChange={(e) => setIncludeLicensing(e.target.checked)} />
+            Lançar licenciamento junto ({pdfAnalysis?.licensingFromPdf ? "valor lido do PDF" : "valor de referência, confira"})
+          </label>
+
+          {pending && (
+            <div className="mt-3 rounded-(--radius-md) border border-(--color-primary) p-3">
+              <p className="text-sm font-medium">Confirmar lançamentos?</p>
+              <p className="mt-1 text-xs text-(--color-text-secondary)">
+                IPVA {year} — {pending.label}:{" "}
+                {pending.cents.length === 1
+                  ? formatCurrencyBRL(pending.cents[0])
+                  : `${pending.cents.length}x de ${formatCurrencyBRL(pending.cents[0])}`}
+                {includeLicensing ? ` + Licenciamento ${formatCurrencyBRL(licensingCents)}` : ""}. Viram recorrências anuais em
+                Cadastro → Recorrências.
+              </p>
+              <div className="mt-2 flex gap-2">
+                <Button size="sm" disabled={saving} onClick={handleConfirmChoice} type="button">
+                  {saving ? "Lançando..." : "Confirmar"}
+                </Button>
+                <Button size="sm" variant="ghost" disabled={saving} onClick={() => setPending(null)} type="button">
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {vehicle && !vehicle.ipvaChosen && !pdfAnalysis && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={saving}
+                onClick={() =>
+                  run(simulateIpva, (r) => {
+                    setVehicle(r.vehicle);
+                    setMessage("Cenários criados. Compare o impacto no saldo em Simulação.");
+                  })
+                }
+                type="button"
+              >
+                {hasSimulations ? "Refazer simulação" : "Simular à vista × parcelado"}
+              </Button>
+              {hasSimulations && (
+                <Link
+                  href="/simulacao"
+                  className="inline-flex h-9 items-center rounded-(--radius-md) px-3 text-xs font-medium text-(--color-primary) hover:bg-black/5"
+                >
+                  Ver em Simulação
+                </Link>
+              )}
+            </div>
+          )}
 
           {vehicle?.ipvaChosen && !pdfAnalysis && (
             <p className="mt-3 text-sm text-(--color-positive)">
@@ -474,7 +503,7 @@ export function VehicleIpvaEditor({
                   ? "à vista s/ desconto"
                   : vehicle.ipvaChosen.option === "cash"
                     ? "à vista"
-                    : `${IPVA_RULES.maxInstallments} cotas`}{" "}
+                    : `${vehicle.ipvaChosen.installments ?? IPVA_RULES.maxInstallments} cotas`}{" "}
               (a partir de {vehicle.ipvaChosen.year}). Ele repete todo ano em Cadastro → Recorrências.
             </p>
           )}

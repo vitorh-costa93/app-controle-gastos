@@ -11,6 +11,7 @@ import {
   VehicleSettings,
   analyzeVehiclePdf,
   chooseIpva,
+  clearVehicle,
   listFipeBrands,
   listFipeModels,
   listFipeYears,
@@ -159,11 +160,10 @@ export function VehicleIpvaEditor({
       const analysis = result.analysis;
       setPdfAnalysis(analysis);
       setLicensingInput(centsToInputBRL(analysis.licensingCents));
-      if (analysis.vehicle) {
-        setVehicle(analysis.vehicle);
-        setEditing(false);
-      } else if (analysis.cashWithoutDiscountCents === null) {
+      if (analysis.cashWithoutDiscountCents === null) {
         setEditing(true);
+      } else {
+        setEditing(false);
       }
       setMessage(
         analysis.notes || "PDF analisado! Confira os valores abaixo e escolha a opção para lançar."
@@ -193,6 +193,7 @@ export function VehicleIpvaEditor({
     run(
       () =>
         chooseIpva(option, personId, imposto, categoriaIpva, {
+          matchedFipe: pdfAnalysis?.matchedFipe ?? null,
           cashWithDiscountCents,
           cashWithoutDiscountCents,
           installmentCents,
@@ -258,7 +259,19 @@ export function VehicleIpvaEditor({
         )}
       </div>
 
-      {vehicle && !editing && (
+      {pdfAnalysis?.matchedFipe && (
+        <div className="mb-3 rounded-(--radius-md) border border-(--color-border) p-3">
+          <p className="text-sm font-medium">
+            {pdfAnalysis.matchedFipe.brandName} {pdfAnalysis.matchedFipe.modelName} · {pdfAnalysis.matchedFipe.yearName}
+          </p>
+          <p className="text-xs text-(--color-text-tertiary)">
+            FIPE {formatCurrencyBRL(pdfAnalysis.matchedFipe.fipeCents)} · referência {pdfAnalysis.matchedFipe.fipeMonth} · código{" "}
+            {pdfAnalysis.matchedFipe.fipeCode}
+          </p>
+        </div>
+      )}
+
+      {vehicle && !editing && !pdfAnalysis && (
         <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
           <div>
             <p className="text-sm font-medium">
@@ -268,7 +281,7 @@ export function VehicleIpvaEditor({
               FIPE {formatCurrencyBRL(vehicle.fipeCents)} · referência {vehicle.fipeMonth} · código {vehicle.fipeCode}
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
               size="sm"
               variant="secondary"
@@ -296,6 +309,21 @@ export function VehicleIpvaEditor({
             </Button>
             <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
               Trocar veículo
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={saving}
+              onClick={() =>
+                run(clearVehicle, () => {
+                  setVehicle(null);
+                  setPdfAnalysis(null);
+                  setEditing(true);
+                  setMessage("Veículo removido.");
+                })
+              }
+            >
+              Limpar
             </Button>
           </div>
         </div>

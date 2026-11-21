@@ -44,6 +44,18 @@ export interface VehicleSettings {
   ipvaChosen: { option: IpvaChoiceOption; year: number } | null;
 }
 
+export interface MatchedFipeVehicle {
+  brandId: string;
+  brandName: string;
+  modelId: string;
+  modelName: string;
+  yearId: string;
+  yearName: string;
+  fipeCents: number;
+  fipeMonth: string;
+  fipeCode: string;
+}
+
 export interface VehiclePdfAnalysis {
   vehicleSummary: string;
   plate: string | null;
@@ -52,6 +64,7 @@ export interface VehiclePdfAnalysis {
   year: number;
   fipeCents: number | null;
   fipeMatched: boolean;
+  matchedFipe: MatchedFipeVehicle | null;
   cashWithDiscountCents: number | null;
   cashWithoutDiscountCents: number | null;
   installmentCount: number;
@@ -61,7 +74,6 @@ export interface VehiclePdfAnalysis {
   ipvaFirstDueDate: string;
   licensingDueDate: string;
   notes: string;
-  vehicle: VehicleSettings | null;
 }
 
 async function fipeGet<T>(path: string): Promise<T> {
@@ -103,25 +115,43 @@ function normalizeText(value: string): string {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/[^a-z0-9.\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
 
 const BRAND_ALIASES: Record<string, string> = {
   gm: "chevrolet",
+  chev: "chevrolet",
   vw: "volkswagen",
   mb: "mercedes benz",
   mmc: "mitsubishi",
   caoa: "chery",
 };
 
+function expandCrlvTokens(modelRaw: string): string[] {
+  const rawTokens = normalizeText(modelRaw).split(" ").filter(Boolean);
+  const expanded = new Set<string>();
+  for (const t of rawTokens) {
+    expanded.add(t);
+    if (t.includes("10")) expanded.add("1.0");
+    if (t.includes("14")) expanded.add("1.4");
+    if (t.includes("16")) expanded.add("1.6");
+    if (t.includes("20")) expanded.add("2.0");
+    if (t.endsWith("mt") || t === "mt") expanded.add("mec");
+    if (t.endsWith("at") || t === "at") expanded.add("aut");
+    if (/^lt\d+$/.test(t)) expanded.add("lt");
+    if (/^ltz\d*$/.test(t)) expanded.add("ltz");
+  }
+  return Array.from(expanded).filter((t) => t.length >= 2);
+}
+
 async function tryMatchFipeVehicle(
   brandRaw: string | null,
   modelRaw: string | null,
   yearModel: number | null,
   fuelRaw: string | null
-): Promise<VehicleSettings | null> {
+): Promise<MatchedFipeVehicle | null> {
   if (!brandRaw || !modelRaw) return null;
   try {
     const brands = await listFipeBrands();
@@ -133,44 +163,65 @@ async function tryMatchFipeVehicle(
     if (!brand) return null;
 
     const models = await listFipeModels(brand.code);
-    const modelTokens = normalizeText(modelRaw).split(" ").filter((t) => t.length >= 2);
-    if (modelTokens.length === 0) return null;
+    const crlvTokens = expandCrlvTokens(modelRaw);
+    const baseToken = normalizeText(modelRaw).split(" ")[0];
+    if (!baseToken || baseToken.length < 2) return null;
 
-    let bestModel: FipeOption | null = null;
-    let bestScore = 0;
-    for (const m of models) {
-      const mNorm = normalizeText(m.name);
-      let score = 0;
-      for (const token of modelTokens) {
-        if (mNorm.includes(token)) score += token.length;
-      }
-      if (score > bestScore) {
-        bestScore = score;
-        bestModel = m;
-      }
-    }
-    if (!bestModel || bestScore === 0) return null;
+    const scored = models
+      .filter((m) => normalizeText(m.name).includes(baseToken))
+      .map((m) => {
+        const mNorm = normalizeText(m.name);
+        let score = 0;
+        for (const token of crlvTokens) {
+          if (mNorm.includes(token)) score += token.length * 2;
+        }
+        // Penaliza termos que não estão no CRLV (ex.: turbo/tb, aut., sedan/plus)
+        if (!crlvTokens.some((t) => t.includes("tb") || t.includes("turbo")) && (mNorm.includes("turbo") || mNorm.includes(" tb "))) {
+          score -= 4;
+        }
+        if (!crlvTokens.includes("aut") && mNorm.includes("aut")) score -= 4;
+        if (!crlvTokens.includes("plus") && !crlvTokens.includes("sedan") && (mNorm.includes("plus") || mNorm.includes("sedan"))) {
+          score -= 3;
+        }
+        return { model: m, score };
+      })
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10);
 
-    const years = await listFipeYears(brand.code, bestModel.code);
-    if (years.length === 0) return null;
+    if (scored.length === 0) return null;
 
     const yearStr = yearModel ? String(yearModel) : "";
     const fuelNorm = fuelRaw ? normalizeText(fuelRaw) : "";
-    const year =
-      years.find((y) => yearStr && y.name.includes(yearStr) && (!fuelNorm || normalizeText(y.name).includes(fuelNorm))) ??
-      years.find((y) => yearStr && y.name.includes(yearStr)) ??
-      years[0];
-    if (!year) return null;
+    const isFlex = fuelNorm.includes("alcool") || fuelNorm.includes("gasolina") || fuelNorm.includes("flex");
 
-    const saved = await saveVehicle({
-      brandId: brand.code,
-      brandName: brand.name,
-      modelId: bestModel.code,
-      modelName: bestModel.name,
-      yearId: year.code,
-      yearName: year.name,
-    });
-    return saved.ok ? saved.vehicle : null;
+    for (const candidate of scored) {
+      const years = await listFipeYears(brand.code, candidate.model.code);
+      const matchedYear = yearStr
+        ? years.find((y) => y.name.includes(yearStr) && (isFlex ? normalizeText(y.name).includes("flex") : true)) ??
+          years.find((y) => y.name.includes(yearStr))
+        : years[0];
+      if (!matchedYear) continue;
+
+      const price = await fipeGet<{ Valor: string; MesReferencia: string; CodigoFipe: string }>(
+        `/${brand.code}/modelos/${candidate.model.code}/anos/${matchedYear.code}`
+      );
+      const fipeCents = parseBRLToCents(price.Valor);
+      if (!Number.isFinite(fipeCents) || fipeCents <= 0) continue;
+
+      return {
+        brandId: brand.code,
+        brandName: brand.name,
+        modelId: candidate.model.code,
+        modelName: candidate.model.name,
+        yearId: matchedYear.code,
+        yearName: matchedYear.name,
+        fipeCents,
+        fipeMonth: price.MesReferencia.trim(),
+        fipeCode: price.CodigoFipe,
+      };
+    }
+
+    return null;
   } catch {
     return null;
   }
@@ -186,6 +237,13 @@ export async function getVehicle(): Promise<VehicleSettings | null> {
   const v = data.value as Partial<VehicleSettings>;
   if (!v.brandId || !v.modelId || !v.yearId || typeof v.fipeCents !== "number") return null;
   return { ...(v as VehicleSettings), ipvaSimulationIds: v.ipvaSimulationIds ?? [], ipvaChosen: v.ipvaChosen ?? null };
+}
+
+export async function clearVehicle(): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { error } = await createAdminClient().from("app_settings").delete().eq("key", VEHICLE_KEY);
+  if (error) return { ok: false, error: "Não foi possível limpar o veículo." };
+  revalidatePath("/configuracoes");
+  return { ok: true };
 }
 
 async function writeVehicle(vehicle: VehicleSettings): Promise<boolean> {
@@ -236,8 +294,8 @@ export async function saveVehicle(selection: {
 
 /**
  * Recebe o PDF do licenciamento (CRLV-e ou guia de IPVA), extrai os dados via IA,
- * consulta a FIPE quando necessário e calcula à vista c/ desconto, à vista s/ desconto,
- * parcelado e licenciamento.
+ * consulta a FIPE quando necessário (sem salvar antes da confirmação) e calcula à vista
+ * c/ desconto, à vista s/ desconto, parcelado e licenciamento.
  */
 export async function analyzeVehiclePdf(
   formData: FormData
@@ -265,7 +323,7 @@ export async function analyzeVehiclePdf(
     }
 
     const extracted = await extractVehicleLicensingFromPdfText(parsed.text);
-    const matchedVehicle = await tryMatchFipeVehicle(
+    const matchedFipe = await tryMatchFipeVehicle(
       extracted.brand,
       extracted.model,
       extracted.year_model,
@@ -274,7 +332,7 @@ export async function analyzeVehiclePdf(
 
     const pdfFipeCents =
       extracted.fipe_value_brl && extracted.fipe_value_brl > 0 ? Math.round(extracted.fipe_value_brl * 100) : null;
-    const fipeCents = matchedVehicle?.fipeCents ?? pdfFipeCents;
+    const fipeCents = matchedFipe?.fipeCents ?? pdfFipeCents;
 
     const year = extracted.exercise_year && extracted.exercise_year >= 2024 ? extracted.exercise_year : nextIpvaYear(new Date());
     const uf = (extracted.uf || IPVA_RULES.uf).toUpperCase();
@@ -318,15 +376,16 @@ export async function analyzeVehiclePdf(
     return {
       ok: true,
       analysis: {
-        vehicleSummary: matchedVehicle
-          ? `${matchedVehicle.brandName} ${matchedVehicle.modelName} · ${matchedVehicle.yearName}`
+        vehicleSummary: matchedFipe
+          ? `${matchedFipe.brandName} ${matchedFipe.modelName} · ${matchedFipe.yearName}`
           : extracted.vehicle_summary,
         plate: extracted.plate,
         plateFinalDigit: plateDigit,
         uf,
         year,
         fipeCents,
-        fipeMatched: Boolean(matchedVehicle),
+        fipeMatched: Boolean(matchedFipe),
+        matchedFipe,
         cashWithDiscountCents,
         cashWithoutDiscountCents,
         installmentCount,
@@ -336,7 +395,6 @@ export async function analyzeVehiclePdf(
         ipvaFirstDueDate,
         licensingDueDate,
         notes: extracted.notes,
-        vehicle: matchedVehicle,
       },
     };
   } catch (e) {
@@ -398,6 +456,7 @@ function addMonthsISO(isoDate: string, monthsToAdd: number): string {
 }
 
 export interface ChooseIpvaOverride {
+  matchedFipe?: MatchedFipeVehicle | null;
   cashWithDiscountCents?: number;
   cashWithoutDiscountCents?: number;
   installmentCents?: number[];
@@ -420,11 +479,12 @@ export async function chooseIpva(
   categoryId: string | null,
   override?: ChooseIpvaOverride
 ): Promise<{ ok: true; vehicle: VehicleSettings | null } | { ok: false; error: string }> {
-  const vehicle = await getVehicle();
-  if (!vehicle && !override) return { ok: false, error: "Escolha o veículo ou envie o PDF primeiro." };
+  const existingVehicle = await getVehicle();
+  if (!existingVehicle && !override) return { ok: false, error: "Escolha o veículo ou envie o PDF primeiro." };
   if (!personId) return { ok: false, error: "Escolha de quem é o IPVA." };
 
-  const plan = vehicle ? computeIpva(vehicle.fipeCents) : null;
+  const fipeCents = override?.matchedFipe?.fipeCents ?? existingVehicle?.fipeCents ?? null;
+  const plan = fipeCents ? computeIpva(fipeCents) : null;
   const year = override?.year ?? nextIpvaYear(new Date());
   const plateDigit = override?.plateFinalDigit ?? null;
 
@@ -484,9 +544,23 @@ export async function chooseIpva(
     if (!licensingResult.ok) return { ok: false, error: licensingResult.error };
   }
 
-  if (vehicle) {
-    for (const id of vehicle.ipvaSimulationIds) await deleteSimulation(id);
-    const next: VehicleSettings = { ...vehicle, ipvaSimulationIds: [], ipvaChosen: { option, year } };
+  const baseVehicle: VehicleSettings | null = override?.matchedFipe
+    ? {
+        ...override.matchedFipe,
+        fetchedAt: new Date().toISOString(),
+        ipvaSimulationIds: existingVehicle?.ipvaSimulationIds ?? [],
+        ipvaChosen: { option, year },
+      }
+    : existingVehicle
+      ? { ...existingVehicle, ipvaSimulationIds: [], ipvaChosen: { option, year } }
+      : null;
+
+  if (existingVehicle) {
+    for (const id of existingVehicle.ipvaSimulationIds) await deleteSimulation(id);
+  }
+
+  if (baseVehicle) {
+    const next: VehicleSettings = { ...baseVehicle, ipvaSimulationIds: [], ipvaChosen: { option, year } };
     if (!(await writeVehicle(next))) {
       return { ok: false, error: "Os lançamentos foram criados, mas não foi possível registrar a escolha." };
     }

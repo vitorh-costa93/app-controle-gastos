@@ -183,7 +183,7 @@ export function VehicleIpvaEditor({
   const needsVehicleConfirm = Boolean(pdfAnalysis && pdfAnalysis.candidates.length > 0 && !candidate);
   const year = pdfAnalysis?.year ?? nextIpvaYear(new Date());
   const imposto = types.find((t) => t.name.toLowerCase().includes("imposto"))?.id ?? null;
-  const categoriaIpva = categories.find((c) => c.name.toLowerCase().includes("ipva"))?.id ?? null;
+  const categoriaIpva = categories.find((c) => c.name.toLowerCase().includes("imposto"))?.id ?? null;
   const hasSimulations = (vehicle?.ipvaSimulationIds.length ?? 0) > 0;
   const visibleModels = models.filter((m) => m.name.toLowerCase().includes(modelFilter.trim().toLowerCase()));
 

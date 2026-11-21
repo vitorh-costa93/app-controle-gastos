@@ -467,7 +467,8 @@ export async function chooseIpva(
     amounts = list;
   }
 
-  const firstDue = override?.ipvaFirstDueDate || ipvaDueDate(year, 0, plateDigit);
+  // Pago no início do mês (dia 1), em vez do dia exato do vencimento por final de placa.
+  const firstDue = ipvaDueDate(year, 0, plateDigit).replace(/-\d{2}$/, "-01");
 
   for (let i = 0; i < amounts.length; i++) {
     const description =
@@ -501,7 +502,7 @@ export async function chooseIpva(
       typeId,
       categoryId,
       amountCents: override.licensingCents!,
-      startDate: override.licensingDueDate || defaultLicensingDueDate(year, plateDigit),
+      startDate: (override.licensingDueDate || defaultLicensingDueDate(year, plateDigit)).replace(/-\d{2}$/, "-01"),
       endDate: null,
       frequency: "annual",
     });

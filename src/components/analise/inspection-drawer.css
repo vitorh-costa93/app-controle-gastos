@@ -1,4 +1,4 @@
-.ni-overlay { position:fixed; inset:0; z-index:40; font-family:var(--font-inter-tight),sans-serif; font-size:13px; }
+.ni-overlay { position:fixed; inset:0; z-index:50; font-family:var(--font-inter-tight),sans-serif; font-size:13px; }
 .ni-backdrop { position:absolute; inset:0; width:100%; height:100%; background:#17244436; border:0; }
 .ni-drawer { position:absolute; right:0; top:0; bottom:0; width:min(590px,95vw); background:#fff; box-shadow:-12px 0 60px #243a6020; padding:24px; overflow-y:auto; color:#20232c; overscroll-behavior:contain; }
 .ni-drawer header,.ni-title,.ni-tools,.ni-tools label,.ni-group-heading,.ni-group li { display:flex; align-items:center; gap:10px; }

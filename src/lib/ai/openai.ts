@@ -308,3 +308,98 @@ export async function generateSimulationSummary(prompt: string): Promise<string>
   });
   return response.choices[0]?.message?.content?.trim() ?? "";
 }
+
+export interface ExtractedVehicleLicensing {
+  vehicle_summary: string;
+  brand: string | null;
+  model: string | null;
+  year_model: number | null;
+  fuel: string | null;
+  plate: string | null;
+  plate_final_digit: number | null;
+  uf: string | null;
+  exercise_year: number | null;
+  fipe_value_brl: number | null;
+  ipva_cash_with_discount_brl: number | null;
+  ipva_cash_without_discount_brl: number | null;
+  ipva_installment_count: number | null;
+  ipva_installment_amount_brl: number | null;
+  licensing_fee_brl: number | null;
+  ipva_first_due_date: string | null;
+  licensing_due_date: string | null;
+  notes: string;
+}
+
+const VEHICLE_LICENSING_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "vehicle_summary",
+    "brand",
+    "model",
+    "year_model",
+    "fuel",
+    "plate",
+    "plate_final_digit",
+    "uf",
+    "exercise_year",
+    "fipe_value_brl",
+    "ipva_cash_with_discount_brl",
+    "ipva_cash_without_discount_brl",
+    "ipva_installment_count",
+    "ipva_installment_amount_brl",
+    "licensing_fee_brl",
+    "ipva_first_due_date",
+    "licensing_due_date",
+    "notes",
+  ],
+  properties: {
+    vehicle_summary: { type: "string" },
+    brand: { type: ["string", "null"] },
+    model: { type: ["string", "null"] },
+    year_model: { type: ["number", "null"] },
+    fuel: { type: ["string", "null"] },
+    plate: { type: ["string", "null"] },
+    plate_final_digit: { type: ["number", "null"] },
+    uf: { type: ["string", "null"] },
+    exercise_year: { type: ["number", "null"] },
+    fipe_value_brl: { type: ["number", "null"] },
+    ipva_cash_with_discount_brl: { type: ["number", "null"] },
+    ipva_cash_without_discount_brl: { type: ["number", "null"] },
+    ipva_installment_count: { type: ["number", "null"] },
+    ipva_installment_amount_brl: { type: ["number", "null"] },
+    licensing_fee_brl: { type: ["number", "null"] },
+    ipva_first_due_date: { type: ["string", "null"] },
+    licensing_due_date: { type: ["string", "null"] },
+    notes: { type: "string" },
+  },
+} as const;
+
+export async function extractVehicleLicensingFromPdfText(text: string): Promise<ExtractedVehicleLicensing> {
+  const response = await chat("extraction", {
+    messages: [
+      {
+        role: "system",
+        content: `Você lê documentos de veículo brasileiros (CRLV-e / Licenciamento anual / guia ou consulta de IPVA da Sefaz/Detran/despachante) e extrai os dados estruturados.
+
+Regras obrigatórias:
+- Nunca invente valores em R$. Só preencha fipe_value_brl, ipva_cash_with_discount_brl, ipva_cash_without_discount_brl, ipva_installment_amount_brl e licensing_fee_brl se esses valores aparecerem explicitamente no texto do PDF. Caso contrário, devolva null para esses campos.
+- Valores monetários são sempre em reais (ex.: 167.74), nunca em centavos.
+- Em CRLV-e (como "GM/ONIX 1.0MT LT" ou "VW/POLO TRACK"), separe brand (ex.: "Chevrolet", "Volkswagen", "Honda", "Hyundai", "Toyota", "Fiat") e model (nome limpo do modelo, ex.: "Onix 1.0", "Polo Track") para facilitar busca na tabela FIPE.
+- plate_final_digit é o último dígito numérico da placa (0 a 9).
+- uf é a sigla do estado (2 letras maiúsculas, ex.: "SP").
+- Datas no formato YYYY-MM-DD (ou null se não constar no documento).
+- notes: resumo curto (1-2 frases em português) do que foi encontrado no documento.`,
+      },
+      { role: "user", content: `Texto extraído do PDF do veículo/licenciamento:\n\n${text.slice(0, 18000)}` },
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: { name: "vehicle_licensing", strict: true, schema: VEHICLE_LICENSING_SCHEMA },
+    },
+  });
+
+  const content = response.choices[0]?.message?.content;
+  if (!content) throw new Error("A IA não retornou os dados do documento.");
+  return JSON.parse(content) as ExtractedVehicleLicensing;
+}

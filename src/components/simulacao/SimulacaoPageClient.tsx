@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { Person } from "@/types/db";
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
-import { ImageIcon, RefreshCw, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { Simulation, MonthSummary } from "@/types/domain";
 import { buildScenarioComparison, summarizeScenarioImpact } from "@/lib/domain/simulation";
 import { accumulateBalance } from "@/lib/domain/finance";
@@ -20,7 +20,7 @@ import { BaseBudget, CashVsInstallmentSection, YieldParams, analyzeSimulation } 
 import { YieldAssumptionCard } from "./YieldAssumptionCard";
 import type { CdiRate } from "@/lib/data/cdi";
 import { generateScenarioAiSummary } from "@/lib/data/simulation-analysis";
-import { deleteSimulation, regenerateSimulationImage, restoreSimulation } from "@/lib/data/simulations";
+import { deleteSimulation, restoreSimulation } from "@/lib/data/simulations";
 import { SimulationEditModal } from "./SimulationEditModal";
 import { formatCurrencyBRL, formatMonthLabel } from "@/lib/utils/format";
 import { useInterface } from "@/components/layout/InterfaceProvider";
@@ -55,8 +55,9 @@ export function SimulacaoPageClient({
   const [simulations, setSimulations] = useState(initialSimulations);
   const [archived, setArchived] = useState(initialArchived);
   const [editing, setEditing] = useState<Simulation | null>(null);
-  const [primaryId, setPrimaryId] = useState<string | null>(initialSimulations[0]?.id ?? null);
-  const [selectedOtherIds, setSelectedOtherIds] = useState<string[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>(() =>
+    initialSimulations[0]?.id ? [initialSimulations[0].id] : []
+  );
   const [percentOfCdi, setPercentOfCdi] = useState(100);
   const [cdiAnnualPercent, setCdiAnnualPercent] = useState(cdi.annualPercent);
   const effectiveCdi = useMemo<CdiRate>(
@@ -70,27 +71,27 @@ export function SimulacaoPageClient({
     () => accumulateBalance(baseSummaries, effectiveStartingBalance?.amountCents ?? 0, effectiveStartingBalance?.month),
     [baseSummaries, effectiveStartingBalance?.amountCents, effectiveStartingBalance?.month]
   );
-  const primary = simulations.find((s) => s.id === primaryId) ?? null;
-  const others = useMemo(
-    () => simulations.filter((s) => selectedOtherIds.includes(s.id) && s.id !== primaryId),
-    [simulations, selectedOtherIds, primaryId]
+  const selectedSimulations = useMemo(
+    () => simulations.filter((s) => selectedIds.includes(s.id)),
+    [simulations, selectedIds]
   );
+  const hasSelected = selectedSimulations.length > 0;
 
   const comparison = useMemo(() => {
-    if (!primary) return [];
+    if (!hasSelected) return [];
     return buildScenarioComparison(
       baseMap,
-      [primary, ...others],
+      selectedSimulations,
       horizon,
       effectiveStartingBalance?.amountCents ?? 0,
       effectiveStartingBalance?.month
     );
-  }, [baseMap, primary, others, horizon, effectiveStartingBalance?.amountCents, effectiveStartingBalance?.month]);
+  }, [baseMap, hasSelected, selectedSimulations, horizon, effectiveStartingBalance?.amountCents, effectiveStartingBalance?.month]);
 
   const impact = useMemo(() => {
-    if (!primary) return null;
-    return summarizeScenarioImpact([primary, ...others], comparison);
-  }, [primary, others, comparison]);
+    if (!hasSelected) return null;
+    return summarizeScenarioImpact(selectedSimulations, comparison);
+  }, [hasSelected, selectedSimulations, comparison]);
 
   const yieldParams = useMemo<YieldParams>(
     () => ({ cdiAnnualPercent, percentOfCdi }),
@@ -113,15 +114,15 @@ export function SimulacaoPageClient({
       : { label: `Parcelar ganha ${formatCurrencyBRL(-r.advantageCashCents)}`, tone: "installment" };
   }
 
-  const aiRequestKey = primary
-    ? JSON.stringify({ personId, primary, others, comparison, startingBalance: effectiveStartingBalance, horizon })
+  const aiRequestKey = hasSelected
+    ? JSON.stringify({ personId, selectedSimulations, comparison, startingBalance: effectiveStartingBalance, horizon })
     : null;
 
   useEffect(() => {
-    if (!primary || !aiRequestKey) return;
+    if (!hasSelected || !aiRequestKey) return;
     let cancelled = false;
     const timer = setTimeout(() => {
-      generateScenarioAiSummary([primary, ...others], comparison).then((summary) => {
+      generateScenarioAiSummary(selectedSimulations, comparison).then((summary) => {
         if (!cancelled) setAiState({ key: aiRequestKey, summary });
       });
     }, 500);
@@ -132,30 +133,9 @@ export function SimulacaoPageClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiRequestKey]);
 
-  const [imagePendingId, setImagePendingId] = useState<string | null>(null);
-  const [imageError, setImageError] = useState<{ id: string; message: string } | null>(null);
-  const autoImageAttempted = useRef(new Set<string>());
-
-  async function generateImage(id: string) {
-    setImagePendingId(id);
-    setImageError(null);
-    const result = await regenerateSimulationImage(id);
-    setImagePendingId((current) => (current === id ? null : current));
-    if (result.ok) {
-      setSimulations((prev) => prev.map((s) => (s.id === id ? { ...s, imageUrl: result.imageUrl } : s)));
-    } else {
-      setImageError({ id, message: result.error });
-    }
+  function toggleSimulation(id: string) {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
-
-  // Simulações criadas quando a geração de imagem falhava ficaram só com o ícone —
-  // tenta gerar a foto uma vez por visita quando a simulação principal não tem imagem.
-  useEffect(() => {
-    if (isModern || !primary || primary.imageUrl || autoImageAttempted.current.has(primary.id)) return;
-    autoImageAttempted.current.add(primary.id);
-    generateImage(primary.id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isModern, primary?.id, primary?.imageUrl]);
 
   async function handleDelete(sim: Simulation) {
     const result = await deleteSimulation(sim.id);
@@ -163,12 +143,8 @@ export function SimulacaoPageClient({
       window.alert(result.error);
       return;
     }
-    setSimulations((prev) => {
-      const next = prev.filter((s) => s.id !== sim.id);
-      if (primaryId === sim.id) setPrimaryId(next[0]?.id ?? null);
-      return next;
-    });
-    setSelectedOtherIds((prev) => prev.filter((id) => id !== sim.id));
+    setSimulations((prev) => prev.filter((s) => s.id !== sim.id));
+    setSelectedIds((prev) => prev.filter((id) => id !== sim.id));
     setArchived((prev) => [{ ...sim, active: false }, ...prev]);
   }
 
@@ -180,11 +156,12 @@ export function SimulacaoPageClient({
     }
     setArchived((prev) => prev.filter((s) => s.id !== sim.id));
     setSimulations((prev) => [{ ...sim, active: true }, ...prev]);
-    setPrimaryId((cur) => cur ?? sim.id);
+    setSelectedIds((prev) => (prev.includes(sim.id) ? prev : [...prev, sim.id]));
   }
 
   const aiSummary = aiState?.key === aiRequestKey ? aiState.summary : null;
-  const aiLoading = Boolean(primary) && aiState?.key !== aiRequestKey;
+  const aiLoading = hasSelected && aiState?.key !== aiRequestKey;
+  const combinedTitle = selectedSimulations.map((s) => s.description).join(" + ");
 
   return (
     <div className={isModern ? "modern-simulation" : undefined}>
@@ -207,11 +184,11 @@ export function SimulacaoPageClient({
             <p className="modern-simulation-subtitle">Com base no que já está cadastrado, sem compras simuladas. Horizonte: {formatMonthLabel(horizon.from)} → {formatMonthLabel(horizon.to)}.</p>
             <BaseCaixinhaYield summaries={baseSummaries} accumulated={baseAccumulated} cdiAnnualPercent={cdiAnnualPercent} onCdiAnnualPercent={setCdiAnnualPercent} percentOfCdi={percentOfCdi} onPercentOfCdi={setPercentOfCdi} horizon={horizon} />
           </Card>}
-          {tab === "compare" && (primary ? <>
-            <div className="modern-simulation-impact"><CashVsInstallmentSection simulation={primary} params={yieldParams} base={base} /></div>
+          {tab === "compare" && (hasSelected ? <>
+            <div className="modern-simulation-impact"><CashVsInstallmentSection simulations={selectedSimulations} params={yieldParams} base={base} /></div>
             <Card className="p-5">
-              <h2 className="modern-simulation-title">Evolução do orçamento · {[primary, ...others].map((s) => s.description).join(" + ")}</h2>
-              <p className="modern-simulation-subtitle">{formatMonthLabel(horizon.from)} → {formatMonthLabel(horizon.to)}{others.length ? ` · ${others.length + 1} compras combinadas` : ""}</p>
+              <h2 className="modern-simulation-title">Evolução do orçamento · {combinedTitle}</h2>
+              <p className="modern-simulation-subtitle">{formatMonthLabel(horizon.from)} → {formatMonthLabel(horizon.to)}{selectedSimulations.length > 1 ? ` · ${selectedSimulations.length} compras combinadas` : ""}</p>
               <h3 className="modern-simulation-chart-title">Saldo no final do mês</h3>
               <LeftoverComparisonChart comparison={comparison} />
               <h3 className="modern-simulation-chart-title">Saldo acumulado</h3>
@@ -219,13 +196,13 @@ export function SimulacaoPageClient({
             </Card>
             {impact && <ImpactSummaryCard impact={impact} />}
             <Card className="flex gap-3 bg-(--color-primary-soft)/40 p-4"><Sparkles size={18} className="mt-0.5 shrink-0 text-(--color-primary)" /><div><p className="mb-1 text-sm font-semibold text-(--color-primary)">Insight da IA</p>{aiLoading ? <p className="text-sm text-(--color-text-secondary)">Analisando cenário...</p> : <p className="text-sm text-(--color-text-secondary)">{aiSummary}</p>}</div></Card>
-          </> : <Card className="p-5"><h2 className="modern-simulation-title">Compare uma compra</h2><p className="modern-simulation-subtitle">Crie uma simulação para ver o impacto no seu dinheiro guardado.</p></Card>)}
-          {tab === "saved" && (simulations.length || archived.length ? <ScenarioList simulations={simulations} archived={archived} onEdit={setEditing} onDelete={handleDelete} onRestore={handleRestore} verdictFor={verdictFor} primaryId={primaryId} onSelectPrimary={(id) => { setPrimaryId(id); setTab("compare"); }} selectedOtherIds={selectedOtherIds} onToggleOther={(id) => setSelectedOtherIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])} /> : <Card className="p-5 text-sm">Nenhum cenário salvo ainda. Crie uma simulação em Comparar compra.</Card>)}
+          </> : <Card className="p-5"><h2 className="modern-simulation-title">Compare uma compra</h2><p className="modern-simulation-subtitle">Crie ou marque uma ou mais simulações na lista ao lado para ver o impacto combinado no seu dinheiro guardado.</p></Card>)}
+          {tab === "saved" && (simulations.length || archived.length ? <ScenarioList simulations={simulations} archived={archived} onEdit={setEditing} onDelete={handleDelete} onRestore={handleRestore} verdictFor={verdictFor} selectedIds={selectedIds} onToggle={toggleSimulation} onOpen={(id) => { setSelectedIds((prev) => (prev.includes(id) ? prev : [...prev, id])); setTab("compare"); }} /> : <Card className="p-5 text-sm">Nenhum cenário salvo ainda. Crie uma simulação em Comparar compra.</Card>)}
         </section>
         <aside className="modern-simulation-sidebar" aria-label="Configuração da simulação">
           {tab !== "saved" && <YieldAssumptionCard cdi={effectiveCdi} percentOfCdi={percentOfCdi} onChange={setPercentOfCdi} />}
-          {tab !== "projection" && <NewSimulationForm cdiAnnualPercent={cdiAnnualPercent} percentOfCdi={percentOfCdi} onCreated={(sim) => { setSimulations((prev) => [sim, ...prev]); setSelectedOtherIds((prev) => (primaryId && !prev.includes(primaryId) ? [...prev, primaryId] : prev)); setPrimaryId(sim.id); setTab("compare"); }} />}
-          {tab === "compare" && (simulations.length > 0 || archived.length > 0) && <ScenarioList simulations={simulations} archived={archived} onEdit={setEditing} onDelete={handleDelete} onRestore={handleRestore} verdictFor={verdictFor} primaryId={primaryId} onSelectPrimary={setPrimaryId} selectedOtherIds={selectedOtherIds} onToggleOther={(id) => setSelectedOtherIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])} />}
+          {tab !== "projection" && <NewSimulationForm cdiAnnualPercent={cdiAnnualPercent} percentOfCdi={percentOfCdi} onCreated={(sim) => { setSimulations((prev) => [sim, ...prev]); setSelectedIds((prev) => (prev.includes(sim.id) ? prev : [...prev, sim.id])); setTab("compare"); }} />}
+          {tab === "compare" && (simulations.length > 0 || archived.length > 0) && <ScenarioList simulations={simulations} archived={archived} onEdit={setEditing} onDelete={handleDelete} onRestore={handleRestore} verdictFor={verdictFor} selectedIds={selectedIds} onToggle={toggleSimulation} />}
         </aside>
       </div> : (
       <div className={`simulation-grid grid grid-cols-1 gap-6 lg:grid-cols-[1.1fr_0.9fr] ${isModern ? `modern-simulation-grid modern-simulation-grid--${tab}` : ""}`}>
@@ -248,7 +225,7 @@ export function SimulacaoPageClient({
           </Card></div>
 
           <div hidden={isModern && tab !== "compare"} className="modern-simulation-comparison">
-          {!primary ? (
+          {!hasSelected ? (
             <Card className="p-5 text-center">
               <p className="text-sm text-(--color-text-secondary)">
                 Crie uma simulação para descobrir como uma nova compra afetaria esse saldo.
@@ -257,34 +234,10 @@ export function SimulacaoPageClient({
           ) : (
             <>
               <div className="modern-simulation-graphs"><Card className="p-5">
-                <div className="relative mb-4 h-48 w-full overflow-hidden rounded-(--radius-lg) bg-(--color-primary-soft) sm:h-56">
-                  {primary.imageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={primary.imageUrl} alt={primary.description} className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-(--color-primary)">
-                      <ImageIcon size={28} className={imagePendingId === primary.id ? "animate-pulse" : ""} />
-                      <span className="text-xs">
-                        {imagePendingId === primary.id ? "Gerando imagem..." : "Sem imagem"}
-                      </span>
-                    </div>
-                  )}
-                  <button
-                    onClick={() => generateImage(primary.id)}
-                    disabled={imagePendingId === primary.id}
-                    className="absolute right-2 bottom-2 flex items-center gap-1 rounded-full bg-black/55 px-3 py-1.5 text-xs font-medium text-white backdrop-blur hover:bg-black/70 disabled:opacity-60"
-                  >
-                    <RefreshCw size={12} className={imagePendingId === primary.id ? "animate-spin" : ""} />
-                    {primary.imageUrl ? "Gerar outra" : "Gerar imagem"}
-                  </button>
-                </div>
-                {imageError?.id === primary.id && (
-                  <p className="-mt-2 mb-3 text-xs text-(--color-negative)">{imageError.message}</p>
-                )}
                 <div className="mb-1 flex items-center justify-between">
-                  <h3 className="text-[15px] font-semibold">{primary.description}</h3>
-                  {others.length > 0 && (
-                    <span className="text-xs text-(--color-text-tertiary)">Com outras simulações</span>
+                  <h3 className="text-[15px] font-semibold">{combinedTitle}</h3>
+                  {selectedSimulations.length > 1 && (
+                    <span className="text-xs text-(--color-text-tertiary)">{selectedSimulations.length} compras combinadas</span>
                   )}
                 </div>
                 <p className="mb-4 text-xs text-(--color-text-tertiary)">
@@ -299,7 +252,7 @@ export function SimulacaoPageClient({
               </Card></div>
 
               <div className="modern-simulation-impact"><CashVsInstallmentSection
-                simulation={primary}
+                simulations={selectedSimulations}
                 params={yieldParams}
                 base={base}
               /></div>
@@ -333,8 +286,7 @@ export function SimulacaoPageClient({
             percentOfCdi={percentOfCdi}
             onCreated={(sim) => {
               setSimulations((prev) => [sim, ...prev]);
-              setSelectedOtherIds((prev) => (primaryId && !prev.includes(primaryId) ? [...prev, primaryId] : prev));
-              setPrimaryId(sim.id);
+              setSelectedIds((prev) => (prev.includes(sim.id) ? prev : [...prev, sim.id]));
               if (isModern) setTab("compare");
             }}
           /></div>
@@ -348,12 +300,12 @@ export function SimulacaoPageClient({
               onDelete={handleDelete}
               onRestore={handleRestore}
               verdictFor={verdictFor}
-              primaryId={primaryId}
-              onSelectPrimary={(id) => { setPrimaryId(id); if (isModern) setTab("compare"); }}
-              selectedOtherIds={selectedOtherIds}
-              onToggleOther={(id) =>
-                setSelectedOtherIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
-              }
+              selectedIds={selectedIds}
+              onToggle={toggleSimulation}
+              onOpen={(id) => {
+                setSelectedIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+                if (isModern) setTab("compare");
+              }}
             />
           )}
           {isModern && simulations.length === 0 && archived.length === 0 && <Card className="p-5 text-sm">Nenhum cenário salvo ainda. Crie uma simulação em Comparar compra.</Card>}

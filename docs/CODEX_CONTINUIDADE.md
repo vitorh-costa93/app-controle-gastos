@@ -2,9 +2,9 @@
 
 Atualizado: 22/11/2026.
 
-## Simulação — múltiplas compras (22/11/2026)
-- `SimulacaoPageClient.tsx` e `ScenarioList.tsx`: removido o seletor `Incluir outras simulações?`; checkboxes de soma ficam sempre visíveis ao lado das compras não-primárias, e ao criar uma nova simulação a compra anterior permanece marcada na lista combinada.
-- `simulation.ts` e `simulation-analysis.ts`: `summarizeScenarioImpact` e `generateScenarioAiSummary` agora aceitam múltiplas simulações (`[primary, ...others]`), somando total, período e impacto nos títulos, resumo e IA.
+## Simulação — múltiplas compras sem cenário "Principal" (22/11/2026)
+- `cash-vs-installments.ts` e `cash-vs-installments-input.ts`: `buildCashVsInstallmentInput` e `compareCashVsInstallments` agora combinam fluxos à vista e parcelados de múltiplas compras (`cashOutflowsCents` e `installmentOutflowsCents`), respeitando meses de início e prazos distintos.
+- `CashVsInstallmentSection.tsx`, `ScenarioList.tsx` e `SimulacaoPageClient.tsx`: removido completamente o conceito de compra "Principal"; todas as compras marcadas nos checkboxes (`selectedIds`) entram juntas em toda a análise (comparativo À vista × Parcelado, gráficos, IA, ponto de equilíbrio, sensibilidade, evolução do orçamento e resumo de impacto).
 - Validação: `test-ui-scope.mjs`, `npm run lint` e `npm run build` aprovados antes do push em `main`/Vercel.
 
 ## Nova regra da Reserva de Emergência e salário por data (19/11/2026)

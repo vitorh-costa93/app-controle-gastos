@@ -10,10 +10,9 @@ import { cn } from "@/lib/utils/cn";
 export function ScenarioList({
   simulations,
   archived,
-  primaryId,
-  onSelectPrimary,
-  selectedOtherIds,
-  onToggleOther,
+  selectedIds,
+  onToggle,
+  onOpen,
   onEdit,
   onDelete,
   onRestore,
@@ -21,10 +20,9 @@ export function ScenarioList({
 }: {
   simulations: Simulation[];
   archived: Simulation[];
-  primaryId: string | null;
-  onSelectPrimary: (id: string) => void;
-  selectedOtherIds: string[];
-  onToggleOther: (id: string) => void;
+  selectedIds: string[];
+  onToggle: (id: string) => void;
+  onOpen?: (id: string) => void;
   onEdit: (sim: Simulation) => void;
   onDelete: (sim: Simulation) => Promise<void>;
   onRestore: (sim: Simulation) => Promise<void>;
@@ -45,32 +43,25 @@ export function ScenarioList({
 
       <ul className="space-y-2">
         {simulations.map((sim) => {
-          const isPrimary = sim.id === primaryId;
-          const isOther = selectedOtherIds.includes(sim.id);
+          const isSelected = selectedIds.includes(sim.id);
           return (
             <li key={sim.id}>
               <div
                 className={cn(
                   "flex items-center gap-3 rounded-(--radius-lg) border p-3 transition-colors",
-                  isPrimary
+                  isSelected
                     ? "border-(--color-primary) bg-(--color-primary-soft)/50"
                     : "border-(--color-border) hover:bg-black/[0.015]"
                 )}
               >
-                {!isPrimary ? (
-                  <input
-                    type="checkbox"
-                    aria-label={`Somar ${sim.description} na simulação`}
-                    checked={isOther}
-                    onChange={() => onToggleOther(sim.id)}
-                    className="h-4 w-4 accent-(--color-primary)"
-                  />
-                ) : (
-                  <span className="shrink-0 rounded-full bg-(--color-primary) px-2 py-0.5 text-[10px] font-semibold text-white">
-                    Principal
-                  </span>
-                )}
-                <button className="flex flex-1 items-center gap-3 text-left" onClick={() => onSelectPrimary(sim.id)}>
+                <input
+                  type="checkbox"
+                  aria-label={`Incluir ${sim.description} na simulação`}
+                  checked={isSelected}
+                  onChange={() => onToggle(sim.id)}
+                  className="h-4 w-4 accent-(--color-primary)"
+                />
+                <button className="flex flex-1 items-center gap-3 text-left" onClick={() => (onOpen ?? onToggle)(sim.id)}>
                   {sim.imageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -88,7 +79,6 @@ export function ScenarioList({
                     <p className="text-xs text-(--color-text-tertiary)">
                       {sim.installments}x · {formatCurrencyBRL(sim.installmentAmountCents)} · Criado em{" "}
                       {formatDateBR(sim.createdAt.slice(0, 10))}
-                      {isOther && " · Com outras simulações"}
                     </p>
                   </div>
                 </button>

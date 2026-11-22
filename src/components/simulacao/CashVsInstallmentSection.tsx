@@ -32,29 +32,31 @@ export interface CashVsInstallmentAnalysis {
   result: CashVsInstallmentResult;
 }
 
-/** Entrada + resultado do comparativo, ou null quando a simulação não tem preço à vista para comparar. */
-export function analyzeSimulation(sim: Simulation, params: YieldParams, base: BaseBudget): CashVsInstallmentAnalysis | null {
+/** Entrada + resultado do comparativo, ou null quando não há preço à vista para comparar. */
+export function analyzeSimulation(sim: Simulation | Simulation[], params: YieldParams, base: BaseBudget): CashVsInstallmentAnalysis | null {
   const input = buildCashVsInstallmentInput(sim, params, base.summaries, base.accumulated);
   return input ? { input, result: compareCashVsInstallments(input) } : null;
 }
 
 export function CashVsInstallmentSection({
-  simulation,
+  simulations,
   params,
   base,
 }: {
-  simulation: Simulation;
+  simulations: Simulation[];
   params: YieldParams;
   base: BaseBudget;
 }) {
-  const analysis = useMemo(() => analyzeSimulation(simulation, params, base), [simulation, params, base]);
+  const analysis = useMemo(() => analyzeSimulation(simulations, params, base), [simulations, params, base]);
+
+  if (simulations.length === 0) return null;
 
   if (!analysis) {
     return (
       <Card className="flex gap-3 p-5">
         <Scale size={18} className="mt-0.5 shrink-0 text-(--color-text-tertiary)" />
         <p className="text-sm text-(--color-text-secondary)">
-          Informe o <b>preço à vista</b> desta simulação (menu ⋮ → Editar) para ver o impacto no seu dinheiro guardado e
+          Informe o <b>preço à vista</b> {simulations.length > 1 ? "das simulações" : "desta simulação"} (menu ⋮ → Editar) para ver o impacto no seu dinheiro guardado e
           se compensa pagar à vista ou parcelar.
         </p>
       </Card>
@@ -62,17 +64,27 @@ export function CashVsInstallmentSection({
   }
 
   const { input, result } = analysis;
-  const startMonth = simulation.startDate.slice(0, 7);
+  const startMonth = simulations.map((s) => s.startDate.slice(0, 7)).sort()[0];
+  const combined: Simulation = {
+    ...simulations[0],
+    id: simulations.map((s) => s.id).join("+"),
+    description: simulations.map((s) => s.description).join(" + "),
+    startDate: `${startMonth}-01`,
+    installments: input.installments,
+    totalAmountCents: input.installmentTotalCents,
+    installmentAmountCents: Math.round(input.installmentTotalCents / Math.max(1, input.installments)),
+    cashPriceCents: input.cashPriceCents,
+  };
 
   return (
     <>
-      <HeadlineCard simulation={simulation} input={input} result={result} startMonth={startMonth} />
-      <ImpactCard simulation={simulation} input={input} result={result} startMonth={startMonth} />
+      <HeadlineCard simulation={combined} count={simulations.length} input={input} result={result} startMonth={startMonth} />
+      <ImpactCard simulation={combined} input={input} result={result} startMonth={startMonth} />
       {result.installment && (
         <>
-          <AiAnalysisCard simulation={simulation} input={input} />
+          <AiAnalysisCard simulation={combined} input={input} />
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <BreakEvenCard simulation={simulation} input={input} result={result} />
+            <BreakEvenCard simulation={combined} input={input} result={result} />
             <SensitivityCard input={input} />
           </div>
         </>
@@ -118,11 +130,13 @@ function Row({ label, value, tone, strong }: { label: string; value: string; ton
 /** Conclusão no topo: juros do parcelamento × rendimento da Caixinha, e o aviso de saldo apertado. */
 function HeadlineCard({
   simulation,
+  count = 1,
   input,
   result,
   startMonth,
 }: {
   simulation: Simulation;
+  count?: number;
   input: CashVsInstallmentInput;
   result: CashVsInstallmentResult;
   startMonth: string;
@@ -135,9 +149,11 @@ function HeadlineCard({
       <SectionHeader
         title={simulation.description}
         subtitle={
-          inst
-            ? `À vista × parcelado em ${simulation.installments}× · compra em ${formatMonthLabel(startMonth)}`
-            : `À vista · compra em ${formatMonthLabel(startMonth)}`
+          count > 1
+            ? `${count} compras combinadas · ${inst ? `à vista × parcelado em até ${simulation.installments}×` : "à vista"} · início em ${formatMonthLabel(startMonth)}`
+            : inst
+              ? `À vista × parcelado em ${simulation.installments}× · compra em ${formatMonthLabel(startMonth)}`
+              : `À vista · compra em ${formatMonthLabel(startMonth)}`
         }
       />
       <div className="space-y-4 p-5">

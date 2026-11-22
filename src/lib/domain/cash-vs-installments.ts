@@ -32,6 +32,9 @@ export interface CashVsInstallmentInput {
    * null = mês desconhecido (além do horizonte do app): é completado com a média dos meses conhecidos.
    */
   monthlyLeftoverCents: (number | null)[];
+  /** Opcional: fluxos mensais customizados (para combinar múltiplas compras com meses/prazos distintos). */
+  cashOutflowsCents?: number[];
+  installmentOutflowsCents?: number[];
 }
 
 export interface PortfolioScenario {
@@ -257,18 +260,24 @@ function installmentOutflows(totalCents: number, installments: number): number[]
 export function compareCashVsInstallments(input: CashVsInstallmentInput): CashVsInstallmentResult {
   const { cashPriceCents: cash, installments } = input;
   const hasInstallments = installments > 1;
-  const horizon = hasInstallments ? installments : 12;
+  const customHorizon = Math.max(
+    (input.cashOutflowsCents?.length ?? 1) - 1,
+    (input.installmentOutflowsCents?.length ?? 1) - 1
+  );
+  const horizon = Math.max(hasInstallments ? installments : 12, customHorizon);
   const rate = monthlyYieldRate(input.cdiAnnualPercent, input.percentOfCdi);
   const leftovers = fillLeftovers(input.monthlyLeftoverCents, horizon + 1);
   const opening = input.openingBalanceCents;
+  const cashFlows = input.cashOutflowsCents ?? [cash];
 
   const none = simulatePortfolio(opening, leftovers, [], rate);
-  const cashScenario = simulatePortfolio(opening, leftovers, [cash], rate);
+  const cashScenario = simulatePortfolio(opening, leftovers, cashFlows, rate);
 
   let installment: CashVsInstallmentResult["installment"] = null;
   if (hasInstallments) {
     const total = input.installmentTotalCents;
-    const inst = simulatePortfolio(opening, leftovers, installmentOutflows(total, installments), rate);
+    const baseInstFlows = input.installmentOutflowsCents ?? installmentOutflows(total, installments);
+    const inst = simulatePortfolio(opening, leftovers, baseInstFlows, rate);
     const advantage = cashScenario.finalNet - inst.finalNet;
     const implied = impliedInstallmentRate(cash, total, installments);
 
@@ -277,9 +286,12 @@ export function compareCashVsInstallments(input: CashVsInstallmentInput): CashVs
     let hi = Math.max(cash * 2, total * 2);
     for (let i = 0; i < 60; i++) {
       const mid = (lo + hi) / 2;
+      const scaledFlows = input.installmentOutflowsCents && total > 0
+        ? baseInstFlows.map((v) => v * (mid / total))
+        : installmentOutflows(mid, installments);
       const diff =
         cashScenario.finalNet -
-        simulatePortfolio(opening, leftovers, installmentOutflows(mid, installments), rate).finalNet;
+        simulatePortfolio(opening, leftovers, scaledFlows, rate).finalNet;
       if (diff > 0) hi = mid;
       else lo = mid;
     }

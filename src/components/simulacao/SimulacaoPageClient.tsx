@@ -56,7 +56,6 @@ export function SimulacaoPageClient({
   const [archived, setArchived] = useState(initialArchived);
   const [editing, setEditing] = useState<Simulation | null>(null);
   const [primaryId, setPrimaryId] = useState<string | null>(initialSimulations[0]?.id ?? null);
-  const [includeOthers, setIncludeOthers] = useState(false);
   const [selectedOtherIds, setSelectedOtherIds] = useState<string[]>([]);
   const [percentOfCdi, setPercentOfCdi] = useState(100);
   const [cdiAnnualPercent, setCdiAnnualPercent] = useState(cdi.annualPercent);
@@ -73,11 +72,8 @@ export function SimulacaoPageClient({
   );
   const primary = simulations.find((s) => s.id === primaryId) ?? null;
   const others = useMemo(
-    () =>
-      includeOthers
-        ? simulations.filter((s) => selectedOtherIds.includes(s.id) && s.id !== primaryId)
-        : [],
-    [includeOthers, simulations, selectedOtherIds, primaryId]
+    () => simulations.filter((s) => selectedOtherIds.includes(s.id) && s.id !== primaryId),
+    [simulations, selectedOtherIds, primaryId]
   );
 
   const comparison = useMemo(() => {
@@ -93,8 +89,8 @@ export function SimulacaoPageClient({
 
   const impact = useMemo(() => {
     if (!primary) return null;
-    return summarizeScenarioImpact(primary, comparison);
-  }, [primary, comparison]);
+    return summarizeScenarioImpact([primary, ...others], comparison);
+  }, [primary, others, comparison]);
 
   const yieldParams = useMemo<YieldParams>(
     () => ({ cdiAnnualPercent, percentOfCdi }),
@@ -125,7 +121,7 @@ export function SimulacaoPageClient({
     if (!primary || !aiRequestKey) return;
     let cancelled = false;
     const timer = setTimeout(() => {
-      generateScenarioAiSummary(primary, comparison).then((summary) => {
+      generateScenarioAiSummary([primary, ...others], comparison).then((summary) => {
         if (!cancelled) setAiState({ key: aiRequestKey, summary });
       });
     }, 500);
@@ -214,8 +210,8 @@ export function SimulacaoPageClient({
           {tab === "compare" && (primary ? <>
             <div className="modern-simulation-impact"><CashVsInstallmentSection simulation={primary} params={yieldParams} base={base} /></div>
             <Card className="p-5">
-              <h2 className="modern-simulation-title">Evolução do orçamento · {primary.description}</h2>
-              <p className="modern-simulation-subtitle">{formatMonthLabel(horizon.from)} → {formatMonthLabel(horizon.to)}{others.length ? " · com outras simulações" : ""}</p>
+              <h2 className="modern-simulation-title">Evolução do orçamento · {[primary, ...others].map((s) => s.description).join(" + ")}</h2>
+              <p className="modern-simulation-subtitle">{formatMonthLabel(horizon.from)} → {formatMonthLabel(horizon.to)}{others.length ? ` · ${others.length + 1} compras combinadas` : ""}</p>
               <h3 className="modern-simulation-chart-title">Saldo no final do mês</h3>
               <LeftoverComparisonChart comparison={comparison} />
               <h3 className="modern-simulation-chart-title">Saldo acumulado</h3>
@@ -224,12 +220,12 @@ export function SimulacaoPageClient({
             {impact && <ImpactSummaryCard impact={impact} />}
             <Card className="flex gap-3 bg-(--color-primary-soft)/40 p-4"><Sparkles size={18} className="mt-0.5 shrink-0 text-(--color-primary)" /><div><p className="mb-1 text-sm font-semibold text-(--color-primary)">Insight da IA</p>{aiLoading ? <p className="text-sm text-(--color-text-secondary)">Analisando cenário...</p> : <p className="text-sm text-(--color-text-secondary)">{aiSummary}</p>}</div></Card>
           </> : <Card className="p-5"><h2 className="modern-simulation-title">Compare uma compra</h2><p className="modern-simulation-subtitle">Crie uma simulação para ver o impacto no seu dinheiro guardado.</p></Card>)}
-          {tab === "saved" && (simulations.length || archived.length ? <ScenarioList simulations={simulations} archived={archived} onEdit={setEditing} onDelete={handleDelete} onRestore={handleRestore} verdictFor={verdictFor} primaryId={primaryId} onSelectPrimary={(id) => { setPrimaryId(id); setTab("compare"); }} includeOthers={includeOthers} onIncludeOthersChange={setIncludeOthers} selectedOtherIds={selectedOtherIds} onToggleOther={(id) => setSelectedOtherIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])} /> : <Card className="p-5 text-sm">Nenhum cenário salvo ainda. Crie uma simulação em Comparar compra.</Card>)}
+          {tab === "saved" && (simulations.length || archived.length ? <ScenarioList simulations={simulations} archived={archived} onEdit={setEditing} onDelete={handleDelete} onRestore={handleRestore} verdictFor={verdictFor} primaryId={primaryId} onSelectPrimary={(id) => { setPrimaryId(id); setTab("compare"); }} selectedOtherIds={selectedOtherIds} onToggleOther={(id) => setSelectedOtherIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])} /> : <Card className="p-5 text-sm">Nenhum cenário salvo ainda. Crie uma simulação em Comparar compra.</Card>)}
         </section>
         <aside className="modern-simulation-sidebar" aria-label="Configuração da simulação">
           {tab !== "saved" && <YieldAssumptionCard cdi={effectiveCdi} percentOfCdi={percentOfCdi} onChange={setPercentOfCdi} />}
-          {tab !== "projection" && <NewSimulationForm cdiAnnualPercent={cdiAnnualPercent} percentOfCdi={percentOfCdi} onCreated={(sim) => { setSimulations((prev) => [sim, ...prev]); setPrimaryId(sim.id); setTab("compare"); }} />}
-          {tab === "compare" && (simulations.length > 0 || archived.length > 0) && <ScenarioList simulations={simulations} archived={archived} onEdit={setEditing} onDelete={handleDelete} onRestore={handleRestore} verdictFor={verdictFor} primaryId={primaryId} onSelectPrimary={setPrimaryId} includeOthers={includeOthers} onIncludeOthersChange={setIncludeOthers} selectedOtherIds={selectedOtherIds} onToggleOther={(id) => setSelectedOtherIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])} />}
+          {tab !== "projection" && <NewSimulationForm cdiAnnualPercent={cdiAnnualPercent} percentOfCdi={percentOfCdi} onCreated={(sim) => { setSimulations((prev) => [sim, ...prev]); setSelectedOtherIds((prev) => (primaryId && !prev.includes(primaryId) ? [...prev, primaryId] : prev)); setPrimaryId(sim.id); setTab("compare"); }} />}
+          {tab === "compare" && (simulations.length > 0 || archived.length > 0) && <ScenarioList simulations={simulations} archived={archived} onEdit={setEditing} onDelete={handleDelete} onRestore={handleRestore} verdictFor={verdictFor} primaryId={primaryId} onSelectPrimary={setPrimaryId} selectedOtherIds={selectedOtherIds} onToggleOther={(id) => setSelectedOtherIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])} />}
         </aside>
       </div> : (
       <div className={`simulation-grid grid grid-cols-1 gap-6 lg:grid-cols-[1.1fr_0.9fr] ${isModern ? `modern-simulation-grid modern-simulation-grid--${tab}` : ""}`}>
@@ -337,6 +333,7 @@ export function SimulacaoPageClient({
             percentOfCdi={percentOfCdi}
             onCreated={(sim) => {
               setSimulations((prev) => [sim, ...prev]);
+              setSelectedOtherIds((prev) => (primaryId && !prev.includes(primaryId) ? [...prev, primaryId] : prev));
               setPrimaryId(sim.id);
               if (isModern) setTab("compare");
             }}
@@ -353,8 +350,6 @@ export function SimulacaoPageClient({
               verdictFor={verdictFor}
               primaryId={primaryId}
               onSelectPrimary={(id) => { setPrimaryId(id); if (isModern) setTab("compare"); }}
-              includeOthers={includeOthers}
-              onIncludeOthersChange={setIncludeOthers}
               selectedOtherIds={selectedOtherIds}
               onToggleOther={(id) =>
                 setSelectedOtherIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))

@@ -160,10 +160,15 @@ export interface SimulationImpactSummary {
 }
 
 export function summarizeScenarioImpact(
-  simulation: Simulation,
+  simulation: Simulation | Simulation[],
   comparison: ScenarioComparisonMonth[]
 ): SimulationImpactSummary {
-  const installments = calcSimulationInstallments(simulation);
+  const list = Array.isArray(simulation) ? simulation : [simulation];
+  const primary = list[0];
+  const allInstallments = list
+    .flatMap((s) => calcSimulationInstallments(s))
+    .sort((a, b) => a.referenceMonth.localeCompare(b.referenceMonth));
+  const totalAmountCents = list.reduce((sum, s) => sum + s.totalAmountCents, 0);
   const impactedMonths = comparison.filter((m) => m.impactCents !== 0);
 
   const lowest = comparison.reduce<ScenarioComparisonMonth | null>((min, m) => {
@@ -182,15 +187,16 @@ export function summarizeScenarioImpact(
     impactedMonths.reduce((sum, m) => sum + m.impactCents, 0) / totalMonthsWithImpact
   );
 
-  const startMonth = installments[0]?.referenceMonth ?? simulation.startDate.slice(0, 7);
+  const startMonth = allInstallments[0]?.referenceMonth ?? primary?.startDate.slice(0, 7) ?? "";
+  const endMonth = allInstallments[allInstallments.length - 1]?.referenceMonth ?? primary?.startDate.slice(0, 7) ?? "";
 
   return {
-    payback: calcPayback(simulation.totalAmountCents, startMonth, comparison),
-    totalAmountCents: simulation.totalAmountCents,
-    installmentAmountCents: simulation.installmentAmountCents,
-    installments: simulation.installments,
+    payback: calcPayback(totalAmountCents, startMonth, comparison),
+    totalAmountCents,
+    installmentAmountCents: list.length === 1 ? primary.installmentAmountCents : averageMonthlyImpactCents,
+    installments: list.length === 1 ? primary.installments : impactedMonths.length,
     startMonth,
-    endMonth: installments[installments.length - 1]?.referenceMonth ?? simulation.startDate.slice(0, 7),
+    endMonth,
     averageMonthlyImpactCents,
     lowestBalanceMonth: lowest
       ? { referenceMonth: lowest.referenceMonth, accumulatedCents: lowest.accumulatedWithCents }

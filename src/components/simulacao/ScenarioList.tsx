@@ -4,7 +4,6 @@ import { useState, useTransition } from "react";
 import { Luggage, MoreVertical, Pencil, Trash2, Undo2 } from "lucide-react";
 import { Simulation } from "@/types/domain";
 import { Card } from "@/components/ui/Card";
-import { Select } from "@/components/ui/Field";
 import { formatCurrencyBRL, formatDateBR } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/cn";
 
@@ -13,8 +12,6 @@ export function ScenarioList({
   archived,
   primaryId,
   onSelectPrimary,
-  includeOthers,
-  onIncludeOthersChange,
   selectedOtherIds,
   onToggleOther,
   onEdit,
@@ -26,8 +23,6 @@ export function ScenarioList({
   archived: Simulation[];
   primaryId: string | null;
   onSelectPrimary: (id: string) => void;
-  includeOthers: boolean;
-  onIncludeOthersChange: (value: boolean) => void;
   selectedOtherIds: string[];
   onToggleOther: (id: string) => void;
   onEdit: (sim: Simulation) => void;
@@ -41,25 +36,17 @@ export function ScenarioList({
 
   return (
     <Card className="p-5">
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-[15px] font-semibold">Cenários</h3>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-(--color-text-secondary)">Incluir outras simulações?</span>
-          <Select
-            className="h-8 w-20"
-            value={includeOthers ? "sim" : "nao"}
-            onChange={(e) => onIncludeOthersChange(e.target.value === "sim")}
-          >
-            <option value="sim">Sim</option>
-            <option value="nao">Não</option>
-          </Select>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 className="text-[15px] font-semibold">Cenários</h3>
+          <p className="text-xs text-(--color-text-secondary)">Marque as compras que entram juntas na simulação.</p>
         </div>
       </div>
 
       <ul className="space-y-2">
         {simulations.map((sim) => {
           const isPrimary = sim.id === primaryId;
-          const isOther = includeOthers && selectedOtherIds.includes(sim.id);
+          const isOther = selectedOtherIds.includes(sim.id);
           return (
             <li key={sim.id}>
               <div
@@ -70,13 +57,18 @@ export function ScenarioList({
                     : "border-(--color-border) hover:bg-black/[0.015]"
                 )}
               >
-                {includeOthers && !isPrimary && (
+                {!isPrimary ? (
                   <input
                     type="checkbox"
+                    aria-label={`Somar ${sim.description} na simulação`}
                     checked={isOther}
                     onChange={() => onToggleOther(sim.id)}
                     className="h-4 w-4 accent-(--color-primary)"
                   />
+                ) : (
+                  <span className="shrink-0 rounded-full bg-(--color-primary) px-2 py-0.5 text-[10px] font-semibold text-white">
+                    Principal
+                  </span>
                 )}
                 <button className="flex flex-1 items-center gap-3 text-left" onClick={() => onSelectPrimary(sim.id)}>
                   {sim.imageUrl ? (

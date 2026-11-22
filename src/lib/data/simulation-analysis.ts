@@ -61,17 +61,19 @@ export async function getBaseMonthSummaries(
 }
 
 export async function generateScenarioAiSummary(
-  simulation: Simulation,
+  simulation: Simulation | Simulation[],
   comparison: ScenarioComparisonMonth[]
 ): Promise<string> {
   if (!isAiConfigured()) {
     return "A explicação por IA ainda não está configurada. Adicione uma chave de API para habilitar esse recurso.";
   }
 
-  const impact = summarizeScenarioImpact(simulation, comparison);
+  const list = Array.isArray(simulation) ? simulation : [simulation];
+  const impact = summarizeScenarioImpact(list, comparison);
+  const title = list.map((s) => s.description).join(" + ");
 
-  const prompt = `Simulação: "${simulation.description}".
-Valor total: ${formatCurrencyBRL(simulation.totalAmountCents)} em ${simulation.installments}x de ${formatCurrencyBRL(simulation.installmentAmountCents)}.
+  const prompt = `Simulação: "${title}".
+Valor total combinado: ${formatCurrencyBRL(impact.totalAmountCents)}${list.length === 1 ? ` em ${list[0].installments}x de ${formatCurrencyBRL(list[0].installmentAmountCents)}` : ` (${list.length} compras combinadas)`}.
 Período de impacto: ${formatMonthLabel(impact.startMonth)} até ${formatMonthLabel(impact.endMonth)}.
 Impacto médio mensal: ${formatCurrencyBRL(impact.averageMonthlyImpactCents)}.
 ${impact.mostImpactedMonth ? `Mês de maior impacto: ${formatMonthLabel(impact.mostImpactedMonth.referenceMonth)}, com ${formatCurrencyBRL(impact.mostImpactedMonth.impactCents)}.` : ""}

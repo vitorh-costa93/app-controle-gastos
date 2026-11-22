@@ -15,3 +15,12 @@ As regras de salário (dashboard-psi), banco compartilhado, segredos, CLIs, lint
 ## Economia de tokens
 
 Valem as instruções globais (`~/.claude/CLAUDE.md`). Neste projeto: Sonnet 5.5 médio; Haiku 5.5 para ajustes mecânicos de UI/commit e subagentes de leitura; contexto acima de ~200k ou assunto novo = salvar estado em `docs/CODEX_CONTINUIDADE.md` e `/clear`.
+
+## NÃO QUEBRAR (invariantes — nunca podem regredir)
+<!-- Liste aqui só o que JÁ foi validado pelo usuário. Ex.: "Frenagem do 1993 validada em 12/11: não mexer em física sem comparar com a tabela". -->
+- (vazio: adicione ao fechar cada etapa validada)
+
+## Critério de entrega
+- Só dizer "corrigi" com prova (teste/log/hash/print antes-depois). Mesmo defeito reportado 2x = causa raiz errada: parar e reler.
+- Estado vivo em `CONTINUIDADE.md` (feito / quebrado / próximo passo / decisões). Atualizar ao fechar cada etapa.
+- Regras gerais: `~/.claude/CLAUDE.md` (delegação, limites de sessão, segredos, iRacing).

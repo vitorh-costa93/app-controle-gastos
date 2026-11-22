@@ -1,6 +1,11 @@
 # Continuidade — MeuDinheiro
 
-Atualizado: 19/11/2026.
+Atualizado: 22/11/2026.
+
+## Simulação — múltiplas compras (22/11/2026)
+- `SimulacaoPageClient.tsx` e `ScenarioList.tsx`: removido o seletor `Incluir outras simulações?`; checkboxes de soma ficam sempre visíveis ao lado das compras não-primárias, e ao criar uma nova simulação a compra anterior permanece marcada na lista combinada.
+- `simulation.ts` e `simulation-analysis.ts`: `summarizeScenarioImpact` e `generateScenarioAiSummary` agora aceitam múltiplas simulações (`[primary, ...others]`), somando total, período e impacto nos títulos, resumo e IA.
+- Validação: `test-ui-scope.mjs`, `npm run lint` e `npm run build` aprovados antes do push em `main`/Vercel.
 
 ## Nova regra da Reserva de Emergência e salário por data (19/11/2026)
 - `simulation-baseline.ts`, `salary.ts` e `simulation-analysis.ts`: até o dia 15 do mês atual (Brasília), o mês seguinte usa o salário estimado (ano anterior × YoY) e gastos estimados (`"simulation"`); após o dia 15, o mês seguinte usa o valor real reportado em entradas e os gastos reais da Análise (`"analysis"`), mantendo os meses posteriores estimados.

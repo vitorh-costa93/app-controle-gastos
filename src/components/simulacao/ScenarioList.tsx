@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Luggage, MoreVertical, Pencil, Trash2, Undo2 } from "lucide-react";
+import { Luggage, MoreVertical, Pencil, RefreshCw, ShieldCheck, ShoppingBag, Trash2, Undo2 } from "lucide-react";
 import { Simulation } from "@/types/domain";
 import { Card } from "@/components/ui/Card";
-import { formatCurrencyBRL, formatDateBR } from "@/lib/utils/format";
+import { formatCurrencyBRL } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/cn";
 
 export function ScenarioList({
@@ -16,6 +16,7 @@ export function ScenarioList({
   onEdit,
   onDelete,
   onRestore,
+  onRefreshTrack,
   verdictFor,
 }: {
   simulations: Simulation[];
@@ -26,6 +27,7 @@ export function ScenarioList({
   onEdit: (sim: Simulation) => void;
   onDelete: (sim: Simulation) => Promise<void>;
   onRestore: (sim: Simulation) => Promise<void>;
+  onRefreshTrack?: (sim: Simulation) => Promise<void>;
   verdictFor: (sim: Simulation) => { label: string; tone: "cash" | "installment" | "neutral" } | null;
 }) {
   const [, startTransition] = useTransition();
@@ -71,14 +73,24 @@ export function ScenarioList({
                     />
                   ) : (
                     <div className="flex h-12 w-16 shrink-0 items-center justify-center rounded-(--radius-md) bg-(--color-primary-soft) text-(--color-primary)">
-                      <Luggage size={16} />
+                      {sim.category === "travel" ? <Luggage size={16} /> : <ShoppingBag size={16} />}
                     </div>
                   )}
                   <div className="min-w-0">
-                    <p className="break-words text-sm font-medium">{sim.description}</p>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <p className="break-words text-sm font-medium">{sim.description}</p>
+                      {sim.bestOfferMeta && (
+                        <span
+                          title={`Menor preço auditado em ${sim.bestOfferMeta.storeOrProvider}`}
+                          className="inline-flex items-center gap-0.5 rounded-full bg-(--color-positive-soft) px-1.5 py-0.5 text-[10px] font-semibold text-(--color-positive)"
+                        >
+                          <ShieldCheck size={10} /> {sim.bestOfferMeta.storeOrProvider.split(" ")[0]}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-(--color-text-tertiary)">
-                      {sim.installments}x · {formatCurrencyBRL(sim.installmentAmountCents)} · Criado em{" "}
-                      {formatDateBR(sim.createdAt.slice(0, 10))}
+                      {sim.cashPriceCents ? `À vista ${formatCurrencyBRL(sim.cashPriceCents)} · ` : ""}
+                      {sim.installments}x de {formatCurrencyBRL(sim.installmentAmountCents)}
                     </p>
                   </div>
                 </button>
@@ -109,7 +121,20 @@ export function ScenarioList({
                   {menuId === sim.id && (
                     <>
                       <div className="fixed inset-0 z-10" onClick={() => setMenuId(null)} />
-                      <div className="absolute right-0 z-20 mt-1 w-36 overflow-hidden rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) py-1 text-sm shadow-(--shadow-md)">
+                      <div className="absolute right-0 z-20 mt-1 w-44 overflow-hidden rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) py-1 text-sm shadow-(--shadow-md)">
+                        {onRefreshTrack && (
+                          <button
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-(--color-primary) hover:bg-black/5"
+                            onClick={() => {
+                              setMenuId(null);
+                              startTransition(async () => {
+                                await onRefreshTrack(sim);
+                              });
+                            }}
+                          >
+                            <RefreshCw size={14} /> Rastrear preço
+                          </button>
+                        )}
                         <button
                           className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-black/5"
                           onClick={() => {

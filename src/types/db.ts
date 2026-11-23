@@ -127,6 +127,98 @@ export interface ExtractedTransactionData {
   description: string | null;
 }
 
+export type SimulationCategory = "product" | "travel";
+
+export interface ProductTrackerConfig {
+  query: string;
+  mustInclude?: string[];
+  mustExclude?: string[];
+  minSanityPriceCents?: number;
+  targetCashCents?: number | null;
+  highFrequencyBlackFriday?: boolean;
+  customUrls?: string[];
+}
+
+export interface TravelTrackerConfig {
+  destinationAirport: string; // ex.: "MCZ"
+  destinationLabel: string; // ex.: "Maceió - AL (MCZ)"
+  originAirports: string[]; // ex.: ["RAO", "VCP"]
+  accommodationName: string; // ex.: "Japaratinga Lounge Resort" ou "Salinas Maragogi"
+  outboundDate: string; // "YYYY-MM-DD"
+  returnDate: string; // "YYYY-MM-DD"
+  adults: number;
+  allowStops: boolean;
+  highFrequencyBlackFriday?: boolean;
+  targetTotalCents?: number | null;
+  customUrls?: string[];
+}
+
+export type SimulationTrackerConfig = ProductTrackerConfig | TravelTrackerConfig | Record<string, unknown>;
+
+export interface VerifiedProductOffer {
+  store: string;
+  seller: string;
+  title: string;
+  skuOrModel?: string | null;
+  cashPriceCents: number;
+  installmentTotalCents: number;
+  installments: number;
+  url: string;
+  inStock: boolean;
+  isNew: boolean;
+  isUnconditioned: boolean;
+  isOfficialSeller: boolean;
+  notes?: string;
+}
+
+export interface VerifiedFlightQuote {
+  originAirport: string;
+  destinationAirport: string;
+  airline: string;
+  stopsCount: number;
+  durationSummary: string;
+  cashTotalCents: number; // total para todos os passageiros
+  installmentTotalCents: number;
+  installments: number;
+  groundTransferCents: number; // custo estimado Araraquara -> aeroporto
+  bookingUrl: string;
+  notes?: string;
+}
+
+export interface VerifiedStayQuote {
+  accommodationName: string;
+  provider: string; // ex.: "Site Oficial / Omnibees", "Booking.com"
+  roomType: string;
+  boardBasis: string; // ex.: "All Inclusive Premium"
+  nights: number;
+  cashTotalCents: number;
+  installmentTotalCents: number;
+  installments: number;
+  bookingUrl: string;
+  isBlackFridayPromo?: boolean;
+  notes?: string;
+}
+
+export interface BestOfferMeta {
+  category: SimulationCategory;
+  checkedAt: string;
+  sourceMode: "live_verified" | "ai_web_verified" | "cached";
+  storeOrProvider: string;
+  cashPriceCents: number;
+  installmentTotalCents: number;
+  installments: number;
+  offerUrl?: string | null;
+  verificationSummary: string;
+  rejectedCount?: number;
+  rejectedReasons?: string[];
+  // Para produto: todas as ofertas de lojas oficiais aprovadas nas 4 camadas
+  productOffers?: VerifiedProductOffer[];
+  // Para viagem: cotações de voo (RAO vs VCP) + cotação do resort nas datas
+  flightQuotes?: VerifiedFlightQuote[];
+  selectedFlightOrigin?: string;
+  stayQuote?: VerifiedStayQuote | null;
+}
+
 export interface SimulationRow {
   id: string;
   description: string;
@@ -138,8 +230,47 @@ export interface SimulationRow {
   ai_summary: string | null;
   ai_summary_generated_at: string | null;
   image_url: string | null;
+  category?: SimulationCategory;
+  auto_track?: boolean;
+  tracker_config?: SimulationTrackerConfig | null;
+  best_offer_meta?: BestOfferMeta | null;
+  last_tracked_at?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface SimulationPriceSnapshotRow {
+  id: string;
+  simulation_id: string;
+  captured_at: string;
+  category: SimulationCategory;
+  store_or_provider: string;
+  cash_price: string;
+  installment_total: string;
+  installments: number;
+  flight_cash_price: string | null;
+  flight_origin: string | null;
+  stay_cash_price: string | null;
+  stay_installment_total: string | null;
+  offer_url: string | null;
+  verified_new: boolean;
+  verification_meta: Record<string, unknown> | null;
+}
+
+export interface SimulationPriceAlertRow {
+  id: string;
+  simulation_id: string;
+  snapshot_id: string | null;
+  created_at: string;
+  alert_type: "drop_detected" | "new_low" | "target_reached" | "initial_baseline";
+  title: string;
+  message: string;
+  previous_cash_price: string | null;
+  new_cash_price: string;
+  drop_percent: string | null;
+  offer_url: string | null;
+  read_at: string | null;
+  notified_channels: string[];
 }
 
 export interface UserSettingsRow {

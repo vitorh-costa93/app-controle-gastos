@@ -2,11 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { SimulationRow } from "@/types/db";
+import { BestOfferMeta, SimulationCategory, SimulationRow, SimulationTrackerConfig } from "@/types/db";
 import { Simulation } from "@/types/domain";
 import { mapSimulationRow, centsToReaisString } from "./mappers";
 import { generateSimulationImage } from "@/lib/ai/openai";
 import { persistGeneratedImage } from "@/lib/supabase/storage";
+import { previewTrackedPrices, recordSnapshotAndEvaluateAlerts } from "./price-tracking";
 
 export interface SimulationInput {
   description: string;
@@ -16,6 +17,10 @@ export interface SimulationInput {
   cashPriceCents?: number | null;
   installments: number;
   startDate: string;
+  category?: SimulationCategory;
+  autoTrack?: boolean;
+  trackerConfig?: SimulationTrackerConfig | null;
+  bestOfferMeta?: BestOfferMeta | null;
   /** Não gera a foto ilustrativa (que consome a API de imagens) — para simulações criadas automaticamente. */
   skipImage?: boolean;
 }
@@ -35,23 +40,63 @@ export async function createSimulation(
   input: SimulationInput
 ): Promise<{ ok: true; data: Simulation } | { ok: false; error: string }> {
   const supabase = createAdminClient();
-  // Gera a foto ilustrativa antes de salvar — se falhar, a simulação é criada sem imagem
-  // mesmo assim (dá pra tentar de novo depois pelo botão "Gerar imagem").
-  const imageUrl = input.skipImage ? null : await generateAndStoreImage(input.description);
+  const category: SimulationCategory = input.category ?? "product";
+  const autoTrack = input.autoTrack ?? true;
+  let bestOfferMeta = input.bestOfferMeta ?? null;
+  let cashPriceCents = input.cashPriceCents ?? null;
+  let totalAmountCents = input.totalAmountCents;
+  let installments = input.installments;
+
+  // Se o rastreamento automático está ativo e o usuário não digitou preço ou ainda não buscou a cotação,
+  // busca automaticamente na internet passando pelo pipeline de 4 camadas!
+  if (autoTrack && (!bestOfferMeta || totalAmountCents <= 0 || !cashPriceCents || cashPriceCents <= 0)) {
+    const tracked = await previewTrackedPrices({
+      category,
+      description: input.description,
+      startDate: input.startDate,
+      trackerConfig: input.trackerConfig,
+    });
+    if (tracked.ok) {
+      bestOfferMeta = tracked.meta;
+      cashPriceCents = tracked.meta.cashPriceCents;
+      totalAmountCents = tracked.meta.installmentTotalCents;
+      installments = tracked.meta.installments;
+    }
+  }
+
+  if (totalAmountCents <= 0) {
+    return { ok: false, error: "Não foi possível obter um preço válido. Informe o valor ou tente buscar novamente." };
+  }
+
+  const imagePrompt =
+    category === "travel" && input.trackerConfig && "accommodationName" in input.trackerConfig
+      ? `${input.trackerConfig.accommodationName} em ${input.trackerConfig.destinationLabel || input.description}`
+      : input.description;
+  const imageUrl = input.skipImage ? null : await generateAndStoreImage(imagePrompt);
   const { data, error } = await supabase
     .from("simulations")
     .insert({
       description: input.description,
-      total_amount: centsToReaisString(input.totalAmountCents),
-      cash_price: input.cashPriceCents ? centsToReaisString(input.cashPriceCents) : null,
-      installments: input.installments,
+      total_amount: centsToReaisString(totalAmountCents),
+      cash_price: cashPriceCents ? centsToReaisString(cashPriceCents) : null,
+      installments: Math.max(1, installments),
       start_date: input.startDate,
       image_url: imageUrl,
+      category,
+      auto_track: autoTrack,
+      tracker_config: input.trackerConfig ?? {},
+      best_offer_meta: bestOfferMeta,
+      last_tracked_at: bestOfferMeta ? bestOfferMeta.checkedAt : null,
     })
     .select("*")
     .single();
 
-  if (error) return { ok: false, error: "Não foi possível salvar esta simulação." };
+  if (error || !data) return { ok: false, error: "Não foi possível salvar esta simulação." };
+
+  if (bestOfferMeta) {
+    await recordSnapshotAndEvaluateAlerts(data as SimulationRow, bestOfferMeta);
+  }
+
   revalidatePath("/simulacao");
   return { ok: true, data: mapSimulationRow(data as SimulationRow) };
 }
@@ -110,23 +155,63 @@ export async function updateSimulation(
   id: string,
   input: SimulationInput
 ): Promise<{ ok: true; data: Simulation } | { ok: false; error: string }> {
-  if (!input.description.trim() || input.totalAmountCents <= 0 || input.installments < 1) {
-    return { ok: false, error: "Preencha descrição, valor e parcelas." };
+  if (!input.description.trim()) {
+    return { ok: false, error: "Preencha a descrição da simulação." };
   }
   const supabase = createAdminClient();
+  const category: SimulationCategory = input.category ?? "product";
+  const autoTrack = input.autoTrack ?? false;
+  let bestOfferMeta = input.bestOfferMeta;
+  let cashPriceCents = input.cashPriceCents ?? null;
+  let totalAmountCents = input.totalAmountCents;
+  let installments = input.installments;
+
+  if (autoTrack && (totalAmountCents <= 0 || !cashPriceCents || cashPriceCents <= 0)) {
+    const tracked = await previewTrackedPrices({
+      category,
+      description: input.description,
+      startDate: input.startDate,
+      trackerConfig: input.trackerConfig,
+    });
+    if (tracked.ok) {
+      bestOfferMeta = tracked.meta;
+      cashPriceCents = tracked.meta.cashPriceCents;
+      totalAmountCents = tracked.meta.installmentTotalCents;
+      installments = tracked.meta.installments;
+    }
+  }
+
+  if (totalAmountCents <= 0 || installments < 1) {
+    return { ok: false, error: "Preencha valor e parcelas ou ative a busca automática de preços." };
+  }
+
+  const updatePayload: Record<string, unknown> = {
+    description: input.description.trim(),
+    total_amount: centsToReaisString(totalAmountCents),
+    cash_price: cashPriceCents ? centsToReaisString(cashPriceCents) : null,
+    installments,
+    start_date: input.startDate,
+  };
+  if (input.category !== undefined) updatePayload.category = input.category;
+  if (input.autoTrack !== undefined) updatePayload.auto_track = input.autoTrack;
+  if (input.trackerConfig !== undefined) updatePayload.tracker_config = input.trackerConfig ?? {};
+  if (bestOfferMeta !== undefined) {
+    updatePayload.best_offer_meta = bestOfferMeta;
+    if (bestOfferMeta) updatePayload.last_tracked_at = bestOfferMeta.checkedAt;
+  }
+
   const { data, error } = await supabase
     .from("simulations")
-    .update({
-      description: input.description.trim(),
-      total_amount: centsToReaisString(input.totalAmountCents),
-      cash_price: input.cashPriceCents ? centsToReaisString(input.cashPriceCents) : null,
-      installments: input.installments,
-      start_date: input.startDate,
-    })
+    .update(updatePayload)
     .eq("id", id)
     .select("*")
     .single();
   if (error || !data) return { ok: false, error: "Não foi possível salvar as alterações." };
+
+  if (bestOfferMeta) {
+    await recordSnapshotAndEvaluateAlerts(data as SimulationRow, bestOfferMeta);
+  }
+
   revalidatePath("/simulacao");
   return { ok: true, data: mapSimulationRow(data as SimulationRow) };
 }

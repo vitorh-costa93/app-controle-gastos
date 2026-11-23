@@ -4,6 +4,7 @@ export const maxDuration = 60;
 
 import { listActiveSimulations, listArchivedSimulations } from "@/lib/data/simulations";
 import { getSimulationBudget } from "@/lib/data/simulation-budget";
+import { getNotificationChannelsConfig, getPriceTrackingDashboardData } from "@/lib/data/price-tracking";
 import { SimulacaoPageClient } from "@/components/simulacao/SimulacaoPageClient";
 import { listPeople } from "@/lib/data/reference";
 
@@ -11,10 +12,12 @@ export default async function SimulacaoPage({ searchParams }: { searchParams: Pr
   const sp = await searchParams;
   const people = await listPeople();
   const personId = typeof sp.personId === "string" && people.some((p) => p.id === sp.personId) ? sp.personId : "";
-  const [simulations, archived, budget] = await Promise.all([
+  const [simulations, archived, budget, trackingData, notificationConfig] = await Promise.all([
     listActiveSimulations(),
     listArchivedSimulations(),
     getSimulationBudget(personId || undefined),
+    getPriceTrackingDashboardData(),
+    getNotificationChannelsConfig(),
   ]);
 
   return (
@@ -23,6 +26,9 @@ export default async function SimulacaoPage({ searchParams }: { searchParams: Pr
       personId={personId}
       initialSimulations={simulations}
       initialArchived={archived}
+      initialSnapshotsBySimId={trackingData.snapshotsBySimId}
+      initialAlerts={trackingData.alerts}
+      initialNotificationConfig={notificationConfig}
       {...budget}
     />
   );

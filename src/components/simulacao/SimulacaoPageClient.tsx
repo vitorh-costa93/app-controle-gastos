@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { Person } from "@/types/db";
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import { Sparkles } from "lucide-react";
-import { Simulation, MonthSummary } from "@/types/domain";
+import { Simulation, MonthSummary, SimulationPriceAlert, SimulationPriceSnapshot } from "@/types/domain";
 import { buildScenarioComparison, summarizeScenarioImpact } from "@/lib/domain/simulation";
 import { accumulateBalance } from "@/lib/domain/finance";
 import { StartingBalance } from "@/lib/data/settings";
@@ -17,10 +17,12 @@ import { LeftoverComparisonChart, AccumulatedBalanceChart } from "./SimulationCh
 import { BaseCaixinhaYield } from "./BaseCaixinhaYield";
 import { ImpactSummaryCard } from "./ImpactSummaryCard";
 import { BaseBudget, CashVsInstallmentSection, YieldParams, analyzeSimulation } from "./CashVsInstallmentSection";
+import { PriceTrackingSection } from "./PriceTrackingSection";
 import { YieldAssumptionCard } from "./YieldAssumptionCard";
 import type { CdiRate } from "@/lib/data/cdi";
 import { generateScenarioAiSummary } from "@/lib/data/simulation-analysis";
 import { deleteSimulation, restoreSimulation } from "@/lib/data/simulations";
+import { NotificationChannelsConfig, refreshSimulationPriceTracking } from "@/lib/data/price-tracking";
 import { SimulationEditModal } from "./SimulationEditModal";
 import { formatCurrencyBRL, formatMonthLabel } from "@/lib/utils/format";
 import { useInterface } from "@/components/layout/InterfaceProvider";
@@ -29,6 +31,9 @@ import "./modern-simulation.css";
 export function SimulacaoPageClient({
   initialSimulations,
   initialArchived,
+  initialSnapshotsBySimId = {},
+  initialAlerts = [],
+  initialNotificationConfig = { browserPushEnabled: true, dropThresholdPercent: 4 },
   baseSummaries,
   horizon,
   startingBalance,
@@ -38,6 +43,9 @@ export function SimulacaoPageClient({
 }: {
   initialSimulations: Simulation[];
   initialArchived: Simulation[];
+  initialSnapshotsBySimId?: Record<string, SimulationPriceSnapshot[]>;
+  initialAlerts?: SimulationPriceAlert[];
+  initialNotificationConfig?: NotificationChannelsConfig;
   baseSummaries: MonthSummary[];
   horizon: { from: string; to: string };
   startingBalance: StartingBalance | null;
@@ -54,6 +62,8 @@ export function SimulacaoPageClient({
   const [tab, setTab] = useState<"projection" | "compare" | "saved">("projection");
   const [simulations, setSimulations] = useState(initialSimulations);
   const [archived, setArchived] = useState(initialArchived);
+  const [snapshotsBySimId, setSnapshotsBySimId] = useState<Record<string, SimulationPriceSnapshot[]>>(initialSnapshotsBySimId);
+  const [alerts, setAlerts] = useState<SimulationPriceAlert[]>(initialAlerts);
   const [editing, setEditing] = useState<Simulation | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>(() =>
     initialSimulations[0]?.id ? [initialSimulations[0].id] : []
@@ -164,6 +174,26 @@ export function SimulacaoPageClient({
     setSelectedIds((prev) => (prev.includes(sim.id) ? prev : [...prev, sim.id]));
   }
 
+  async function handleRefreshTrack(sim: Simulation) {
+    const res = await refreshSimulationPriceTracking(sim.id);
+    if (!res.ok) {
+      window.alert(res.error);
+      return;
+    }
+    setSimulations((prev) => prev.map((s) => (s.id === res.simulation.id ? res.simulation : s)));
+    if (res.snapshot) {
+      const snap = res.snapshot;
+      setSnapshotsBySimId((prev) => ({
+        ...prev,
+        [snap.simulationId]: [...(prev[snap.simulationId] ?? []), snap],
+      }));
+    }
+    if (res.alert) {
+      const al = res.alert;
+      setAlerts((prev) => [al, ...prev]);
+    }
+  }
+
   const aiSummary = aiState?.key === aiRequestKey ? aiState.summary : null;
   const aiLoading = hasSelected && aiState?.key !== aiRequestKey;
   const combinedTitle = selectedSimulations.map((s) => s.description).join(" + ");
@@ -190,6 +220,23 @@ export function SimulacaoPageClient({
             <BaseCaixinhaYield summaries={baseSummaries} accumulated={baseAccumulated} cdiAnnualPercent={cdiAnnualPercent} onCdiAnnualPercent={setCdiAnnualPercent} percentOfCdi={percentOfCdi} onPercentOfCdi={setPercentOfCdi} horizon={horizon} />
           </Card>}
           {tab === "compare" && (hasSelected ? <>
+            <PriceTrackingSection
+              simulations={selectedSimulations}
+              snapshotsBySimId={snapshotsBySimId}
+              alerts={alerts}
+              notificationConfig={initialNotificationConfig}
+              onSimulationUpdated={(updated) => setSimulations((prev) => prev.map((s) => (s.id === updated.id ? updated : s)))}
+              onSnapshotAdded={(snap) =>
+                setSnapshotsBySimId((prev) => ({
+                  ...prev,
+                  [snap.simulationId]: [...(prev[snap.simulationId] ?? []), snap],
+                }))
+              }
+              onAlertAdded={(al) => setAlerts((prev) => [al, ...prev])}
+              onAlertDismissed={(alertId) =>
+                setAlerts((prev) => prev.map((a) => (a.id === alertId ? { ...a, readAt: new Date().toISOString() } : a)))
+              }
+            />
             <div className="modern-simulation-impact"><CashVsInstallmentSection simulations={selectedSimulations} params={yieldParams} base={base} /></div>
             <Card className="p-5">
               <h2 className="modern-simulation-title">Evolução do orçamento · {combinedTitle}</h2>
@@ -204,12 +251,12 @@ export function SimulacaoPageClient({
               <Card className="flex gap-3 bg-(--color-primary-soft)/40 p-4"><Sparkles size={18} className="mt-0.5 shrink-0 text-(--color-primary)" /><div><p className="mb-1 text-sm font-semibold text-(--color-primary)">Insight da IA</p>{aiLoading ? <p className="text-sm text-(--color-text-secondary)">Analisando cenário...</p> : <p className="text-sm text-(--color-text-secondary)">{aiSummary}</p>}</div></Card>
             )}
           </> : <Card className="p-5"><h2 className="modern-simulation-title">Compare uma compra</h2><p className="modern-simulation-subtitle">Crie ou marque uma ou mais simulações na lista ao lado para ver o impacto combinado no seu dinheiro guardado.</p></Card>)}
-          {tab === "saved" && (simulations.length || archived.length ? <ScenarioList simulations={simulations} archived={archived} onEdit={setEditing} onDelete={handleDelete} onRestore={handleRestore} verdictFor={verdictFor} selectedIds={selectedIds} onToggle={toggleSimulation} onOpen={(id) => { setSelectedIds((prev) => (prev.includes(id) ? prev : [...prev, id])); setTab("compare"); }} /> : <Card className="p-5 text-sm">Nenhum cenário salvo ainda. Crie uma simulação em Comparar compra.</Card>)}
+          {tab === "saved" && (simulations.length || archived.length ? <ScenarioList simulations={simulations} archived={archived} onEdit={setEditing} onDelete={handleDelete} onRestore={handleRestore} onRefreshTrack={handleRefreshTrack} verdictFor={verdictFor} selectedIds={selectedIds} onToggle={toggleSimulation} onOpen={(id) => { setSelectedIds((prev) => (prev.includes(id) ? prev : [...prev, id])); setTab("compare"); }} /> : <Card className="p-5 text-sm">Nenhum cenário salvo ainda. Crie uma simulação em Comparar compra.</Card>)}
         </section>
         <aside className="modern-simulation-sidebar" aria-label="Configuração da simulação">
           {tab !== "saved" && <YieldAssumptionCard cdi={effectiveCdi} percentOfCdi={percentOfCdi} onChange={setPercentOfCdi} />}
           {tab !== "projection" && <NewSimulationForm cdiAnnualPercent={cdiAnnualPercent} percentOfCdi={percentOfCdi} onCreated={(sim) => { setSimulations((prev) => [sim, ...prev]); setSelectedIds((prev) => (prev.includes(sim.id) ? prev : [...prev, sim.id])); setTab("compare"); }} />}
-          {tab === "compare" && (simulations.length > 0 || archived.length > 0) && <ScenarioList simulations={simulations} archived={archived} onEdit={setEditing} onDelete={handleDelete} onRestore={handleRestore} verdictFor={verdictFor} selectedIds={selectedIds} onToggle={toggleSimulation} />}
+          {tab === "compare" && (simulations.length > 0 || archived.length > 0) && <ScenarioList simulations={simulations} archived={archived} onEdit={setEditing} onDelete={handleDelete} onRestore={handleRestore} onRefreshTrack={handleRefreshTrack} verdictFor={verdictFor} selectedIds={selectedIds} onToggle={toggleSimulation} />}
         </aside>
       </div>}
 

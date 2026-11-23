@@ -2,6 +2,23 @@
 
 Atualizado: 23/11/2026.
 
+## Rastreamento Inteligente de Preços na Simulação — Produtos (4 Camadas) & Viagens (Voos RAO/VCP + Resorts por Data) (23/11/2026)
+- **Schema `meudinheiro` (`supabase/migrations/20261123171000_simulation_price_tracking.sql`):**
+  - Colunas `category` (`'product' | 'travel'`), `auto_track`, `tracker_config`, `best_offer_meta` e `last_tracked_at` adicionadas em `meudinheiro.simulations`.
+  - Criadas as tabelas `meudinheiro.simulation_price_snapshots` (histórico real de preços com separação de voo e hospedagem para viagens) e `meudinheiro.simulation_price_alerts` (alertas de queda e linha de base).
+- **Motor Anti-Falso-Positivo de 4 Camadas para Produtos (`src/lib/price-tracking/engine.ts` e `catalog.ts`):**
+  - Coleta multi-fonte (Mercado Livre Brasil API pública `condition=new`, busca web HTML e JSON-LD Schema.org com proteção SSRF) auditada por regras determinísticas + `gpt-6-luna` (`verifyProductOfferFourLayers`).
+  - Camada 1: Identidade exata e piso anti-acessório (`minSanityPriceCents` + exclusão de controles/jogos/capas/suportes).
+  - Camada 2: Exclusivamente item 100% novo e em estoque (rejeita usados, seminovos, reembalados, open box, vitrine e outlet).
+  - Camada 3: Extração do **menor valor à vista (PIX universal)** e do **menor valor parcelado universal (cartão comum)** **na mesma loja**, descartando preços condicionados a cartão próprio da loja ou cashback futuro.
+  - Camada 4: Whitelist de lojas e vendedores oficiais 1P (KaBuM!, Amazon.com.br 1P, Magalu 1P, Mercado Livre Loja Oficial, Fast Shop).
+- **Motor de Viagens por Data — Passagens Aéreas Multi-Origem (`RAO`/`VCP`) + Estadia/Resort (`trackTravelPrices`):**
+  - Permite selecionar o **Destino / Aeroporto** (ex.: `Maceió - AL (MCZ)`, `Recife (REC)`, etc.), a **Estadia / Resort** (ex.: `Japaratinga Lounge Resort`, `Salinas Maragogi All Inclusive`, etc.) e as **Datas de Ida/Check-in e Volta/Check-out**.
+  - Compara voos saindo de **Ribeirão Preto (`RAO`)** (com escala) e **Campinas (`VCP`)** (direto ou escala) para os passageiros + tarifa do resort para as exatas diárias (incluindo promoções de Black Friday), somando automaticamente **Melhor Voo + Estadia** no preço à vista e no parcelado da Simulação.
+- **UI na Simulação, Alertas Mobile e Cron (`SimulationFormFields.tsx`, `PriceTrackingSection.tsx`, `ScenarioList.tsx`, `/api/cron/price-tracking`):**
+  - Seletor **`Compra / Produto`** vs **`Viagem (Voo + Estadia)`** no formulário de simulação; com rastreamento ativo, o usuário não precisa imputar valor manual — o sistema preenche o menor valor real à vista e parcelado automaticamente.
+  - Painel `PriceTrackingSection` na aba `Comparar compra` com tabela de lojas auditadas, comparativo de voos `RAO` vs `VCP` + Resort, seletor rápido de datas para recotar viagens, gráfico de histórico temporal, alertas Push no navegador/celular + integração Telegram Bot e cron diário em `vercel.json`.
+
 ## Correção de Bugs P0/P1, Otimização P2 e Limpeza P3 (23/11/2026)
 - **P0 — Gastos estimados por pessoa (`estimates.ts`, `EstimatedExpensesEditor.tsx`, `RecorrenciasView.tsx`, `cadastro/page.tsx`):** `setEstimatedExpenses` agora recebe `scopePersonId` opcional e preserva os itens das demais pessoas quando a tela está filtrada por pessoa; linhas incompletas exibem erro de validação explícito em vez de descarte silencioso.
 - **P0 — Copy do veredito na Simulação (`CashVsInstallmentSection.tsx`):** corrigido texto para exibir sempre `"R$ X a mais no seu saldo final pagando à vista / parcelando"`.

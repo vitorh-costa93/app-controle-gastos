@@ -1,4 +1,13 @@
-import { Bank, Direction, FieldConfidence, FixedVariable, TransactionSource } from "./db";
+import {
+  Bank,
+  BestOfferMeta,
+  Direction,
+  FieldConfidence,
+  FixedVariable,
+  SimulationCategory,
+  SimulationTrackerConfig,
+  TransactionSource,
+} from "./db";
 
 /** Representação de app: valores sempre em centavos (inteiro), nunca float de reais. */
 export interface Transaction {
@@ -99,5 +108,43 @@ export interface Simulation {
   active: boolean;
   aiSummary: string | null;
   imageUrl: string | null;
+  category: SimulationCategory;
+  autoTrack: boolean;
+  trackerConfig: SimulationTrackerConfig | null;
+  bestOfferMeta: BestOfferMeta | null;
+  lastTrackedAt: string | null;
   createdAt: string;
+}
+
+export interface SimulationPriceSnapshot {
+  id: string;
+  simulationId: string;
+  capturedAt: string;
+  category: SimulationCategory;
+  storeOrProvider: string;
+  cashPriceCents: number;
+  installmentTotalCents: number;
+  installments: number;
+  flightCashPriceCents: number | null;
+  flightOrigin: string | null;
+  stayCashPriceCents: number | null;
+  stayInstallmentTotalCents: number | null;
+  offerUrl: string | null;
+  verifiedNew: boolean;
+}
+
+export interface SimulationPriceAlert {
+  id: string;
+  simulationId: string;
+  snapshotId: string | null;
+  createdAt: string;
+  alertType: "drop_detected" | "new_low" | "target_reached" | "initial_baseline";
+  title: string;
+  message: string;
+  previousCashPriceCents: number | null;
+  newCashPriceCents: number;
+  dropPercent: number | null;
+  offerUrl: string | null;
+  readAt: string | null;
+  notifiedChannels: string[];
 }

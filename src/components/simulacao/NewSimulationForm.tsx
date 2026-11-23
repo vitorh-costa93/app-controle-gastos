@@ -17,10 +17,12 @@ export function NewSimulationForm({
   onCreated,
   cdiAnnualPercent,
   percentOfCdi,
+  embedded = false,
 }: {
   onCreated: (s: Simulation) => void;
   cdiAnnualPercent: number;
   percentOfCdi: number;
+  embedded?: boolean;
 }) {
   const [form, setForm] = useState<SimulationFormValue>(emptySimulationForm);
   const [isPending, startTransition] = useTransition();
@@ -44,9 +46,9 @@ export function NewSimulationForm({
     });
   }
 
-  return (
-    <Card className="p-5">
-      <h3 className="mb-4 text-[15px] font-semibold">Nova simulação</h3>
+  const body = (
+    <>
+      {!embedded && <h3 className="mb-4 text-[15px] font-semibold">Nova simulação</h3>}
       <SimulationFormFields
         value={form}
         onChange={setForm}
@@ -64,6 +66,9 @@ export function NewSimulationForm({
           Adicionar
         </Button>
       </div>
-    </Card>
+    </>
   );
+
+  if (embedded) return body;
+  return <Card className="p-5">{body}</Card>;
 }

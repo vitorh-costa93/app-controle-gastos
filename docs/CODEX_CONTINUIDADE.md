@@ -3,6 +3,8 @@
 Atualizado: 23/11/2026.
 
 ## Rastreamento Inteligente de Preços na Simulação — Produtos (4 Camadas) & Viagens (Voos RAO/VCP + Resorts por Data) (23/11/2026)
+- **UI em aba única com Cenários no topo (23/11/2026):**
+  - `SimulacaoPageClient.tsx`, `ScenarioList.tsx` e `NewSimulationForm.tsx`: removidas as 3 sub-abas (`Projeção do dinheiro`, `Comparar compra`, `Cenários salvos`); o bloco `Cenários` agora fica no topo em grid de 2 colunas com botão `+ Nova simulação` (modal) alimentando diretamente todas as análises abaixo, mantendo multi-seleção e acordeões sob demanda.
 - **IA auto-atualizável (`src/lib/ai/models.ts`, `openai.ts`, `engine.ts`):** implementadas `pickLatestFromList` e `resolveModelFor` (cache 12h via `/v1/models`, escolhendo automaticamente a versão mais recente da família `gpt-*-luna` e `gpt-image-*`, espelhando `dashboard-psi`), conectadas em todas as chamadas de texto, visão, imagem e transcrição.
 - **UI Compacta e Cron Black Friday 2h (23/11/2026):**
   - `PriceTrackingSection.tsx`, `CashVsInstallmentSection.tsx` e `SimulacaoPageClient.tsx`: visão compacta em página única (resumo de preço + veredito + saldos líquidos + gráfico principal visíveis; detalhes de lojas/viagem/histórico, tabela mês a mês, IA, ponto de equilíbrio, CDI e evolução mensal recolhidos sob demanda), preservando multi-seleção de cenários.

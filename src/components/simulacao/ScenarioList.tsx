@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Luggage, MoreVertical, Pencil, RefreshCw, ShieldCheck, ShoppingBag, Trash2, Undo2 } from "lucide-react";
+import { Luggage, MoreVertical, Pencil, Plus, RefreshCw, ShieldCheck, ShoppingBag, Trash2, Undo2 } from "lucide-react";
 import { Simulation } from "@/types/domain";
 import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 import { formatCurrencyBRL } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/cn";
 
@@ -17,6 +18,8 @@ export function ScenarioList({
   onDelete,
   onRestore,
   onRefreshTrack,
+  onAddNew,
+  layout = "grid",
   verdictFor,
 }: {
   simulations: Simulation[];
@@ -28,6 +31,8 @@ export function ScenarioList({
   onDelete: (sim: Simulation) => Promise<void>;
   onRestore: (sim: Simulation) => Promise<void>;
   onRefreshTrack?: (sim: Simulation) => Promise<void>;
+  onAddNew?: () => void;
+  layout?: "list" | "grid";
   verdictFor: (sim: Simulation) => { label: string; tone: "cash" | "installment" | "neutral" } | null;
 }) {
   const [, startTransition] = useTransition();
@@ -36,34 +41,44 @@ export function ScenarioList({
 
   return (
     <Card className="p-5">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+      <div className="mb-3.5 flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 className="text-[15px] font-semibold">Cenários</h3>
           <p className="text-xs text-(--color-text-secondary)">Marque as compras que entram juntas na simulação.</p>
         </div>
+        {onAddNew && (
+          <Button type="button" onClick={onAddNew} className="gap-1.5 px-3 py-1.5 text-xs">
+            <Plus size={14} /> Nova simulação
+          </Button>
+        )}
       </div>
 
-      <ul className="space-y-2">
+      <ul className={layout === "grid" ? "grid grid-cols-1 gap-2.5 md:grid-cols-2" : "space-y-2"}>
         {simulations.map((sim) => {
           const isSelected = selectedIds.includes(sim.id);
+          const verdict = verdictFor(sim);
           return (
             <li key={sim.id}>
               <div
                 className={cn(
-                  "flex flex-wrap items-center gap-x-3 gap-y-2 rounded-(--radius-lg) border p-3 transition-colors",
+                  "flex flex-col gap-2 rounded-(--radius-lg) border p-3 transition-colors",
                   isSelected
                     ? "border-(--color-primary) bg-(--color-primary-soft)/50"
                     : "border-(--color-border) hover:bg-black/[0.015]"
                 )}
               >
-                <input
-                  type="checkbox"
-                  aria-label={`Incluir ${sim.description} na simulação`}
-                  checked={isSelected}
-                  onChange={() => onToggle(sim.id)}
-                  className="h-4 w-4 accent-(--color-primary)"
-                />
-                <button className="flex min-w-0 flex-1 basis-40 items-center gap-3 text-left" onClick={() => (onOpen ?? onToggle)(sim.id)}>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    aria-label={`Incluir ${sim.description} na simulação`}
+                    checked={isSelected}
+                    onChange={() => onToggle(sim.id)}
+                    className="h-4 w-4 shrink-0 accent-(--color-primary)"
+                  />
+                  <button
+                    className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                    onClick={() => (onOpen ?? onToggle)(sim.id)}
+                  >
                   {sim.imageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -93,31 +108,16 @@ export function ScenarioList({
                       {sim.installments}x de {formatCurrencyBRL(sim.installmentAmountCents)}
                     </p>
                   </div>
-                </button>
-                {(() => {
-                  const verdict = verdictFor(sim);
-                  return verdict ? (
-                    <span
-                      className={cn(
-                        "order-last ml-7 max-w-full whitespace-normal rounded-full px-2.5 py-1 text-xs font-semibold",
-                        verdict.tone === "cash" && "bg-(--color-negative-soft) text-(--color-negative)",
-                        verdict.tone === "installment" && "bg-(--color-primary-soft) text-(--color-primary)",
-                        verdict.tone === "neutral" && "bg-black/5 text-(--color-text-secondary)"
-                      )}
-                    >
-                      {verdict.label}
-                    </span>
-                  ) : null;
-                })()}
-                <div className="relative shrink-0">
-                  <button
-                    className="rounded-full p-1.5 text-(--color-text-tertiary) hover:bg-black/5"
-                    aria-label="Mais opções"
-                    aria-expanded={menuId === sim.id}
-                    onClick={() => setMenuId((cur) => (cur === sim.id ? null : sim.id))}
-                  >
-                    <MoreVertical size={16} />
                   </button>
+                  <div className="relative shrink-0">
+                    <button
+                      className="rounded-full p-1.5 text-(--color-text-tertiary) hover:bg-black/5"
+                      aria-label="Mais opções"
+                      aria-expanded={menuId === sim.id}
+                      onClick={() => setMenuId((cur) => (cur === sim.id ? null : sim.id))}
+                    >
+                      <MoreVertical size={16} />
+                    </button>
                   {menuId === sim.id && (
                     <>
                       <div className="fixed inset-0 z-10" onClick={() => setMenuId(null)} />
@@ -160,7 +160,20 @@ export function ScenarioList({
                       </div>
                     </>
                   )}
+                  </div>
                 </div>
+                {verdict && (
+                  <span
+                    className={cn(
+                      "ml-7 self-start rounded-full px-2.5 py-0.5 text-xs font-semibold",
+                      verdict.tone === "cash" && "bg-(--color-negative-soft) text-(--color-negative)",
+                      verdict.tone === "installment" && "bg-(--color-primary-soft) text-(--color-primary)",
+                      verdict.tone === "neutral" && "bg-black/5 text-(--color-text-secondary)"
+                    )}
+                  >
+                    {verdict.label}
+                  </span>
+                )}
               </div>
             </li>
           );

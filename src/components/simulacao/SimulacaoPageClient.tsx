@@ -11,6 +11,7 @@ import { accumulateBalance } from "@/lib/domain/finance";
 import { StartingBalance } from "@/lib/data/settings";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
+import { Modal } from "@/components/ui/Modal";
 import { NewSimulationForm } from "./NewSimulationForm";
 import { ScenarioList } from "./ScenarioList";
 import { LeftoverComparisonChart, AccumulatedBalanceChart } from "./SimulationCharts";
@@ -59,8 +60,9 @@ export function SimulacaoPageClient({
   const searchParams = useSearchParams();
   const [individualBalances, setIndividualBalances] = useState<Record<string, number>>({});
   const effectiveStartingBalance = personId ? { month: undefined, amountCents: individualBalances[personId] ?? 0 } : startingBalance;
-  const [tab, setTab] = useState<"projection" | "compare" | "saved">("projection");
   const [showBudgetCharts, setShowBudgetCharts] = useState(false);
+  const [showBaseProjection, setShowBaseProjection] = useState(false);
+  const [showNewModal, setShowNewModal] = useState(false);
   const [simulations, setSimulations] = useState(initialSimulations);
   const [archived, setArchived] = useState(initialArchived);
   const [snapshotsBySimId, setSnapshotsBySimId] = useState<Record<string, SimulationPriceSnapshot[]>>(initialSnapshotsBySimId);
@@ -210,77 +212,127 @@ export function SimulacaoPageClient({
         {(isModern || personId) && <label>Pessoa <select value={personId} onChange={(event) => { const params = new URLSearchParams(searchParams.toString()); if (event.target.value) params.set("personId", event.target.value); else params.delete("personId"); router.push(`${pathname}${params.size ? `?${params}` : ""}`); }}><option value="">Casal</option>{people.filter((person) => person.name.trim().toLocaleLowerCase("pt-BR") !== "casal").map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select></label>}
         {personId && <div><p>{individualBalances[personId] ? "Saldo inicial individual usado apenas nesta simulação." : "Saldo inicial individual não informado; projeção parte de zero."}</p><label htmlFor="individual-balance">Saldo inicial individual</label><CurrencyInput id="individual-balance" valueCents={individualBalances[personId] ?? 0} onChange={(amount) => setIndividualBalances((previous) => ({ ...previous, [personId]: amount }))} /></div>}
       </div>}
-      {isModern && <nav className="modern-simulation-tabs" aria-label="Áreas da simulação">
-        {([ ["projection", "Projeção do dinheiro"], ["compare", "Comparar compra"], ["saved", "Cenários salvos"] ] as const).map(([id, label]) => <button key={id} type="button" aria-current={tab === id ? "page" : undefined} onClick={() => setTab(id)}>{label}</button>)}
-      </nav>}
+      <div className="mb-5">
+        <ScenarioList
+          simulations={simulations}
+          archived={archived}
+          layout="grid"
+          onAddNew={() => setShowNewModal(true)}
+          onEdit={setEditing}
+          onDelete={handleDelete}
+          onRestore={handleRestore}
+          onRefreshTrack={handleRefreshTrack}
+          verdictFor={verdictFor}
+          selectedIds={selectedIds}
+          onToggle={toggleSimulation}
+        />
+      </div>
+
       {isModern && <div className="modern-simulation-layout">
         <section className="modern-simulation-main" aria-label="Resultados da simulação">
-          {tab === "projection" && <Card className="p-5">
-            <h2 className="modern-simulation-title">Saldo acumulado projetado</h2>
-            <p className="modern-simulation-subtitle">Com base no que já está cadastrado, sem compras simuladas. Horizonte: {formatMonthLabel(horizon.from)} → {formatMonthLabel(horizon.to)}.</p>
-            <BaseCaixinhaYield summaries={baseSummaries} accumulated={baseAccumulated} cdiAnnualPercent={cdiAnnualPercent} onCdiAnnualPercent={setCdiAnnualPercent} percentOfCdi={percentOfCdi} onPercentOfCdi={setPercentOfCdi} horizon={horizon} />
-          </Card>}
-          {tab === "compare" && (hasSelected ? <>
-            <PriceTrackingSection
-              simulations={selectedSimulations}
-              snapshotsBySimId={snapshotsBySimId}
-              alerts={alerts}
-              notificationConfig={initialNotificationConfig}
-              onSimulationUpdated={(updated) => setSimulations((prev) => prev.map((s) => (s.id === updated.id ? updated : s)))}
-              onSnapshotAdded={(snap) =>
-                setSnapshotsBySimId((prev) => ({
-                  ...prev,
-                  [snap.simulationId]: [...(prev[snap.simulationId] ?? []), snap],
-                }))
-              }
-              onAlertAdded={(al) => setAlerts((prev) => [al, ...prev])}
-              onAlertDismissed={(alertId) =>
-                setAlerts((prev) => prev.map((a) => (a.id === alertId ? { ...a, readAt: new Date().toISOString() } : a)))
-              }
-            />
-            <div className="modern-simulation-impact"><CashVsInstallmentSection simulations={selectedSimulations} params={yieldParams} base={base} /></div>
-            <div className="flex justify-center">
-              <button
-                type="button"
-                onClick={() => setShowBudgetCharts((v) => !v)}
-                className="inline-flex items-center gap-1.5 rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-3.5 py-1.5 text-xs font-semibold text-(--color-text-secondary) hover:bg-black/5"
-              >
-                {showBudgetCharts ? (
-                  <>
-                    Ocultar evolução mensal do orçamento e impacto <ChevronUp size={14} />
-                  </>
-                ) : (
-                  <>
-                    Ver evolução mensal do orçamento e impacto <ChevronDown size={14} />
-                  </>
-                )}
-              </button>
-            </div>
-            {showBudgetCharts && (
-              <>
+          {hasSelected ? (
+            <>
+              <PriceTrackingSection
+                simulations={selectedSimulations}
+                snapshotsBySimId={snapshotsBySimId}
+                alerts={alerts}
+                notificationConfig={initialNotificationConfig}
+                onSimulationUpdated={(updated) => setSimulations((prev) => prev.map((s) => (s.id === updated.id ? updated : s)))}
+                onSnapshotAdded={(snap) =>
+                  setSnapshotsBySimId((prev) => ({
+                    ...prev,
+                    [snap.simulationId]: [...(prev[snap.simulationId] ?? []), snap],
+                  }))
+                }
+                onAlertAdded={(al) => setAlerts((prev) => [al, ...prev])}
+                onAlertDismissed={(alertId) =>
+                  setAlerts((prev) => prev.map((a) => (a.id === alertId ? { ...a, readAt: new Date().toISOString() } : a)))
+                }
+              />
+              <div className="modern-simulation-impact"><CashVsInstallmentSection simulations={selectedSimulations} params={yieldParams} base={base} /></div>
+              <div className="flex flex-wrap justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowBaseProjection((v) => !v)}
+                  className="inline-flex items-center gap-1.5 rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-3.5 py-1.5 text-xs font-semibold text-(--color-text-secondary) hover:bg-black/5"
+                >
+                  {showBaseProjection ? (
+                    <>
+                      Ocultar projeção sem compras <ChevronUp size={14} />
+                    </>
+                  ) : (
+                    <>
+                      Ver projeção sem compras (Caixinha) <ChevronDown size={14} />
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowBudgetCharts((v) => !v)}
+                  className="inline-flex items-center gap-1.5 rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-3.5 py-1.5 text-xs font-semibold text-(--color-text-secondary) hover:bg-black/5"
+                >
+                  {showBudgetCharts ? (
+                    <>
+                      Ocultar evolução mensal do orçamento e impacto <ChevronUp size={14} />
+                    </>
+                  ) : (
+                    <>
+                      Ver evolução mensal do orçamento e impacto <ChevronDown size={14} />
+                    </>
+                  )}
+                </button>
+              </div>
+              {showBaseProjection && (
                 <Card className="p-5">
-                  <h2 className="modern-simulation-title">Evolução do orçamento · {combinedTitle}</h2>
-                  <p className="modern-simulation-subtitle">{formatMonthLabel(horizon.from)} → {formatMonthLabel(horizon.to)}{selectedSimulations.length > 1 ? ` · ${selectedSimulations.length} compras combinadas` : ""}</p>
-                  <h3 className="modern-simulation-chart-title">Saldo no final do mês</h3>
-                  <LeftoverComparisonChart comparison={comparison} />
-                  <h3 className="modern-simulation-chart-title">Saldo acumulado</h3>
-                  <AccumulatedBalanceChart comparison={comparison} />
+                  <h2 className="modern-simulation-title">Saldo acumulado projetado</h2>
+                  <p className="modern-simulation-subtitle">Com base no que já está cadastrado, sem compras simuladas. Horizonte: {formatMonthLabel(horizon.from)} → {formatMonthLabel(horizon.to)}.</p>
+                  <BaseCaixinhaYield summaries={baseSummaries} accumulated={baseAccumulated} cdiAnnualPercent={cdiAnnualPercent} onCdiAnnualPercent={setCdiAnnualPercent} percentOfCdi={percentOfCdi} onPercentOfCdi={setPercentOfCdi} horizon={horizon} />
                 </Card>
-                {impact && <ImpactSummaryCard impact={impact} />}
-              </>
-            )}
-            {!hasCashVsInstallmentAi && (
-              <Card className="flex gap-3 bg-(--color-primary-soft)/40 p-4"><Sparkles size={18} className="mt-0.5 shrink-0 text-(--color-primary)" /><div><p className="mb-1 text-sm font-semibold text-(--color-primary)">Insight da IA</p>{aiLoading ? <p className="text-sm text-(--color-text-secondary)">Analisando cenário...</p> : <p className="text-sm text-(--color-text-secondary)">{aiSummary}</p>}</div></Card>
-            )}
-          </> : <Card className="p-5"><h2 className="modern-simulation-title">Compare uma compra</h2><p className="modern-simulation-subtitle">Crie ou marque uma ou mais simulações na lista ao lado para ver o impacto combinado no seu dinheiro guardado.</p></Card>)}
-          {tab === "saved" && (simulations.length || archived.length ? <ScenarioList simulations={simulations} archived={archived} onEdit={setEditing} onDelete={handleDelete} onRestore={handleRestore} onRefreshTrack={handleRefreshTrack} verdictFor={verdictFor} selectedIds={selectedIds} onToggle={toggleSimulation} onOpen={(id) => { setSelectedIds((prev) => (prev.includes(id) ? prev : [...prev, id])); setTab("compare"); }} /> : <Card className="p-5 text-sm">Nenhum cenário salvo ainda. Crie uma simulação em Comparar compra.</Card>)}
+              )}
+              {showBudgetCharts && (
+                <>
+                  <Card className="p-5">
+                    <h2 className="modern-simulation-title">Evolução do orçamento · {combinedTitle}</h2>
+                    <p className="modern-simulation-subtitle">{formatMonthLabel(horizon.from)} → {formatMonthLabel(horizon.to)}{selectedSimulations.length > 1 ? ` · ${selectedSimulations.length} compras combinadas` : ""}</p>
+                    <h3 className="modern-simulation-chart-title">Saldo no final do mês</h3>
+                    <LeftoverComparisonChart comparison={comparison} />
+                    <h3 className="modern-simulation-chart-title">Saldo acumulado</h3>
+                    <AccumulatedBalanceChart comparison={comparison} />
+                  </Card>
+                  {impact && <ImpactSummaryCard impact={impact} />}
+                </>
+              )}
+              {!hasCashVsInstallmentAi && (
+                <Card className="flex gap-3 bg-(--color-primary-soft)/40 p-4"><Sparkles size={18} className="mt-0.5 shrink-0 text-(--color-primary)" /><div><p className="mb-1 text-sm font-semibold text-(--color-primary)">Insight da IA</p>{aiLoading ? <p className="text-sm text-(--color-text-secondary)">Analisando cenário...</p> : <p className="text-sm text-(--color-text-secondary)">{aiSummary}</p>}</div></Card>
+              )}
+            </>
+          ) : (
+            <Card className="p-5">
+              <h2 className="modern-simulation-title">Saldo acumulado projetado</h2>
+              <p className="modern-simulation-subtitle">Sem compras marcadas acima. Horizonte: {formatMonthLabel(horizon.from)} → {formatMonthLabel(horizon.to)}.</p>
+              <BaseCaixinhaYield summaries={baseSummaries} accumulated={baseAccumulated} cdiAnnualPercent={cdiAnnualPercent} onCdiAnnualPercent={setCdiAnnualPercent} percentOfCdi={percentOfCdi} onPercentOfCdi={setPercentOfCdi} horizon={horizon} />
+            </Card>
+          )}
         </section>
-        <aside className="modern-simulation-sidebar" aria-label="Configuração da simulação">
-          {tab !== "saved" && <YieldAssumptionCard cdi={effectiveCdi} percentOfCdi={percentOfCdi} onChange={setPercentOfCdi} />}
-          {tab !== "projection" && <NewSimulationForm cdiAnnualPercent={cdiAnnualPercent} percentOfCdi={percentOfCdi} onCreated={(sim) => { setSimulations((prev) => [sim, ...prev]); setSelectedIds((prev) => (prev.includes(sim.id) ? prev : [...prev, sim.id])); setTab("compare"); }} />}
-          {tab === "compare" && (simulations.length > 0 || archived.length > 0) && <ScenarioList simulations={simulations} archived={archived} onEdit={setEditing} onDelete={handleDelete} onRestore={handleRestore} onRefreshTrack={handleRefreshTrack} verdictFor={verdictFor} selectedIds={selectedIds} onToggle={toggleSimulation} />}
+        <aside className="modern-simulation-sidebar" aria-label="Premissas de rendimento">
+          <YieldAssumptionCard cdi={effectiveCdi} percentOfCdi={percentOfCdi} onChange={setPercentOfCdi} />
         </aside>
       </div>}
+
+      {showNewModal && (
+        <Modal open onClose={() => setShowNewModal(false)} title="Nova simulação">
+          <NewSimulationForm
+            embedded
+            cdiAnnualPercent={cdiAnnualPercent}
+            percentOfCdi={percentOfCdi}
+            onCreated={(sim) => {
+              setSimulations((prev) => [sim, ...prev]);
+              setSelectedIds((prev) => (prev.includes(sim.id) ? prev : [...prev, sim.id]));
+              setShowNewModal(false);
+            }}
+          />
+        </Modal>
+      )}
 
       {editing && (
         <SimulationEditModal

@@ -2,7 +2,7 @@
 // Decisão de 01/10/2026 (testes reais em farmacia-uailazo/docs/CUSTOS-OPENAI-TESTES.md):
 // texto/visão = gpt-6-luna; imagem = gpt-image-2.5-flare em qualidade medium.
 // Para trocar sem deploy de código: variável de ambiente AI_MODEL_<TAREFA> (ex.: AI_MODEL_EXTRACTION).
-// Sem dependências: este arquivo é idêntico no Uailazo (src/lib/ai/models.ts).
+// Sem dependências: espelha dashboard-psi/lib/ai-models.js com auto-descoberta via /v1/models (cache 12h).
 
 export type AiTask = "extraction" | "vision" | "insight" | "transcription" | "image";
 
@@ -16,6 +16,94 @@ const DEFAULT_MODELS: Record<AiTask, string> = {
 
 export function modelFor(task: AiTask): string {
   return process.env[`AI_MODEL_${task.toUpperCase()}`]?.trim() || DEFAULT_MODELS[task];
+}
+
+const MODEL_DISCOVERY_TTL_MS = 12 * 60 * 60 * 1000;
+let _discoveryCache: { at: number; ids: string[] | null } = { at: 0, ids: null };
+
+export function clearModelDiscoveryCache(): void {
+  _discoveryCache = { at: 0, ids: null };
+}
+
+function parseVersion(str: string): number[] {
+  return String(str || "")
+    .split(".")
+    .map((n) => Number(n) || 0);
+}
+
+function compareVersionsDesc(a: string, b: string): number {
+  const va = parseVersion(a);
+  const vb = parseVersion(b);
+  const len = Math.max(va.length, vb.length);
+  for (let i = 0; i < len; i++) {
+    const diff = (vb[i] || 0) - (va[i] || 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+/** Seleciona a versão mais recente da família configurada a partir da lista de modelos da OpenAI. */
+export function pickLatestFromList(task: AiTask, ids: string[]): string {
+  const fallback = DEFAULT_MODELS[task];
+  if (!Array.isArray(ids) || !ids.length || task === "transcription") return fallback;
+
+  if (task === "image") {
+    const matches = ids
+      .map((id) => {
+        const m = String(id || "").match(/^gpt-image-(\d+(?:\.\d+)?)(?:-(flare))?$/i);
+        return m ? { id, ver: m[1], isFlare: Boolean(m[2]) } : null;
+      })
+      .filter((x): x is { id: string; ver: string; isFlare: boolean } => x !== null)
+      .sort((a, b) => compareVersionsDesc(a.ver, b.ver) || Number(b.isFlare) - Number(a.isFlare));
+    return matches[0]?.id || fallback;
+  }
+
+  const matches = ids
+    .map((id) => {
+      const m = String(id || "").match(/^gpt-(\d+(?:\.\d+)?)-luna$/i);
+      return m ? { id, ver: m[1] } : null;
+    })
+    .filter((x): x is { id: string; ver: string } => x !== null)
+    .sort((a, b) => compareVersionsDesc(a.ver, b.ver));
+  return matches[0]?.id || fallback;
+}
+
+/**
+ * Resolve o modelo da tarefa consultando a lista de modelos da OpenAI (cache 12h)
+ * para usar automaticamente a versão mais recente da família (luna / gpt-image).
+ * Variáveis AI_MODEL_<TAREFA> têm prioridade; em caso de falha, usa DEFAULT_MODELS.
+ */
+export async function resolveModelFor(
+  task: AiTask,
+  options?: { apiKey?: string; discover?: boolean }
+): Promise<string> {
+  const especifico = process.env[`AI_MODEL_${task.toUpperCase()}`]?.trim();
+  if (especifico) return especifico;
+  const apiKey = options?.apiKey ?? process.env.OPENAI_API_KEY;
+  if (task === "transcription" || !apiKey) return DEFAULT_MODELS[task];
+  if (process.env.NODE_TEST_CONTEXT && !options?.discover) return DEFAULT_MODELS[task];
+
+  const agora = Date.now();
+  if (_discoveryCache.ids && agora - _discoveryCache.at < MODEL_DISCOVERY_TTL_MS) {
+    return pickLatestFromList(task, _discoveryCache.ids);
+  }
+
+  try {
+    const r = await fetch("https://api.openai.com/v1/models", {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!r.ok) return DEFAULT_MODELS[task];
+    const data = (await r.json()) as { data?: Array<{ id?: string }> };
+    const ids = Array.isArray(data?.data)
+      ? data.data.map((m) => m?.id).filter((id): id is string => Boolean(id))
+      : [];
+    if (!ids.length) return DEFAULT_MODELS[task];
+    _discoveryCache = { at: agora, ids };
+    return pickLatestFromList(task, ids);
+  } catch {
+    return DEFAULT_MODELS[task];
+  }
 }
 
 /** Qualidade de imagem padrão (flare medium ≈ US$ 0,011 por imagem 1024x1536). */

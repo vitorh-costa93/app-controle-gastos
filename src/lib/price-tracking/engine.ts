@@ -8,7 +8,7 @@ import {
   VerifiedStayQuote,
 } from "@/types/db";
 import { getOpenAIClient, isAiConfigured } from "@/lib/ai/openai";
-import { modelFor } from "@/lib/ai/models";
+import { resolveModelFor } from "@/lib/ai/models";
 import { logAiUsage } from "@/lib/ai/usage";
 import {
   CONSOLE_ACCESSORY_EXCLUSIONS,
@@ -337,7 +337,7 @@ export async function trackProductPrices(
 
   if (isAiConfigured()) {
     const openai = getOpenAIClient();
-    const model = modelFor("extraction");
+    const model = await resolveModelFor("extraction");
     const t0 = Date.now();
     try {
       const response = await openai.responses.create({
@@ -550,7 +550,7 @@ export async function auditOfferFromScreenshot(
     return { ok: false, error: "OPENAI_API_KEY não configurada para leitura de imagem." };
   }
   const openai = getOpenAIClient();
-  const model = modelFor("vision");
+  const model = await resolveModelFor("vision");
   const query = (rawConfig?.query || description || "PlayStation 5").trim();
   const config: ProductTrackerConfig = {
     query,
@@ -815,7 +815,7 @@ export async function trackTravelPrices(
 
   if (isAiConfigured()) {
     const openai = getOpenAIClient();
-    const model = modelFor("extraction");
+    const model = await resolveModelFor("extraction");
     const t0 = Date.now();
     try {
       const response = await openai.responses.create({

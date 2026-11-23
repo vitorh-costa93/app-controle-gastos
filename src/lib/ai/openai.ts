@@ -1,6 +1,6 @@
 import "server-only";
 import OpenAI from "openai";
-import { modelFor, imageQuality, estimateCostUsd, type AiTask } from "./models";
+import { resolveModelFor, imageQuality, estimateCostUsd, type AiTask } from "./models";
 import { logAiUsage } from "./usage";
 
 let client: OpenAI | null = null;
@@ -18,7 +18,7 @@ export function getOpenAIClient(): OpenAI {
 }
 
 // Modelos e custos vivem em ./models.ts; todo uso é registrado em ai_usage (./usage.ts).
-// Imagem: só gpt-image-2.5-flare em medium (decisão do usuário); sem fallback para outros modelos.
+// Imagem: usa resolveModelFor("image") em qualidade medium; sem fallback para outros modelos.
 
 /** chat.completions com modelo da tarefa + log de uso/custo (nunca quebra por causa do log). */
 async function chat(
@@ -26,7 +26,7 @@ async function chat(
   params: Omit<OpenAI.Chat.ChatCompletionCreateParamsNonStreaming, "model">
 ): Promise<OpenAI.Chat.ChatCompletion> {
   const openai = getOpenAIClient();
-  const model = modelFor(task);
+  const model = await resolveModelFor(task);
   const t0 = Date.now();
   try {
     const response = await openai.chat.completions.create({ ...params, model });
@@ -64,7 +64,8 @@ export async function generateSimulationImage(description: string): Promise<Gene
   const prompt = `Fotografia realista, bonita e bem iluminada representando: "${description}". Estilo foto de revista/banco de imagens, cores naturais, enquadramento horizontal, sem texto, sem letras, sem números, sem logotipos.`;
 
   const quality = imageQuality();
-  for (const model of [modelFor("image")]) {
+  const imageModel = await resolveModelFor("image");
+  for (const model of [imageModel]) {
     const t0 = Date.now();
     try {
       const response = await openai.images.generate({
@@ -243,7 +244,7 @@ export async function extractTransactionsFromImage(
 
 export async function transcribeAudio(file: File): Promise<string> {
   const openai = getOpenAIClient();
-  const model = modelFor("transcription");
+  const model = await resolveModelFor("transcription");
   const t0 = Date.now();
   try {
     const result = await openai.audio.transcriptions.create({ model, file, language: "pt" });

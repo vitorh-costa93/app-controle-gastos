@@ -3,6 +3,7 @@
 Atualizado: 23/11/2026.
 
 ## Rastreamento Inteligente de Preços na Simulação — Produtos (4 Camadas) & Viagens (Voos RAO/VCP + Resorts por Data) (23/11/2026)
+- **IA auto-atualizável (`src/lib/ai/models.ts`, `openai.ts`, `engine.ts`):** implementadas `pickLatestFromList` e `resolveModelFor` (cache 12h via `/v1/models`, escolhendo automaticamente a versão mais recente da família `gpt-*-luna` e `gpt-image-*`, espelhando `dashboard-psi`), conectadas em todas as chamadas de texto, visão, imagem e transcrição.
 - **UI Compacta e Cron Black Friday 2h (23/11/2026):**
   - `PriceTrackingSection.tsx`, `CashVsInstallmentSection.tsx` e `SimulacaoPageClient.tsx`: visão compacta em página única (resumo de preço + veredito + saldos líquidos + gráfico principal visíveis; detalhes de lojas/viagem/histórico, tabela mês a mês, IA, ponto de equilíbrio, CDI e evolução mensal recolhidos sob demanda), preservando multi-seleção de cenários.
   - `price-tracking.ts` + banco `meudinheiro.simulations`: `refreshMultipleSimulationsTracking` contempla todas as simulações ativas `product`/`travel` com `auto_track = true` usando `Promise.allSettled` (incluindo `Ar Condicionado - Equipamento`).

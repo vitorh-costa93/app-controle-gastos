@@ -457,12 +457,12 @@ export function SimulationFormFields({
               <span className="block text-xs font-semibold text-(--color-text-primary)">
                 {value.category === "travel"
                   ? "Rastrear menor Voo (RAO/VCP) + Estadia por data automaticamente"
-                  : "Rastrear menor preço real automaticamente (4 camadas Anti-Falso-Positivo)"}
+                  : "Rastrear menor preço automaticamente"}
               </span>
               <span className="mt-0.5 block text-[11px] leading-snug text-(--color-text-secondary)">
                 {value.category === "travel"
                   ? "Busca tarifas aéreas e diárias do resort para as datas escolhidas (incluindo Black Friday) e preenche o valor à vista e parcelado."
-                  : "Verifica item 100% novo, em estoque, loja oficial e traz o menor preço à vista (PIX) e parcelado da mesma loja sem você precisar chutar valor."}
+                  : "Busca o menor preço à vista (PIX) e parcelado na mesma loja automaticamente."}
               </span>
             </div>
           </div>
@@ -492,7 +492,7 @@ export function SimulationFormFields({
               {isSearching
                 ? value.category === "travel"
                   ? "Consultando voos (RAO/VCP) e tarifas do resort nas datas..."
-                  : "Auditando lojas oficiais nas 4 camadas anti-falso-positivo..."
+                  : "Buscando menores preços..."
                 : value.category === "travel"
                   ? "Buscar melhor Voo + Estadia agora"
                   : "Buscar menor preço à vista e parcelado agora"}
@@ -507,10 +507,7 @@ export function SimulationFormFields({
                     <CheckCircle2 size={14} className="shrink-0" />
                     {value.category === "travel"
                       ? "Melhor combinação Voo + Resort encontrada"
-                      : `Menor preço validado: ${value.bestOfferMeta.storeOrProvider}`}
-                  </span>
-                  <span className="rounded-full bg-(--color-positive-soft) px-2 py-0.5 text-[10px] font-semibold text-(--color-positive)">
-                    4 Camadas OK
+                      : `Menor preço: ${value.bestOfferMeta.storeOrProvider}`}
                   </span>
                 </div>
 
@@ -554,9 +551,6 @@ export function SimulationFormFields({
                   </div>
                 )}
 
-                <p className="text-[11px] leading-snug text-(--color-text-secondary)">
-                  {value.bestOfferMeta.verificationSummary}
-                </p>
               </div>
             )}
 

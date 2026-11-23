@@ -4,12 +4,10 @@ import { useState, useTransition } from "react";
 import {
   Bell,
   Camera,
-  CheckCircle2,
   ExternalLink,
   Hotel,
   Plane,
   RefreshCw,
-  ShieldAlert,
   ShieldCheck,
   ShoppingBag,
   TrendingDown,
@@ -196,11 +194,10 @@ export function PriceTrackingSection({
             <ShieldCheck size={18} className="shrink-0 text-(--color-primary)" />
             <div>
               <h3 className="text-sm font-semibold text-(--color-text-primary)">
-                Rastreamento de Preços em Tempo Real · Pipeline 4 Camadas Anti-Falso-Positivo
+                Rastreamento de preços
               </h3>
               <p className="text-xs text-(--color-text-secondary)">
-                Menor preço à vista e parcelado na mesma loja para produtos · Voos (RAO/VCP) + Resorts por data para
-                viagens
+                Melhores ofertas à vista e parcelado para suas simulações.
               </p>
             </div>
           </div>
@@ -221,7 +218,7 @@ export function PriceTrackingSection({
               className="gap-1.5 px-3 py-1.5 text-xs"
             >
               <RefreshCw size={13} className={cn(isRefreshingAll && "animate-spin")} />
-              {isRefreshingAll ? "Auditando preços agora..." : "Atualizar preços agora"}
+              {isRefreshingAll ? "Atualizando preços..." : "Atualizar preços agora"}
             </Button>
           </div>
         </div>
@@ -291,18 +288,13 @@ export function PriceTrackingSection({
                       <div className="flex flex-wrap items-center gap-2">
                         <h4 className="text-[15px] font-semibold">{sim.description}</h4>
                         <span className="rounded-full bg-(--color-primary-soft) px-2.5 py-0.5 text-[11px] font-semibold text-(--color-primary)">
-                          {isTravel ? "Viagem (Voo + Estadia por Data)" : "Produto · 4 Camadas Anti-Falso-Positivo"}
+                          {isTravel ? "Viagem" : "Produto"}
                         </span>
-                        {meta && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-(--color-positive-soft) px-2.5 py-0.5 text-[11px] font-semibold text-(--color-positive)">
-                            <CheckCircle2 size={11} /> Auditado
-                          </span>
-                        )}
                       </div>
                       <p className="mt-0.5 text-xs text-(--color-text-secondary)">
                         {meta
-                          ? `Fonte vencedora: ${meta.storeOrProvider} · Última checagem: ${new Date(meta.checkedAt).toLocaleString("pt-BR")}`
-                          : "Clique em 'Rastrear agora' para buscar o menor preço real à vista e parcelado sem condição oculta."}
+                          ? `Melhor oferta: ${meta.storeOrProvider} · Atualizado em ${new Date(meta.checkedAt).toLocaleString("pt-BR")}`
+                          : "Clique em 'Rastrear agora' para buscar o menor preço à vista e parcelado."}
                       </p>
                     </div>
                   </div>
@@ -355,10 +347,10 @@ export function PriceTrackingSection({
                       <table className="w-full border-collapse text-xs tabular-nums">
                         <thead>
                           <tr className="border-b border-(--color-border) bg-black/[0.025] text-[11px] font-semibold text-(--color-text-secondary)">
-                            <th className="px-3 py-2 text-left">Loja Oficial (Camada 4)</th>
-                            <th className="px-3 py-2 text-left">Modelo / Condição (Camadas 1 e 2)</th>
-                            <th className="px-3 py-2 text-right">Menor À Vista (PIX)</th>
-                            <th className="px-3 py-2 text-right">Menor Parcelado (Mesma Loja)</th>
+                            <th className="px-3 py-2 text-left">Loja</th>
+                            <th className="px-3 py-2 text-left">Produto</th>
+                            <th className="px-3 py-2 text-right">À vista (PIX)</th>
+                            <th className="px-3 py-2 text-right">Parcelado</th>
                             <th className="px-3 py-2 text-right">Ação</th>
                           </tr>
                         </thead>
@@ -379,13 +371,6 @@ export function PriceTrackingSection({
                                 <td className="px-3 py-2.5">
                                   <div className="line-clamp-1 font-medium text-(--color-text-primary)">
                                     {offer.title}
-                                  </div>
-                                  <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-(--color-positive)">
-                                    <span>✓ 100% Novo</span>
-                                    <span>·</span>
-                                    <span>✓ Em estoque</span>
-                                    <span>·</span>
-                                    <span>✓ Sem condição de cartão da loja</span>
                                   </div>
                                 </td>
                                 <td className="whitespace-nowrap px-3 py-2.5 text-right font-bold text-(--color-positive)">
@@ -431,17 +416,6 @@ export function PriceTrackingSection({
                         </tbody>
                       </table>
                     </div>
-
-                    {(meta.rejectedCount ?? 0) > 0 && (
-                      <div className="flex items-start gap-2 rounded-(--radius-md) bg-black/[0.03] px-3 py-2 text-[11px] text-(--color-text-secondary)">
-                        <ShieldAlert size={14} className="mt-0.5 shrink-0 text-(--color-warning)" />
-                        <div>
-                          <b>Filtro Anti-Falso-Positivo barrou {meta.rejectedCount} anúncios suspeitos/condicionados:</b>{" "}
-                          {meta.rejectedReasons?.join(" · ") ||
-                            "Itens usados/reembalados, vendedores 3P fora da whitelist ou preços exclusivos de cartão próprio da loja foram descartados."}
-                        </div>
-                      </div>
-                    )}
                   </div>
                 )}
 

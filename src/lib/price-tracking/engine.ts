@@ -336,34 +336,38 @@ export async function trackProductPrices(
     const model = modelFor("extraction");
     const t0 = Date.now();
     try {
-      const response = await openai.chat.completions.create({
+      const response = await openai.responses.create({
         model,
-        messages: [
+        tools: [
           {
-            role: "system",
-            content: `Você é o Auditor de Preços Anti-Falso-Positivo de 4 Camadas do aplicativo MeuDinheiro (Brasil).
-Sua missão é encontrar e validar ofertas REAIS no mercado brasileiro para o produto solicitado, aplicando 4 camadas rigorosas:
-1. CAMADA 1 (Identidade Exata): Tem que ser exatamente o produto principal ("${query}"). NUNCA inclua acessórios, controles avulsos, jogos, capas, suportes ou peças.
-2. CAMADA 2 (100% Novo e Em Estoque): Rejeite imediatamente usados, seminovos, reembalados, open box, vitrine, outlet ou sem estoque.
-3. CAMADA 3 (Mesma Loja — Preço À Vista Universal + Preço Parcelado Universal Sem Condição):
-   - Para CADA loja aprovada, informe o menor valor à vista universal (PIX ou boleto disponível para qualquer pessoa) E o menor valor total parcelado no cartão de crédito comum (10x ou 12x, sem exigir cartão próprio da loja como Cartão Magalu/Casas Bahia/Vuon e sem abater cashback futuro).
-4. CAMADA 4 (Vendedor Oficial 1P): Apenas lojas oficiais confiáveis no Brasil (KaBuM!, Amazon.com.br 1P, Magazine Luiza 1P, Mercado Livre Loja Oficial, Fast Shop, Carrefour 1P, Sony Store).
-- Para a URL de cada oferta: se houver link direto verificado nos snippets, use-o; caso contrário, forneça a URL direta de busca oficial daquela loja para o modelo exato (ex.: https://www.kabum.com.br/busca/... ou https://www.amazon.com.br/s?k=...).
-- Retorne entre 3 e 5 lojas oficiais comparadas para o usuário ver a disputa de preços.`,
-          },
-          {
-            role: "user",
-            content: `Produto buscado: "${query}"
-Piso mínimo de sanidade: R$ ${(config.minSanityPriceCents! / 100).toFixed(2)}
-Data da verificação: ${new Date().toISOString().slice(0, 10)} (Semana de Black Friday)
-
-Dados coletados da web e APIs:
-${snippets.join("\n\n").slice(0, 14000)}`,
+            type: "web_search_preview",
+            user_location: {
+              type: "approximate",
+              country: "BR",
+              region: "SP",
+              city: "Araraquara",
+            },
           },
         ],
-        response_format: {
-          type: "json_schema",
-          json_schema: { name: "product_price_audit", strict: true, schema: PRODUCT_VERIFICATION_SCHEMA },
+        instructions: `Você é o Auditor de Preços Anti-Falso-Positivo de 4 Camadas do aplicativo MeuDinheiro (Brasil).
+Use a busca web em tempo real para encontrar e validar ofertas REAIS e COMPRÁVEIS HOJE no mercado brasileiro para o produto solicitado, aplicando 4 camadas rigorosas:
+1. CAMADA 1 (Identidade Exata): Tem que ser exatamente o produto principal ("${query}"). NUNCA inclua acessórios, controles avulsos, jogos, capas, suportes ou peças.
+2. CAMADA 2 (100% Novo e Em Estoque): Rejeite imediatamente usados, seminovos, reembalados, open box, vitrine, outlet ou páginas esgotadas/indisponíveis.
+3. CAMADA 3 (Mesma Loja — Preço À Vista Universal + Preço Parcelado Universal Sem Condição):
+   - Para CADA loja aprovada, informe o menor valor à vista universal (PIX ou boleto disponível para qualquer pessoa) E o menor valor total parcelado no cartão de crédito comum (10x ou 12x, sem exigir cartão próprio da loja como Cartão Magalu/Casas Bahia/Vuon e sem abater cashback futuro). Se a loja só exibir um preço único (à vista = parcelado sem juros), repita o mesmo valor em cash_price_brl e installment_total_brl.
+4. CAMADA 4 (Vendedor Oficial 1P): Apenas lojas oficiais confiáveis no Brasil (KaBuM!, Amazon.com.br 1P, Magazine Luiza 1P, Mercado Livre Loja Oficial, Fast Shop, Carrefour 1P, Sony Store).
+- Busque em múltiplas lojas oficiais (ex.: KaBuM!, Amazon Brasil, Mercado Livre Loja Oficial, Magalu, Fast Shop) e retorne todas as ofertas reais que passarem nas 4 camadas, com a URL real da oferta verificada e quantos anúncios foram rejeitados (e o motivo) durante a sua busca.`,
+        input: `Busque na web agora ofertas reais no Brasil para: "${query}"
+Piso mínimo de sanidade: R$ ${(config.minSanityPriceCents! / 100).toFixed(2)}
+Data da verificação: ${new Date().toISOString().slice(0, 10)} (Semana de Black Friday)
+${snippets.length > 0 ? `\nDados adicionais coletados:\n${snippets.join("\n\n").slice(0, 8000)}` : ""}`,
+        text: {
+          format: {
+            type: "json_schema",
+            name: "product_price_audit",
+            strict: true,
+            schema: PRODUCT_VERIFICATION_SCHEMA,
+          },
         },
       });
 
@@ -372,13 +376,13 @@ ${snippets.join("\n\n").slice(0, 14000)}`,
         task: "extraction",
         model,
         ok: true,
-        inputTokens: u?.prompt_tokens,
-        cachedTokens: u?.prompt_tokens_details?.cached_tokens,
-        outputTokens: u?.completion_tokens,
+        inputTokens: u?.input_tokens,
+        cachedTokens: u?.input_tokens_details?.cached_tokens,
+        outputTokens: u?.output_tokens,
         durationMs: Date.now() - t0,
       });
 
-      const raw = response.choices[0]?.message?.content;
+      const raw = response.output_text;
       if (raw) {
         const parsed = JSON.parse(raw) as {
           verification_summary: string;
@@ -444,6 +448,7 @@ ${snippets.join("\n\n").slice(0, 14000)}`,
 
   // Fallback determinístico seguro caso todas as requisições externas falhem
   if (approvedOffers.length === 0) {
+    verificationSummary = "";
     const encoded = encodeURIComponent(query);
     const isPs5 = query.toLocaleLowerCase("pt-BR").includes("playstation 5") || query.toLocaleLowerCase("pt-BR").includes("ps5");
     const baseCash = isPs5 ? 334900 : 250000;
@@ -654,39 +659,43 @@ export async function trackTravelPrices(
     const model = modelFor("extraction");
     const t0 = Date.now();
     try {
-      const response = await openai.chat.completions.create({
+      const response = await openai.responses.create({
         model,
-        messages: [
+        tools: [
           {
-            role: "system",
-            content: `Você é o Motor de Cotação e Auditoria de Viagens (Voos Multi-Origem + Resorts/Hotéis por Data) do MeuDinheiro.
-O usuário mora em Araraquara-SP e quer rastrear o custo real de uma viagem composta por:
+            type: "web_search_preview",
+            user_location: {
+              type: "approximate",
+              country: "BR",
+              region: "SP",
+              city: "Araraquara",
+            },
+          },
+        ],
+        instructions: `Você é o Motor de Cotação e Auditoria de Viagens (Voos Multi-Origem + Resorts/Hotéis por Data) do MeuDinheiro.
+Use a busca web em tempo real para pesquisar as tarifas atuais e promoções de Black Friday dos componentes da viagem:
 1) PASSAGENS AÉREAS (Ida em ${outboundDate} e Volta em ${returnDate}, para ${adults} adultos, taxas incluídas):
    - Compare os aeroportos de origem solicitados (${originAirports.join(", ")}) rumo ao aeroporto ${destCode} (${destLabel}).
    - Ribeirão Preto (RAO) normalmente opera com 1 escala rápida (via VCP, CGH ou CNF pela Azul/Latam/Gol).
    - Campinas / Viracopos (VCP) é hub da Azul e opera voos diretos ou com 1 conexão curta para o Nordeste/Sul.
-   - Calcule o preço total de IDA E VOLTA para TODOS os ${adults} passageiros somados, de acordo com a sazonalidade exata da data (${outboundDate} a ${returnDate}).
+   - Informe o preço total de IDA E VOLTA em BRL para TODOS os ${adults} passageiros somados (sempre > 0).
 2) HOSPEDAGEM / RESORT ("${accommodationName}" para ${nights} noites, Check-in ${outboundDate} e Check-out ${returnDate}, para ${adults} adultos):
-   - Calcule a tarifa total das ${nights} diárias para o casal de acordo com a categoria real do resort/hotel (ex.: Japaratinga Lounge Resort e Salinas Maragogi são resorts All Inclusive Premium em Alagoas; considere tarifas reais de site oficial/Omnibees para a temporada da data informada e descontos de Black Friday quando aplicável).
-   - Traga o menor valor à vista (PIX/transferência no site oficial) e o menor valor parcelado (em até 10x ou 12x no cartão comum sem exigir clube de férias/timeshare).
-   - Rejeite ofertas de multipropriedade/cotas imobiliárias (Gav/ilhas/timeshare) ou quartos sem o regime padrão do resort.`,
-          },
-          {
-            role: "user",
-            content: `Destino / Aeroporto: ${destCode} (${destLabel})
+   - Busque na web as tarifas reais de diárias de "${accommodationName}" (site oficial do resort, Booking, Decolar, Melhores Destinos / promoções Black Friday do resort) e calcule o valor total das ${nights} diárias para o casal (${adults} adultos) nas datas informadas (sempre > 0; NUNCA retorne 0).
+   - Traga o menor valor total à vista (PIX/transferência no site oficial) e o menor valor total parcelado (em até 10x ou 12x no cartão comum sem exigir clube de férias/timeshare).`,
+        input: `Busque na web agora cotações para esta viagem:
+Destino / Aeroporto: ${destCode} (${destLabel})
 Estadia / Resort: "${accommodationName}"
 Check-in / Ida: ${outboundDate}
 Check-out / Volta: ${returnDate} (${nights} noites)
 Passageiros / Hóspedes: ${adults} adultos
-Aeroportos de saída monitorados: ${originAirports.join(", ")} (Aceita escala: ${allowStops ? "Sim" : "Somente voo direto"})
-
-Snippets coletados da web:
-${snippets.join("\n\n").slice(0, 12000)}`,
+Aeroportos de saída monitorados: ${originAirports.join(", ")} (Aceita escala: ${allowStops ? "Sim" : "Somente voo direto"})`,
+        text: {
+          format: {
+            type: "json_schema",
+            name: "travel_price_audit",
+            strict: true,
+            schema: TRAVEL_VERIFICATION_SCHEMA,
           },
-        ],
-        response_format: {
-          type: "json_schema",
-          json_schema: { name: "travel_price_audit", strict: true, schema: TRAVEL_VERIFICATION_SCHEMA },
         },
       });
 
@@ -695,13 +704,13 @@ ${snippets.join("\n\n").slice(0, 12000)}`,
         task: "extraction",
         model,
         ok: true,
-        inputTokens: u?.prompt_tokens,
-        cachedTokens: u?.prompt_tokens_details?.cached_tokens,
-        outputTokens: u?.completion_tokens,
+        inputTokens: u?.input_tokens,
+        cachedTokens: u?.input_tokens_details?.cached_tokens,
+        outputTokens: u?.output_tokens,
         durationMs: Date.now() - t0,
       });
 
-      const raw = response.choices[0]?.message?.content;
+      const raw = response.output_text;
       if (raw) {
         const parsed = JSON.parse(raw) as {
           verification_summary: string;
@@ -736,25 +745,27 @@ ${snippets.join("\n\n").slice(0, 12000)}`,
         rejectedCount = parsed.rejected_count ?? 0;
         rejectedReasons = parsed.rejected_reasons ?? [];
 
-        flightQuotes = (parsed.flight_quotes ?? []).map((fq) => {
-          const originCode = fq.origin_airport.toUpperCase().trim();
-          const originMeta = ORIGIN_AIRPORTS.find((o) => o.code === originCode);
-          return {
-            originAirport: originCode,
-            destinationAirport: destCode,
-            airline: fq.airline,
-            stopsCount: fq.stops_count,
-            durationSummary: fq.duration_summary,
-            cashTotalCents: Math.round(fq.cash_total_brl * 100),
-            installmentTotalCents: Math.round(Math.max(fq.installment_total_brl, fq.cash_total_brl) * 100),
-            installments: Math.max(1, Math.min(12, fq.installments || 6)),
-            groundTransferCents: originMeta?.estimatedGroundCostCents ?? 20000,
-            bookingUrl: buildGoogleFlightsUrl(originCode, destCode, outboundDate, returnDate),
-            notes: fq.notes,
-          };
-        });
+        flightQuotes = (parsed.flight_quotes ?? [])
+          .filter((fq) => fq.cash_total_brl >= 400)
+          .map((fq) => {
+            const originCode = fq.origin_airport.toUpperCase().trim();
+            const originMeta = ORIGIN_AIRPORTS.find((o) => o.code === originCode);
+            return {
+              originAirport: originCode,
+              destinationAirport: destCode,
+              airline: fq.airline,
+              stopsCount: fq.stops_count,
+              durationSummary: fq.duration_summary,
+              cashTotalCents: Math.round(fq.cash_total_brl * 100),
+              installmentTotalCents: Math.round(Math.max(fq.installment_total_brl, fq.cash_total_brl) * 100),
+              installments: Math.max(1, Math.min(12, fq.installments || 6)),
+              groundTransferCents: originMeta?.estimatedGroundCostCents ?? 20000,
+              bookingUrl: buildGoogleFlightsUrl(originCode, destCode, outboundDate, returnDate),
+              notes: fq.notes,
+            };
+          });
 
-        if (parsed.stay_quote) {
+        if (parsed.stay_quote && parsed.stay_quote.cash_total_brl >= 500) {
           const sq = parsed.stay_quote;
           stayQuote = {
             accommodationName: sq.accommodation_name || accommodationName,
@@ -805,6 +816,7 @@ ${snippets.join("\n\n").slice(0, 12000)}`,
   }
 
   if (!stayQuote) {
+    verificationSummary = "";
     const lowerAcc = accommodationName.toLocaleLowerCase("pt-BR");
     const isLuxuryAllInclusive =
       lowerAcc.includes("japaratinga") || lowerAcc.includes("salinas") || lowerAcc.includes("all inclusive");

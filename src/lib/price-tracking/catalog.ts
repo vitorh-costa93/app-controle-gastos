@@ -151,7 +151,7 @@ export function buildDefaultProductTrackerConfig(description: string): ProductTr
   const lower = description.toLocaleLowerCase("pt-BR");
   const isPs5 = lower.includes("playstation 5") || lower.includes("ps5");
   return {
-    query: description.trim() || "PlayStation 5 Slim 1TB",
+    query: description.trim() || "PlayStation 5",
     mustInclude: isPs5 ? ["playstation 5", "ps5"] : [description.trim().split(" ")[0] ?? ""],
     mustExclude: isPs5
       ? [...FORBIDDEN_CONDITION_TERMS, ...CONSOLE_ACCESSORY_EXCLUSIONS]

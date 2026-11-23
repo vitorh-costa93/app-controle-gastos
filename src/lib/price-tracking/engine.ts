@@ -303,7 +303,7 @@ export async function trackProductPrices(
   description: string,
   rawConfig?: Partial<ProductTrackerConfig> | null
 ): Promise<BestOfferMeta> {
-  const query = (rawConfig?.query || description || "PlayStation 5 Slim 1TB").trim();
+  const query = (rawConfig?.query || description || "PlayStation 5").trim();
   const config: ProductTrackerConfig = {
     query,
     mustInclude: rawConfig?.mustInclude ?? [],
@@ -339,7 +339,7 @@ export async function trackProductPrices(
         tools: [
           {
             type: "web_search_preview",
-            search_context_size: "low",
+            search_context_size: "medium",
             user_location: {
               type: "approximate",
               country: "BR",
@@ -350,12 +350,16 @@ export async function trackProductPrices(
         ],
         instructions: `Você é o Auditor de Preços Anti-Falso-Positivo de 4 Camadas do aplicativo MeuDinheiro (Brasil).
 Use a busca web em tempo real para encontrar e validar ofertas REAIS e COMPRÁVEIS HOJE no mercado brasileiro para o produto solicitado, aplicando 4 camadas rigorosas:
-1. CAMADA 1 (Identidade Exata): Tem que ser exatamente o produto principal ("${query}"). NUNCA inclua acessórios, controles avulsos, jogos, capas, suportes ou peças.
+1. CAMADA 1 (Identidade Exata & Variantes Aceitas):
+   - Tem que ser o produto principal ("${query}"). NUNCA inclua acessórios, controles avulsos, jogos, capas, suportes ou peças.
+   - IMPORTANTE SOBRE VARIANTES: Se o usuário buscou apenas "${query}" sem exigir explicitamente "1TB" ou "Com Leitor", NÃO rejeite versões de 825GB ou Edição Digital! Pelo contrário: inclua tanto a Edição Digital (825GB ou 1TB, ex.: Sony PlayStation 5 Edição Digital 825GB 1 Controle Branco na Amazon dp/B0GWNKJDCZ e na KaBuM!) quanto a versão Com Leitor, pois o objetivo é encontrar o MENOR preço real disponível hoje para o console novo!
 2. CAMADA 2 (100% Novo e Em Estoque): Rejeite imediatamente usados, seminovos, reembalados, open box, vitrine, outlet ou páginas esgotadas/indisponíveis.
 3. CAMADA 3 (Mesma Loja — Preço À Vista Universal + Preço Parcelado Universal Sem Condição):
-   - Para CADA loja aprovada, informe o menor valor à vista universal (PIX ou boleto disponível para qualquer pessoa) E o menor valor total parcelado no cartão de crédito comum (10x ou 12x, sem exigir cartão próprio da loja como Cartão Magalu/Casas Bahia/Vuon e sem abater cashback futuro). Se a loja só exibir um preço único (à vista = parcelado sem juros), repita o mesmo valor em cash_price_brl e installment_total_brl.
-4. CAMADA 4 (Vendedor Oficial 1P): Apenas lojas oficiais confiáveis no Brasil (KaBuM!, Amazon.com.br 1P, Magazine Luiza 1P, Mercado Livre Loja Oficial, Fast Shop, Carrefour 1P, Sony Store).
-- Busque em múltiplas lojas oficiais (ex.: KaBuM!, Amazon Brasil, Mercado Livre Loja Oficial, Magalu, Fast Shop) e retorne todas as ofertas reais que passarem nas 4 camadas, com a URL real da oferta verificada e quantos anúncios foram rejeitados (e o motivo) durante a sua busca.`,
+   - Para CADA loja aprovada, informe o menor valor à vista universal (PIX ou NuPay débito disponível para qualquer cliente) E o menor valor total parcelado no cartão de crédito comum (10x ou 12x sem juros, sem exigir cartão próprio de loja como Cartão Magalu/Casas Bahia/Vuon e sem abater cashback futuro).
+   - Atenção na Amazon.com.br: anúncios oficiais do PlayStation 5 (como o Sony PlayStation 5 Edição Digital 825GB 1 Controle Branco, Escolha da Amazon) oferecem 5% off à vista no Pix/NuPay e parcelamento em até 12x sem juros (ex.: R$ 4.047,00 à vista no Pix e 12x de R$ 355,00 = R$ 4.260,00 parcelado, ou o valor vigente na página). Sempre verifique a Amazon.com.br, KaBuM!, Mercado Livre Loja Oficial PlayStation e Magalu!
+4. CAMADA 4 (Vendedor Oficial 1P ou Loja Oficial Homologada):
+   - Aprove ofertas vendidas pela própria loja (Amazon.com.br, KaBuM!, Magalu, Fast Shop, Carrefour) OU vendidas por uma loja oficial homologada dentro da plataforma (ex.: Loja Oficial PlayStation no Mercado Livre, ou vendido por KaBuM!/Sony e enviado pela Amazon.com.br). Rejeite apenas vendedores terceiros desconhecidos sem selo oficial.
+- Retorne todas as ofertas aprovadas (entre 2 e 5 lojas oficiais) ordenadas do menor para o maior preço à vista.`,
         input: `Busque na web agora ofertas reais no Brasil para: "${query}"
 Piso mínimo de sanidade: R$ ${(config.minSanityPriceCents! / 100).toFixed(2)}
 Data da verificação: ${new Date().toISOString().slice(0, 10)} (Semana de Black Friday)

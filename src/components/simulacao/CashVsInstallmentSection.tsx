@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Check, Scale, Sparkles, TriangleAlert } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Scale, Sparkles, TriangleAlert } from "lucide-react";
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { MonthSummary, Simulation } from "@/types/domain";
 import { Card } from "@/components/ui/Card";
@@ -47,6 +47,7 @@ export function CashVsInstallmentSection({
   params: YieldParams;
   base: BaseBudget;
 }) {
+  const [showDetails, setShowDetails] = useState(false);
   const analysis = useMemo(() => analyzeSimulation(simulations, params, base), [simulations, params, base]);
 
   if (simulations.length === 0) return null;
@@ -79,8 +80,15 @@ export function CashVsInstallmentSection({
   return (
     <>
       <HeadlineCard simulation={combined} count={simulations.length} input={input} result={result} startMonth={startMonth} />
-      <ImpactCard simulation={combined} input={input} result={result} startMonth={startMonth} />
-      {result.installment && (
+      <ImpactCard
+        simulation={combined}
+        input={input}
+        result={result}
+        startMonth={startMonth}
+        showDetails={showDetails}
+        onToggleDetails={() => setShowDetails((v) => !v)}
+      />
+      {showDetails && result.installment && (
         <>
           <AiAnalysisCard simulation={combined} input={input} />
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
@@ -246,11 +254,15 @@ function ImpactCard({
   input,
   result,
   startMonth,
+  showDetails,
+  onToggleDetails,
 }: {
   simulation: Simulation;
   input: CashVsInstallmentInput;
   result: CashVsInstallmentResult;
   startMonth: string;
+  showDetails: boolean;
+  onToggleDetails: () => void;
 }) {
   const inst = result.installment;
   const last = result.monthsHorizon;
@@ -272,31 +284,41 @@ function ImpactCard({
         subtitle={`Saldo acumulado de ${formatCurrencyBRL(input.openingBalanceCents)} no fim de ${formatMonthLabel(addMonths(startMonth, -1))} (o da Análise) mais as sobras de cada mês, aplicado na Caixinha até ${formatMonthLabel(addMonths(startMonth, last))}`}
         badge={`${input.percentOfCdi}% do CDI · IR já descontado`}
       />
-      <div className="space-y-5 p-5">
-        <div className={cn("grid grid-cols-1 gap-3", inst ? "md:grid-cols-3" : "md:grid-cols-2")}>
-          <ScenarioCard
-            color={COLORS.none}
-            title="Não comprar"
-            hint="Referência: as sobras se somam ao saldo e rendem."
-            scenario={result.none}
-          />
-          <ScenarioCard
-            color={COLORS.cash}
-            title="Comprar à vista"
-            hint={`Desconta ${formatCurrencyBRL(input.cashPriceCents)} só em ${formatMonthLabel(startMonth)} e segue acumulando as sobras.`}
-            scenario={result.cash}
-            lostCents={result.cashYieldLostCents}
-            best={inst?.winner === "cash"}
-          />
+      <div className="space-y-4 p-5">
+        {/* Faixa compacta de saldos finais líquidos (visão direta) */}
+        <div className={cn("grid grid-cols-1 gap-2.5", inst ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
+          <div className="rounded-(--radius-md) border border-(--color-border) px-3.5 py-2.5">
+            <p className="flex items-center gap-1.5 text-xs text-(--color-text-secondary)">
+              <i className="inline-block h-2 w-2 rounded-full" style={{ background: COLORS.none }} />
+              Não comprar
+            </p>
+            <p className="mt-1 text-base font-bold tabular-nums">{money(result.none.finalNetCents)}</p>
+          </div>
+          <div
+            className={cn(
+              "rounded-(--radius-md) px-3.5 py-2.5",
+              inst?.winner === "cash" ? "border-2 border-(--color-positive)" : "border border-(--color-border)"
+            )}
+          >
+            <p className="flex items-center gap-1.5 text-xs text-(--color-text-secondary)">
+              <i className="inline-block h-2 w-2 rounded-full" style={{ background: COLORS.cash }} />
+              À vista
+            </p>
+            <p className="mt-1 text-base font-bold tabular-nums">{money(result.cash.finalNetCents)}</p>
+          </div>
           {inst && (
-            <ScenarioCard
-              color={COLORS.installment}
-              title={`Comprar parcelado ${simulation.installments}×`}
-              hint={`Desconta ${formatCurrencyBRL(inst.installmentCents)} por mês, de ${formatMonthLabel(addMonths(startMonth, 1))} a ${formatMonthLabel(addMonths(startMonth, last))}, e segue acumulando as sobras.`}
-              scenario={inst.scenario}
-              lostCents={inst.yieldLostCents}
-              best={inst.winner === "installment"}
-            />
+            <div
+              className={cn(
+                "rounded-(--radius-md) px-3.5 py-2.5",
+                inst.winner === "installment" ? "border-2 border-(--color-positive)" : "border border-(--color-border)"
+              )}
+            >
+              <p className="flex items-center gap-1.5 text-xs text-(--color-text-secondary)">
+                <i className="inline-block h-2 w-2 rounded-full" style={{ background: COLORS.installment }} />
+                Parcelado {simulation.installments}×
+              </p>
+              <p className="mt-1 text-base font-bold tabular-nums">{money(inst.scenario.finalNetCents)}</p>
+            </div>
           )}
         </div>
 
@@ -324,65 +346,114 @@ function ImpactCard({
           </p>
         </div>
 
-        <div className="overflow-x-auto">
-          <h4 className="mb-1 text-sm font-semibold">Mês a mês — saldo acumulado depois da sobra e da compra</h4>
-          <table className="w-full min-w-[640px] border-collapse text-[13px] tabular-nums">
-            <thead>
-              <tr className="text-[11px] font-semibold text-(--color-text-secondary)">
-                <Th left>Mês</Th>
-                <Th>Sobra do mês</Th>
-                <Th>Saída da compra</Th>
-                <Th>Não comprar</Th>
-                <Th>À vista</Th>
-                {inst && <Th>Parcelado</Th>}
-              </tr>
-            </thead>
-            <tbody>
-              {shown.map((m, idx) =>
-                m === null ? (
-                  <tr key={`gap-${idx}`}>
-                    <td colSpan={inst ? 6 : 5} className="border-b border-(--color-border)/60 px-2.5 py-2 text-(--color-text-tertiary)">
-                      … {rows.length - 5} meses
-                    </td>
-                  </tr>
-                ) : (
-                  <tr key={m.i} className={m.i === last ? "font-semibold" : ""}>
-                    <Td left>
-                      {formatMonthShortWithYear(addMonths(startMonth, m.i))}
-                      {m.i === 0 ? " · compra" : inst ? ` · ${m.i}/${simulation.installments}` : ""}
-                    </Td>
-                    <Td className={m.leftover >= 0 ? "text-(--color-positive)" : "text-(--color-negative)"}>
-                      {m.leftover >= 0 ? "+ " : "− "}
-                      {formatCurrencyBRL(Math.abs(m.leftover))}
-                    </Td>
-                    <Td className="text-(--color-negative)">
-                      {m.i === 0
-                        ? `− ${formatCurrencyBRL(input.cashPriceCents)} (à vista)`
-                        : inst
-                          ? `− ${formatCurrencyBRL(installmentCents)} (parcela)`
-                          : "—"}
-                    </Td>
-                    <Td>{money(m.none)}</Td>
-                    <Td className={m.cash < 0 ? "text-(--color-negative)" : ""}>{money(m.cash)}</Td>
-                    {inst && <Td className={cn("font-semibold", (m.installment ?? 0) < 0 && "text-(--color-negative)")}>{money(m.installment ?? 0)}</Td>}
-                  </tr>
-                )
-              )}
-            </tbody>
-          </table>
+        <div className="flex justify-center pt-1">
+          <button
+            type="button"
+            onClick={onToggleDetails}
+            className="inline-flex items-center gap-1.5 rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-3.5 py-1.5 text-xs font-semibold text-(--color-text-secondary) hover:bg-black/5"
+          >
+            {showDetails ? (
+              <>
+                Ocultar análise detalhada <ChevronUp size={14} />
+              </>
+            ) : (
+              <>
+                Ver análise detalhada (tabela mês a mês, IA, ponto de equilíbrio e CDI) <ChevronDown size={14} />
+              </>
+            )}
+          </button>
         </div>
 
-        {inst && (
-          <p className="rounded-(--radius-md) bg-black/[0.04] p-3.5 text-[13px] leading-relaxed text-(--color-text-secondary)">
-            Parcelar mantém o dinheiro rendendo por mais tempo: você rende{" "}
-            <b className="text-(--color-text-primary)">{formatCurrencyBRL(Math.abs(inst.extraYieldCents))} {inst.extraYieldCents >= 0 ? "a mais" : "a menos"}</b>{" "}
-            do que pagando à vista. Mas os juros do parcelamento são{" "}
-            <b className="text-(--color-text-primary)">{formatCurrencyBRL(inst.interestCents)}</b>, então o saldo final fica{" "}
-            <b className="text-(--color-text-primary)">
-              {formatCurrencyBRL(Math.abs(inst.advantageCashCents))} {inst.advantageCashCents >= 0 ? "menor" : "maior"}
-            </b>{" "}
-            ({formatCurrencyBRL(inst.scenario.finalNetCents)} contra {formatCurrencyBRL(result.cash.finalNetCents)} no à vista).
-          </p>
+        {showDetails && (
+          <>
+            <div className={cn("grid grid-cols-1 gap-3", inst ? "md:grid-cols-3" : "md:grid-cols-2")}>
+              <ScenarioCard
+                color={COLORS.none}
+                title="Não comprar"
+                hint="Referência: as sobras se somam ao saldo e rendem."
+                scenario={result.none}
+              />
+              <ScenarioCard
+                color={COLORS.cash}
+                title="Comprar à vista"
+                hint={`Desconta ${formatCurrencyBRL(input.cashPriceCents)} só em ${formatMonthLabel(startMonth)} e segue acumulando as sobras.`}
+                scenario={result.cash}
+                lostCents={result.cashYieldLostCents}
+                best={inst?.winner === "cash"}
+              />
+              {inst && (
+                <ScenarioCard
+                  color={COLORS.installment}
+                  title={`Comprar parcelado ${simulation.installments}×`}
+                  hint={`Desconta ${formatCurrencyBRL(inst.installmentCents)} por mês, de ${formatMonthLabel(addMonths(startMonth, 1))} a ${formatMonthLabel(addMonths(startMonth, last))}, e segue acumulando as sobras.`}
+                  scenario={inst.scenario}
+                  lostCents={inst.yieldLostCents}
+                  best={inst.winner === "installment"}
+                />
+              )}
+            </div>
+
+            <div className="overflow-x-auto">
+              <h4 className="mb-1 text-sm font-semibold">Mês a mês — saldo acumulado depois da sobra e da compra</h4>
+              <table className="w-full min-w-[640px] border-collapse text-[13px] tabular-nums">
+                <thead>
+                  <tr className="text-[11px] font-semibold text-(--color-text-secondary)">
+                    <Th left>Mês</Th>
+                    <Th>Sobra do mês</Th>
+                    <Th>Saída da compra</Th>
+                    <Th>Não comprar</Th>
+                    <Th>À vista</Th>
+                    {inst && <Th>Parcelado</Th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {shown.map((m, idx) =>
+                    m === null ? (
+                      <tr key={`gap-${idx}`}>
+                        <td colSpan={inst ? 6 : 5} className="border-b border-(--color-border)/60 px-2.5 py-2 text-(--color-text-tertiary)">
+                          … {rows.length - 5} meses
+                        </td>
+                      </tr>
+                    ) : (
+                      <tr key={m.i} className={m.i === last ? "font-semibold" : ""}>
+                        <Td left>
+                          {formatMonthShortWithYear(addMonths(startMonth, m.i))}
+                          {m.i === 0 ? " · compra" : inst ? ` · ${m.i}/${simulation.installments}` : ""}
+                        </Td>
+                        <Td className={m.leftover >= 0 ? "text-(--color-positive)" : "text-(--color-negative)"}>
+                          {m.leftover >= 0 ? "+ " : "− "}
+                          {formatCurrencyBRL(Math.abs(m.leftover))}
+                        </Td>
+                        <Td className="text-(--color-negative)">
+                          {m.i === 0
+                            ? `− ${formatCurrencyBRL(input.cashPriceCents)} (à vista)`
+                            : inst
+                              ? `− ${formatCurrencyBRL(installmentCents)} (parcela)`
+                              : "—"}
+                        </Td>
+                        <Td>{money(m.none)}</Td>
+                        <Td className={m.cash < 0 ? "text-(--color-negative)" : ""}>{money(m.cash)}</Td>
+                        {inst && <Td className={cn("font-semibold", (m.installment ?? 0) < 0 && "text-(--color-negative)")}>{money(m.installment ?? 0)}</Td>}
+                      </tr>
+                    )
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {inst && (
+              <p className="rounded-(--radius-md) bg-black/[0.04] p-3.5 text-[13px] leading-relaxed text-(--color-text-secondary)">
+                Parcelar mantém o dinheiro rendendo por mais tempo: você rende{" "}
+                <b className="text-(--color-text-primary)">{formatCurrencyBRL(Math.abs(inst.extraYieldCents))} {inst.extraYieldCents >= 0 ? "a mais" : "a menos"}</b>{" "}
+                do que pagando à vista. Mas os juros do parcelamento são{" "}
+                <b className="text-(--color-text-primary)">{formatCurrencyBRL(inst.interestCents)}</b>, então o saldo final fica{" "}
+                <b className="text-(--color-text-primary)">
+                  {formatCurrencyBRL(Math.abs(inst.advantageCashCents))} {inst.advantageCashCents >= 0 ? "menor" : "maior"}
+                </b>{" "}
+                ({formatCurrencyBRL(inst.scenario.finalNetCents)} contra {formatCurrencyBRL(result.cash.finalNetCents)} no à vista).
+              </p>
+            )}
+          </>
         )}
       </div>
     </Card>

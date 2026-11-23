@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { Person } from "@/types/db";
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
-import { Sparkles } from "lucide-react";
+import { ChevronDown, ChevronUp, Sparkles } from "lucide-react";
 import { Simulation, MonthSummary, SimulationPriceAlert, SimulationPriceSnapshot } from "@/types/domain";
 import { buildScenarioComparison, summarizeScenarioImpact } from "@/lib/domain/simulation";
 import { accumulateBalance } from "@/lib/domain/finance";
@@ -60,6 +60,7 @@ export function SimulacaoPageClient({
   const [individualBalances, setIndividualBalances] = useState<Record<string, number>>({});
   const effectiveStartingBalance = personId ? { month: undefined, amountCents: individualBalances[personId] ?? 0 } : startingBalance;
   const [tab, setTab] = useState<"projection" | "compare" | "saved">("projection");
+  const [showBudgetCharts, setShowBudgetCharts] = useState(false);
   const [simulations, setSimulations] = useState(initialSimulations);
   const [archived, setArchived] = useState(initialArchived);
   const [snapshotsBySimId, setSnapshotsBySimId] = useState<Record<string, SimulationPriceSnapshot[]>>(initialSnapshotsBySimId);
@@ -238,15 +239,36 @@ export function SimulacaoPageClient({
               }
             />
             <div className="modern-simulation-impact"><CashVsInstallmentSection simulations={selectedSimulations} params={yieldParams} base={base} /></div>
-            <Card className="p-5">
-              <h2 className="modern-simulation-title">Evolução do orçamento · {combinedTitle}</h2>
-              <p className="modern-simulation-subtitle">{formatMonthLabel(horizon.from)} → {formatMonthLabel(horizon.to)}{selectedSimulations.length > 1 ? ` · ${selectedSimulations.length} compras combinadas` : ""}</p>
-              <h3 className="modern-simulation-chart-title">Saldo no final do mês</h3>
-              <LeftoverComparisonChart comparison={comparison} />
-              <h3 className="modern-simulation-chart-title">Saldo acumulado</h3>
-              <AccumulatedBalanceChart comparison={comparison} />
-            </Card>
-            {impact && <ImpactSummaryCard impact={impact} />}
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={() => setShowBudgetCharts((v) => !v)}
+                className="inline-flex items-center gap-1.5 rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-3.5 py-1.5 text-xs font-semibold text-(--color-text-secondary) hover:bg-black/5"
+              >
+                {showBudgetCharts ? (
+                  <>
+                    Ocultar evolução mensal do orçamento e impacto <ChevronUp size={14} />
+                  </>
+                ) : (
+                  <>
+                    Ver evolução mensal do orçamento e impacto <ChevronDown size={14} />
+                  </>
+                )}
+              </button>
+            </div>
+            {showBudgetCharts && (
+              <>
+                <Card className="p-5">
+                  <h2 className="modern-simulation-title">Evolução do orçamento · {combinedTitle}</h2>
+                  <p className="modern-simulation-subtitle">{formatMonthLabel(horizon.from)} → {formatMonthLabel(horizon.to)}{selectedSimulations.length > 1 ? ` · ${selectedSimulations.length} compras combinadas` : ""}</p>
+                  <h3 className="modern-simulation-chart-title">Saldo no final do mês</h3>
+                  <LeftoverComparisonChart comparison={comparison} />
+                  <h3 className="modern-simulation-chart-title">Saldo acumulado</h3>
+                  <AccumulatedBalanceChart comparison={comparison} />
+                </Card>
+                {impact && <ImpactSummaryCard impact={impact} />}
+              </>
+            )}
             {!hasCashVsInstallmentAi && (
               <Card className="flex gap-3 bg-(--color-primary-soft)/40 p-4"><Sparkles size={18} className="mt-0.5 shrink-0 text-(--color-primary)" /><div><p className="mb-1 text-sm font-semibold text-(--color-primary)">Insight da IA</p>{aiLoading ? <p className="text-sm text-(--color-text-secondary)">Analisando cenário...</p> : <p className="text-sm text-(--color-text-secondary)">{aiSummary}</p>}</div></Card>
             )}

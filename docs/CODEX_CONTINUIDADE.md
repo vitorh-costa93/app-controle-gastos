@@ -3,6 +3,10 @@
 Atualizado: 23/11/2026.
 
 ## Rastreamento Inteligente de Preços na Simulação — Produtos (4 Camadas) & Viagens (Voos RAO/VCP + Resorts por Data) (23/11/2026)
+- **UI Compacta e Cron Black Friday 2h (23/11/2026):**
+  - `PriceTrackingSection.tsx`, `CashVsInstallmentSection.tsx` e `SimulacaoPageClient.tsx`: visão compacta em página única (resumo de preço + veredito + saldos líquidos + gráfico principal visíveis; detalhes de lojas/viagem/histórico, tabela mês a mês, IA, ponto de equilíbrio, CDI e evolução mensal recolhidos sob demanda), preservando multi-seleção de cenários.
+  - `price-tracking.ts` + banco `meudinheiro.simulations`: `refreshMultipleSimulationsTracking` contempla todas as simulações ativas `product`/`travel` com `auto_track = true` usando `Promise.allSettled` (incluindo `Ar Condicionado - Equipamento`).
+  - `.github/workflows/price-tracking-black-friday.yml`: cron de 2 em 2 horas exclusivo da semana de Black Friday (até `2026-11-30`).
 - **Schema `meudinheiro` (`supabase/migrations/20261123171000_simulation_price_tracking.sql`):**
   - Colunas `category` (`'product' | 'travel'`), `auto_track`, `tracker_config`, `best_offer_meta` e `last_tracked_at` adicionadas em `meudinheiro.simulations`.
   - Criadas as tabelas `meudinheiro.simulation_price_snapshots` (histórico real de preços com separação de voo e hospedagem para viagens) e `meudinheiro.simulation_price_alerts` (alertas de queda e linha de base).

@@ -4,6 +4,8 @@ import { useState, useTransition } from "react";
 import {
   Bell,
   Camera,
+  ChevronDown,
+  ChevronUp,
   ExternalLink,
   Hotel,
   Plane,
@@ -52,12 +54,17 @@ export function PriceTrackingSection({
 }) {
   const [isRefreshingAll, startRefreshAll] = useTransition();
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
   const [alertModalOpen, setAlertModalOpen] = useState(false);
   const [notifForm, setNotifForm] = useState<NotificationChannelsConfig>(notificationConfig);
   const [notifStatus, setNotifStatus] = useState<string | null>(null);
   const [pushPermission, setPushPermission] = useState<string>(() =>
     typeof window !== "undefined" && "Notification" in window ? Notification.permission : "default"
   );
+
+  function toggleExpanded(id: string) {
+    setExpandedIds((prev) => ({ ...prev, [id]: !prev[id] }));
+  }
 
   if (simulations.length === 0) return null;
 
@@ -277,54 +284,53 @@ export function PriceTrackingSection({
               sim.description.toLocaleLowerCase("pt-BR").includes("salinas") ||
               sim.description.toLocaleLowerCase("pt-BR").includes("maceió");
 
+            const isExpanded = Boolean(expandedIds[sim.id]);
+
             return (
-              <div key={sim.id} className="space-y-4 p-5">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="flex items-center gap-2.5">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-(--color-primary-soft) text-(--color-primary)">
-                      {isTravel ? <Plane size={16} /> : <ShoppingBag size={16} />}
+              <div key={sim.id} className="space-y-3 px-5 py-3.5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-(--color-primary-soft) text-(--color-primary)">
+                      {isTravel ? <Plane size={15} /> : <ShoppingBag size={15} />}
                     </span>
-                    <div>
+                    <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h4 className="text-[15px] font-semibold">{sim.description}</h4>
-                        <span className="rounded-full bg-(--color-primary-soft) px-2.5 py-0.5 text-[11px] font-semibold text-(--color-primary)">
+                        <h4 className="text-sm font-semibold">{sim.description}</h4>
+                        <span className="rounded-full bg-(--color-primary-soft) px-2 py-0.5 text-[11px] font-semibold text-(--color-primary)">
                           {isTravel ? "Viagem" : "Produto"}
                         </span>
+                        {meta && (
+                          <span className="truncate text-xs text-(--color-text-secondary)">
+                            · {meta.storeOrProvider}
+                          </span>
+                        )}
                       </div>
-                      <p className="mt-0.5 text-xs text-(--color-text-secondary)">
-                        {meta
-                          ? `Melhor oferta: ${meta.storeOrProvider} · Atualizado em ${new Date(meta.checkedAt).toLocaleString("pt-BR")}`
-                          : "Clique em 'Rastrear agora' para buscar o menor preço à vista e parcelado."}
-                      </p>
+                      <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs tabular-nums text-(--color-text-secondary)">
+                        {sim.cashPriceCents ? (
+                          <span>
+                            À vista: <b className="text-(--color-positive)">{formatCurrencyBRL(sim.cashPriceCents)}</b>
+                          </span>
+                        ) : null}
+                        <span>
+                          Parcelado:{" "}
+                          <b className="text-(--color-text-primary)">
+                            {sim.installments}x de {formatCurrencyBRL(sim.installmentAmountCents)}
+                          </b>{" "}
+                          ({formatCurrencyBRL(sim.totalAmountCents)})
+                        </span>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2">
-                    {!isTravel && (
-                      <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-xs font-semibold text-(--color-text-primary) hover:bg-black/5">
-                        <Camera size={12} className="text-(--color-primary)" />
-                        Ler Print de Oferta
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          disabled={isRefreshingThis}
-                          onChange={(e) => {
-                            const f = e.target.files?.[0];
-                            if (f) handleUploadOfferScreenshot(sim.id, f);
-                            e.currentTarget.value = "";
-                          }}
-                        />
-                      </label>
-                    )}
+                  <div className="flex flex-wrap items-center gap-1.5">
                     {meta?.offerUrl && (
                       <a
                         href={meta.offerUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-xs font-semibold text-(--color-primary) hover:bg-(--color-primary-soft)"
+                        className="inline-flex items-center gap-1 rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-2.5 py-1 text-xs font-semibold text-(--color-primary) hover:bg-(--color-primary-soft)"
                       >
-                        Abrir oferta <ExternalLink size={12} />
+                        Abrir <ExternalLink size={11} />
                       </a>
                     )}
                     <Button
@@ -332,13 +338,55 @@ export function PriceTrackingSection({
                       variant="secondary"
                       onClick={() => handleRefreshSingle(sim.id)}
                       disabled={isRefreshingThis}
-                      className="gap-1.5 px-3 py-1.5 text-xs"
+                      className="gap-1 px-2.5 py-1 text-xs"
                     >
                       <RefreshCw size={12} className={cn(isRefreshingThis && "animate-spin")} />
-                      {isRefreshingThis ? "Consultando..." : meta ? "Recarregar preço" : "Rastrear agora"}
+                      {isRefreshingThis ? "..." : "Atualizar"}
                     </Button>
+                    <button
+                      type="button"
+                      onClick={() => toggleExpanded(sim.id)}
+                      className="inline-flex items-center gap-1 rounded-(--radius-md) px-2.5 py-1 text-xs font-semibold text-(--color-text-secondary) hover:bg-black/5"
+                    >
+                      {isExpanded ? (
+                        <>
+                          Ocultar <ChevronUp size={13} />
+                        </>
+                      ) : (
+                        <>
+                          Detalhes <ChevronDown size={13} />
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
+
+                {isExpanded && (
+                  <div className="space-y-3 border-t border-(--color-border)/60 pt-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-(--color-text-secondary)">
+                      <span>
+                        {meta
+                          ? `Última checagem: ${new Date(meta.checkedAt).toLocaleString("pt-BR")}`
+                          : "Clique em 'Atualizar' para buscar o menor preço à vista e parcelado."}
+                      </span>
+                      {!isTravel && (
+                        <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-2.5 py-1 text-xs font-semibold text-(--color-text-primary) hover:bg-black/5">
+                          <Camera size={12} className="text-(--color-primary)" />
+                          Ler Print de Oferta
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            disabled={isRefreshingThis}
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              if (f) handleUploadOfferScreenshot(sim.id, f);
+                              e.currentTarget.value = "";
+                            }}
+                          />
+                        </label>
+                      )}
+                    </div>
 
                 {/* Detalhamento se for COMPRA / PRODUTO */}
                 {!isTravel && meta?.productOffers && meta.productOffers.length > 0 && (
@@ -431,6 +479,8 @@ export function PriceTrackingSection({
 
                 {/* Gráfico de Histórico de Evolução do Preço */}
                 {history.length > 0 && <PriceHistoryChart history={history} isTravel={isTravel} />}
+                  </div>
+                )}
               </div>
             );
           })}

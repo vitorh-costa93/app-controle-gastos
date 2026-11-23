@@ -421,21 +421,21 @@ export async function refreshMultipleSimulationsTracking(
   if (simulationIds && simulationIds.length > 0) {
     query = query.in("id", simulationIds);
   } else {
-    query = query.eq("auto_track", true);
+    query = query.eq("auto_track", true).in("category", ["product", "travel"]);
   }
 
   const { data: rows } = await query;
   const updatedSimulations: Simulation[] = [];
   const newAlerts: SimulationPriceAlert[] = [];
 
-  const results = await Promise.all(
+  const settled = await Promise.allSettled(
     ((rows ?? []) as SimulationRow[]).map((r) => refreshSimulationPriceTracking(r.id))
   );
 
-  for (const res of results) {
-    if (res.ok) {
-      updatedSimulations.push(res.simulation);
-      if (res.alert) newAlerts.push(res.alert);
+  for (const item of settled) {
+    if (item.status === "fulfilled" && item.value.ok) {
+      updatedSimulations.push(item.value.simulation);
+      if (item.value.alert) newAlerts.push(item.value.alert);
     }
   }
 

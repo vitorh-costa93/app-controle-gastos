@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import {
   Bell,
+  Camera,
   CheckCircle2,
   ExternalLink,
   Hotel,
@@ -22,6 +23,7 @@ import { Modal } from "@/components/ui/Modal";
 import { FieldGroup, Input } from "@/components/ui/Field";
 import {
   NotificationChannelsConfig,
+  importOfferScreenshotToSimulation,
   markPriceAlertRead,
   refreshMultipleSimulationsTracking,
   refreshSimulationPriceTracking,
@@ -78,6 +80,31 @@ export function PriceTrackingSection({
         }
       })
       .finally(() => setRefreshingId(null));
+  }
+
+  function handleUploadOfferScreenshot(simId: string, file: File) {
+    setRefreshingId(simId);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const dataUrl = String(reader.result || "");
+        if (!dataUrl) return;
+        const res = await importOfferScreenshotToSimulation(simId, dataUrl);
+        if (!res.ok) {
+          window.alert(res.error);
+          return;
+        }
+        onSimulationUpdated(res.simulation);
+        if (res.snapshot) onSnapshotAdded(res.snapshot);
+        if (res.alert) {
+          onAlertAdded(res.alert);
+          triggerBrowserNotificationIfAllowed(res.alert.title, res.alert.message);
+        }
+      } finally {
+        setRefreshingId(null);
+      }
+    };
+    reader.readAsDataURL(file);
   }
 
   function handleRefreshAllSelected() {
@@ -280,7 +307,24 @@ export function PriceTrackingSection({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {!isTravel && (
+                      <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-xs font-semibold text-(--color-text-primary) hover:bg-black/5">
+                        <Camera size={12} className="text-(--color-primary)" />
+                        Ler Print de Oferta
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          disabled={isRefreshingThis}
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) handleUploadOfferScreenshot(sim.id, f);
+                            e.currentTarget.value = "";
+                          }}
+                        />
+                      </label>
+                    )}
                     {meta?.offerUrl && (
                       <a
                         href={meta.offerUrl}

@@ -536,6 +536,158 @@ ${snippets.length > 0 ? `\nDados adicionais coletados:\n${snippets.join("\n\n").
   };
 }
 
+/**
+ * Audita um print/screenshot de oferta (ex.: app da Amazon no celular com desconto Pix/NuPay logado)
+ * aplicando exatamente o mesmo Pipeline Anti-Falso-Positivo de 4 Camadas.
+ */
+export async function auditOfferFromScreenshot(
+  description: string,
+  imageDataUrl: string,
+  existingMeta?: BestOfferMeta | null,
+  rawConfig?: Partial<ProductTrackerConfig> | null
+): Promise<{ ok: true; meta: BestOfferMeta; extractedOffer: VerifiedProductOffer } | { ok: false; error: string }> {
+  if (!isAiConfigured()) {
+    return { ok: false, error: "OPENAI_API_KEY não configurada para leitura de imagem." };
+  }
+  const openai = getOpenAIClient();
+  const model = modelFor("vision");
+  const query = (rawConfig?.query || description || "PlayStation 5").trim();
+  const config: ProductTrackerConfig = {
+    query,
+    mustInclude: rawConfig?.mustInclude ?? [],
+    mustExclude: rawConfig?.mustExclude ?? FORBIDDEN_CONDITION_TERMS,
+    minSanityPriceCents:
+      rawConfig?.minSanityPriceCents ??
+      (query.toLocaleLowerCase("pt-BR").includes("playstation 5") || query.toLocaleLowerCase("pt-BR").includes("ps5")
+        ? 260000
+        : 5000),
+  };
+
+  const t0 = Date.now();
+  try {
+    const response = await openai.chat.completions.create({
+      model,
+      messages: [
+        {
+          role: "system",
+          content: `Você é o Auditor Visual de 4 Camadas Anti-Falso-Positivo do MeuDinheiro.
+Analise o print da tela do aplicativo/loja enviado pelo usuário para o produto "${query}":
+1. Extraia a loja (ex.: Amazon.com.br, KaBuM!, Magalu, Mercado Livre), o vendedor/selo (ex.: "Escolha da Amazon / Loja Sony"), o título exato do produto, o preço à vista (ex.: "R$ 4.047,00 — 5% off à vista no Pix e NuPay") e o valor total parcelado sem juros na mesma tela (ex.: "em até 12x de R$ 355,00 sem juros" -> 12 * 355 = R$ 4.260,00).
+2. Verifique nas 4 camadas:
+   - Camada 1: É realmente o produto principal "${query}" (e não apenas um controle ou acessório avulso)?
+   - Camada 2: É um item NOVO e disponível para compra?
+   - Camada 3: O preço à vista (Pix/NuPay/boleto) e o parcelado (cartão comum) são universais da loja?
+   - Camada 4: É uma loja oficial confiável?
+3. Gere a URL direta da loja para o produto identificado (ex.: https://www.amazon.com.br/Sony-PlayStation-Edi%C3%A7%C3%A3o-Digital-Controle/dp/B0GWNKJDCZ ou link de busca da loja).`,
+        },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: `Extraia e audite nas 4 camadas a oferta deste print para "${query}":` },
+            { type: "image_url", image_url: { url: imageDataUrl } },
+          ],
+        },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: { name: "product_price_audit", strict: true, schema: PRODUCT_VERIFICATION_SCHEMA },
+      },
+    });
+
+    const u = response.usage;
+    await logAiUsage({
+      task: "vision",
+      model,
+      ok: true,
+      inputTokens: u?.prompt_tokens,
+      cachedTokens: u?.prompt_tokens_details?.cached_tokens,
+      outputTokens: u?.completion_tokens,
+      durationMs: Date.now() - t0,
+    });
+
+    const raw = response.choices[0]?.message?.content;
+    if (!raw) return { ok: false, error: "Não foi possível ler os dados do print." };
+
+    const parsed = JSON.parse(raw) as {
+      verification_summary: string;
+      rejected_count: number;
+      rejected_reasons: string[];
+      offers: Array<{
+        store: string;
+        seller: string;
+        title: string;
+        sku_or_model: string | null;
+        cash_price_brl: number;
+        installment_total_brl: number;
+        installments: number;
+        url: string;
+        in_stock: boolean;
+        is_new: boolean;
+        is_unconditioned: boolean;
+        is_official_seller: boolean;
+        notes: string;
+      }>;
+    };
+
+    const rawOffer = parsed.offers?.[0];
+    if (!rawOffer) {
+      return {
+        ok: false,
+        error: parsed.rejected_reasons?.[0] || parsed.verification_summary || "A oferta do print foi reprovada pelo filtro anti-falso-positivo.",
+      };
+    }
+
+    const offer: VerifiedProductOffer = {
+      store: rawOffer.store,
+      seller: rawOffer.seller,
+      title: rawOffer.title,
+      skuOrModel: rawOffer.sku_or_model,
+      cashPriceCents: Math.round(rawOffer.cash_price_brl * 100),
+      installmentTotalCents: Math.round(Math.max(rawOffer.installment_total_brl, rawOffer.cash_price_brl) * 100),
+      installments: Math.max(1, Math.min(24, rawOffer.installments || 12)),
+      url: isSafePublicHttpsUrl(rawOffer.url)
+        ? rawOffer.url
+        : `https://www.amazon.com.br/s?k=${encodeURIComponent(rawOffer.title)}`,
+      inStock: rawOffer.in_stock,
+      isNew: rawOffer.is_new,
+      isUnconditioned: rawOffer.is_unconditioned,
+      isOfficialSeller: rawOffer.is_official_seller,
+      notes: rawOffer.notes,
+    };
+
+    const check = verifyProductOfferFourLayers(offer, config);
+    if (!check.passed) {
+      return { ok: false, error: check.reason || "Oferta reprovada nas 4 camadas." };
+    }
+
+    const prevOffers = (existingMeta?.productOffers ?? []).filter((o) => o.store !== offer.store);
+    const mergedOffers = [offer, ...prevOffers].sort(
+      (a, b) => a.cashPriceCents - b.cashPriceCents || a.installmentTotalCents - b.installmentTotalCents
+    );
+    const winner = mergedOffers[0];
+
+    const meta: BestOfferMeta = {
+      category: "product",
+      checkedAt: new Date().toISOString(),
+      sourceMode: "live_verified",
+      storeOrProvider: winner.store,
+      cashPriceCents: winner.cashPriceCents,
+      installmentTotalCents: winner.installmentTotalCents,
+      installments: winner.installments,
+      offerUrl: winner.url,
+      verificationSummary: parsed.verification_summary,
+      rejectedCount: existingMeta?.rejectedCount ?? parsed.rejected_count ?? 0,
+      rejectedReasons: existingMeta?.rejectedReasons ?? parsed.rejected_reasons ?? [],
+      productOffers: mergedOffers,
+    };
+
+    return { ok: true, meta, extractedOffer: offer };
+  } catch (err) {
+    await logAiUsage({ task: "vision", model, ok: false, durationMs: Date.now() - t0, error: String(err) });
+    return { ok: false, error: "Erro ao processar o print da oferta." };
+  }
+}
+
 const TRAVEL_VERIFICATION_SCHEMA = {
   type: "object",
   additionalProperties: false,

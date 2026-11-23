@@ -20,7 +20,7 @@ import {
   mapSimulationRow,
   reaisStringToCents,
 } from "./mappers";
-import { trackProductPrices, trackTravelPrices } from "@/lib/price-tracking/engine";
+import { auditOfferFromScreenshot, trackProductPrices, trackTravelPrices } from "@/lib/price-tracking/engine";
 import {
   buildDefaultProductTrackerConfig,
   buildDefaultTravelTrackerConfig,
@@ -330,6 +330,71 @@ export async function refreshSimulationPriceTracking(
 
   if (updErr || !updatedRow) {
     return { ok: false, error: "Não foi possível atualizar a simulação com os preços rastreados." };
+  }
+
+  revalidatePath("/simulacao");
+  return {
+    ok: true,
+    simulation: mapSimulationRow(updatedRow as SimulationRow),
+    snapshot,
+    alert,
+  };
+}
+
+/**
+ * Audita um print/screenshot de oferta (ex.: app da Amazon no celular com desconto Pix/NuPay logado)
+ * nas 4 camadas anti-falso-positivo e atualiza a simulação se for uma oferta válida.
+ */
+export async function importOfferScreenshotToSimulation(
+  simulationId: string,
+  imageDataUrl: string
+): Promise<
+  | {
+      ok: true;
+      simulation: Simulation;
+      snapshot: SimulationPriceSnapshot | null;
+      alert: SimulationPriceAlert | null;
+    }
+  | { ok: false; error: string }
+> {
+  const supabase = createAdminClient();
+  const { data: row, error: readErr } = await supabase
+    .from("simulations")
+    .select("*")
+    .eq("id", simulationId)
+    .single();
+
+  if (readErr || !row) return { ok: false, error: "Simulação não encontrada." };
+  const sim = row as SimulationRow;
+
+  const audited = await auditOfferFromScreenshot(
+    sim.description,
+    imageDataUrl,
+    sim.best_offer_meta,
+    (sim.tracker_config as Partial<ProductTrackerConfig>) ?? null
+  );
+  if (!audited.ok) return audited;
+
+  const meta = audited.meta;
+  const { snapshot, alert } = await recordSnapshotAndEvaluateAlerts(sim, meta);
+
+  const { data: updatedRow, error: updErr } = await supabase
+    .from("simulations")
+    .update({
+      auto_track: true,
+      best_offer_meta: meta,
+      last_tracked_at: meta.checkedAt,
+      cash_price: centsToReaisString(meta.cashPriceCents),
+      total_amount: centsToReaisString(meta.installmentTotalCents),
+      installments: meta.installments,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", simulationId)
+    .select("*")
+    .single();
+
+  if (updErr || !updatedRow) {
+    return { ok: false, error: "Não foi possível salvar a oferta auditada do print." };
   }
 
   revalidatePath("/simulacao");

@@ -86,8 +86,8 @@ export const FORBIDDEN_CONDITION_TERMS = [
 
 /** Termos proibidos quando o usuário busca um console/aparelho principal (Camada 1 Anti-Acessório) */
 export const CONSOLE_ACCESSORY_EXCLUSIONS = [
-  "controle dualsense",
   "apenas controle",
+  "controle avulso",
   "capa protetora",
   "película",
   "pelicula",

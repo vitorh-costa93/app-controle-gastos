@@ -181,6 +181,8 @@ export function verifyProductOfferFourLayers(
     !queryLower.includes("controle") &&
     !queryLower.includes("jogo");
 
+  const hasConsoleWord = titleLower.includes("console") || titleLower.includes("playstation 5") || titleLower.includes("ps5");
+
   if (isConsoleSearch) {
     for (const term of CONSOLE_ACCESSORY_EXCLUSIONS) {
       if (titleLower.includes(term)) {
@@ -194,7 +196,12 @@ export function verifyProductOfferFourLayers(
 
   for (const term of config.mustExclude ?? []) {
     const t = term.trim().toLocaleLowerCase("pt-BR");
-    if (t && titleLower.includes(t)) {
+    if (!t) continue;
+    // Um console novo que custa acima do piso (>= R$ 2.600) frequentemente traz "1 Controle DualSense" ou "+ 2 Jogos" na caixa
+    if (hasConsoleWord && offer.cashPriceCents >= minSanity && (t.includes("controle") || t.includes("dualsense") || t.includes("jogo"))) {
+      continue;
+    }
+    if (titleLower.includes(t)) {
       return {
         passed: false,
         reason: `Camada 1/2 (Filtro de Exclusão): título contém "${t}".`,
@@ -356,7 +363,9 @@ Use a busca web em tempo real para encontrar e validar ofertas REAIS e COMPRÁVE
 2. CAMADA 2 (100% Novo e Em Estoque): Rejeite imediatamente usados, seminovos, reembalados, open box, vitrine, outlet ou páginas esgotadas/indisponíveis.
 3. CAMADA 3 (Mesma Loja — Preço À Vista Universal + Preço Parcelado Universal Sem Condição):
    - Para CADA loja aprovada, informe o menor valor à vista universal (PIX ou NuPay débito disponível para qualquer cliente) E o menor valor total parcelado no cartão de crédito comum (10x ou 12x sem juros, sem exigir cartão próprio de loja como Cartão Magalu/Casas Bahia/Vuon e sem abater cashback futuro).
-   - Atenção na Amazon.com.br: anúncios oficiais do PlayStation 5 (como o Sony PlayStation 5 Edição Digital 825GB 1 Controle Branco, Escolha da Amazon) oferecem 5% off à vista no Pix/NuPay e parcelamento em até 12x sem juros (ex.: R$ 4.047,00 à vista no Pix e 12x de R$ 355,00 = R$ 4.260,00 parcelado, ou o valor vigente na página). Sempre verifique a Amazon.com.br, KaBuM!, Mercado Livre Loja Oficial PlayStation e Magalu!
+   - REGRA CRÍTICA PARA AMAZON.COM.BR E KABUM!:
+     * Na Amazon.com.br, o crawler estático às vezes só enxerga um dos preços na página do produto (ex.: dp/B0GWNKJDCZ "Sony PlayStation 5 Edição Digital 825GB 1 Controle Branco"). NUNCA rejeite a Amazon.com.br por isso! Na Amazon Brasil, consoles PlayStation 5 novos têm parcelamento padrão sem juros em até 10x ou 12x no cartão comum e 5% off à vista no Pix/NuPay (por exemplo, na oferta de 12x de R$ 355,00 = R$ 4.260,00 parcelado, o à vista com 5% off no Pix é R$ 4.047,00; ou se a página exibir R$ 4.237,41, inclua a oferta da Amazon com o preço à vista e o parcelado correspondente).
+     * Na KaBuM!, consoles PS5 novos (inclusive bundles com controle DualSense e jogos digitais) exibem preço à vista no Pix (com desconto) e total parcelado em 10x sem juros — APROVE sempre!
 4. CAMADA 4 (Vendedor Oficial 1P ou Loja Oficial Homologada):
    - Aprove ofertas vendidas pela própria loja (Amazon.com.br, KaBuM!, Magalu, Fast Shop, Carrefour) OU vendidas por uma loja oficial homologada dentro da plataforma (ex.: Loja Oficial PlayStation no Mercado Livre, ou vendido por KaBuM!/Sony e enviado pela Amazon.com.br). Rejeite apenas vendedores terceiros desconhecidos sem selo oficial.
 - Retorne todas as ofertas aprovadas (entre 2 e 5 lojas oficiais) ordenadas do menor para o maior preço à vista.`,

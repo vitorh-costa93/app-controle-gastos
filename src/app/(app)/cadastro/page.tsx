@@ -51,6 +51,7 @@ export default async function CadastroPage({
         people={people}
         categories={categories}
         types={types}
+        scopePersonId={personId ?? null}
       />
     );
   }

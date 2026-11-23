@@ -115,7 +115,7 @@ function Row({ label, value, tone, strong }: { label: string; value: string; ton
       <span className="text-(--color-text-secondary)">{label}</span>
       <span
         className={cn(
-          "tabular-nums",
+          "whitespace-nowrap text-right tabular-nums",
           strong ? "font-bold" : "font-semibold",
           tone === "neg" && "text-(--color-negative)",
           tone === "pos" && "text-(--color-positive)"
@@ -183,7 +183,7 @@ function HeadlineCard({
               <p className="mt-0.5 text-xl font-bold tracking-tight tabular-nums">
                 {inst.winner === "tie"
                   ? "Diferença menor que R$ 1"
-                  : `${formatCurrencyBRL(Math.abs(inst.advantageCashCents))} ${inst.winner === "cash" ? "a mais" : "a menos"} no seu saldo final`}
+                  : `${formatCurrencyBRL(Math.abs(inst.advantageCashCents))} a mais no seu saldo final ${inst.winner === "cash" ? "pagando à vista" : "parcelando"}`}
               </p>
               <p className="mt-0.5 text-sm text-(--color-text-secondary)">
                 {inst.interestCents > 0 ? (
@@ -392,11 +392,11 @@ function ImpactCard({
 const money = (cents: number) => `${cents < 0 ? "− " : ""}${formatCurrencyBRL(Math.abs(cents))}`;
 
 function Th({ children, left }: { children: React.ReactNode; left?: boolean }) {
-  return <th className={cn("border-b border-(--color-border) px-2.5 py-2", left ? "text-left" : "text-right")}>{children}</th>;
+  return <th className={cn("whitespace-nowrap border-b border-(--color-border) px-2.5 py-2", left ? "text-left" : "text-right")}>{children}</th>;
 }
 
 function Td({ children, left, className }: { children: React.ReactNode; left?: boolean; className?: string }) {
-  return <td className={cn("border-b border-(--color-border)/60 px-2.5 py-2", left ? "text-left" : "text-right", className)}>{children}</td>;
+  return <td className={cn("whitespace-nowrap border-b border-(--color-border)/60 px-2.5 py-2", left ? "text-left" : "text-right", className)}>{children}</td>;
 }
 
 function ScenarioCard({

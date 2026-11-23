@@ -60,6 +60,9 @@ interface Sort {
   dir: "asc" | "desc";
 }
 
+/** Colunas secundárias começam ocultas para a tabela caber sem rolagem horizontal; o seletor "Colunas" as reexibe. */
+const DEFAULT_HIDDEN: ColumnKey[] = ["direction", "fixedVariable", "type"];
+
 export function AnaliseTransactionsTable({
   transactions,
   people,
@@ -82,6 +85,16 @@ export function AnaliseTransactionsTable({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
   const [validatedOverrides, setValidatedOverrides] = useState<Record<string, boolean>>({});
+  const [hiddenColumns, setHiddenColumns] = useState<Set<ColumnKey>>(new Set(DEFAULT_HIDDEN));
+  const show = (key: ColumnKey) => !hiddenColumns.has(key);
+  const visibleColumns = COLUMNS.filter((c) => show(c.key));
+  function toggleColumn(key: ColumnKey) {
+    setHiddenColumns((previous) => {
+      const next = new Set(previous);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  }
   const isValidated = (t: MonthlyOccurrence) => validatedOverrides[t.id] ?? Boolean(t.validated);
   async function handleToggleValidated(t: MonthlyOccurrence, next: boolean) {
     if (t.origin !== "real") return;
@@ -264,6 +277,17 @@ export function AnaliseTransactionsTable({
         <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set(filtered.filter(eligible).map((t) => t.id)))}>Selecionar todos os filtrados</Button>
         {selectedOccurrences.length > 0 && <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>Limpar seleção</Button>}
         <span className="text-xs text-(--color-text-tertiary)">Valores calculados automaticamente não são editáveis em lote.</span>
+        <details className="relative ml-auto">
+          <summary className="cursor-pointer list-none rounded-(--radius-md) border border-(--color-border) px-2.5 py-1 text-xs font-medium hover:bg-black/5">Colunas</summary>
+          <div className="absolute right-0 z-20 mt-1 grid w-48 gap-1 rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) p-2 text-xs shadow-(--shadow-md)">
+            {COLUMNS.map((col) => (
+              <label key={col.key} className="flex items-center gap-2">
+                <input type="checkbox" checked={show(col.key)} onChange={() => toggleColumn(col.key)} />
+                {col.label}
+              </label>
+            ))}
+          </div>
+        </details>
       </div>
       <div className="min-w-0 overflow-x-auto">
         <table className="w-full min-w-[900px] text-sm">
@@ -276,7 +300,7 @@ export function AnaliseTransactionsTable({
                   return next;
                 })} />
               </th>
-              {COLUMNS.map((col) => {
+              {visibleColumns.map((col) => {
                 const sortedHere = sort?.key === col.key;
                 const SortIcon = !sortedHere ? ArrowUpDown : sort.dir === "asc" ? ArrowUp : ArrowDown;
                 return (
@@ -284,7 +308,7 @@ export function AnaliseTransactionsTable({
                     key={col.key}
                     aria-sort={sortedHere ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
                     className={cn(
-                      "px-3 py-2 font-medium",
+                      "whitespace-nowrap px-3 py-2 font-medium",
                       col.align === "right" && "text-right",
                       col.align === "center" && "text-center"
                     )}
@@ -346,7 +370,7 @@ export function AnaliseTransactionsTable({
                     {col.key === "amount" && (
                       <div
                         className={cn(
-                          "mt-0.5 text-xs font-semibold tabular-nums",
+                          "mt-0.5 whitespace-nowrap text-xs font-semibold tabular-nums",
                           filteredTotalCents < 0 ? "text-(--color-negative)" : "text-(--color-positive)"
                         )}
                         title="Soma dos registros filtrados: entradas menos saídas"
@@ -370,12 +394,15 @@ export function AnaliseTransactionsTable({
                   <td className="px-3 py-2">
                     <input type="checkbox" aria-label={`Selecionar ${t.description ?? "lançamento"}`} disabled={!eligible(t)} checked={selectedIds.has(t.id)} onChange={() => toggleSelected(t.id)} />
                   </td>
+                  {show("date") && (
                   <td className="px-3 py-2 whitespace-nowrap">
                     {formatDateBR(t.registrationDate)}
                     <span className="ml-1 text-(--color-text-tertiary)">
                       ({formatReferenceMonthShort(t.referenceMonth)})
                     </span>
                   </td>
+                  )}
+                  {show("person") && (
                   <td className="px-3 py-2 whitespace-nowrap">
                     <span className="inline-flex items-center gap-1.5">
                       <span
@@ -385,31 +412,49 @@ export function AnaliseTransactionsTable({
                       {person?.name ?? "—"}
                     </span>
                   </td>
+                  )}
+                  {show("direction") && (
                   <td className="px-3 py-2">
                     <Badge tone={t.direction === "income" ? "positive" : "neutral"}>
                       {t.direction === "income" ? "Entrada" : "Saída"}
                     </Badge>
                   </td>
+                  )}
+                  {show("fixedVariable") && (
                   <td className="px-3 py-2 text-(--color-text-secondary)">
                     {t.fixedVariable === "fixed" ? "Fixo" : "Variável"}
                   </td>
+                  )}
+                  {show("type") && (
                   <td className="px-3 py-2 text-(--color-text-secondary)">{type?.name ?? "—"}</td>
+                  )}
+                  {show("bank") && (
                   <td className="px-3 py-2 text-(--color-text-secondary)"><span className="reference-label">{t.bank && <CategoryIcon name={labelOf("bank", t)} size={15} />}{labelOf("bank", t)}</span></td>
+                  )}
+                  {show("category") && (
                   <td className="px-3 py-2 text-(--color-text-secondary)"><span className="inline-flex items-center gap-2"><CategoryIcon name={category?.name ?? "Sem categoria"} size={15} />{category?.name ?? "—"}</span></td>
+                  )}
+                  {show("description") && (
                   <td className="max-w-[220px] truncate px-3 py-2 text-(--color-text-secondary)" title={t.description ?? ""}>
                     <span className="reference-label"><DescriptionIcon description={t.description ?? ""} categoryName={category?.name} size={14} />{t.description ?? "—"}</span>
                     {t.origin === "projected" && (
                       <span className="ml-1.5 text-[11px] text-(--color-text-tertiary)">· recorrente</span>
                     )}
                   </td>
+                  )}
+                  {show("installment") && (
                   <td className="px-3 py-2 text-(--color-text-secondary)">
                     {t.installmentCurrent}/{t.installmentTotal}
                   </td>
+                  )}
+                  {show("amount") && (
                   <td className="px-3 py-2 text-right font-medium tabular-nums">
                     <span className={t.direction === "income" ? "text-(--color-positive)" : "text-(--color-text-primary)"}>
                       {formatCurrencyBRL(t.amountCents)}
                     </span>
                   </td>
+                  )}
+                  {show("considered") && (
                   <td className="px-3 py-2 text-center">
                     {t.considered ? (
                       <span className="text-(--color-positive)">Sim</span>
@@ -417,6 +462,8 @@ export function AnaliseTransactionsTable({
                       <span className="text-(--color-text-tertiary)">Não</span>
                     )}
                   </td>
+                  )}
+                  {show("validated") && (
                   <td className="px-3 py-2 text-center">
                     {t.origin === "real" ? (
                       <div className="inline-flex justify-center">
@@ -430,6 +477,7 @@ export function AnaliseTransactionsTable({
                       <span className="text-(--color-text-tertiary)" title="Disponível apenas para lançamentos reais">—</span>
                     )}
                   </td>
+                  )}
                   <td className="px-2 py-2 text-center">
                     <button
                       type="button"
@@ -446,7 +494,7 @@ export function AnaliseTransactionsTable({
             })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={COLUMNS.length + 2} className="px-3 py-8 text-center text-(--color-text-tertiary)">
+                <td colSpan={visibleColumns.length + 2} className="px-3 py-8 text-center text-(--color-text-tertiary)">
                   Nenhuma movimentação encontrada com esses filtros.
                 </td>
               </tr>

@@ -1,6 +1,19 @@
 # Continuidade — MeuDinheiro
 
-Atualizado: 22/11/2026.
+Atualizado: 23/11/2026.
+
+## Correção de Bugs P0/P1, Otimização P2 e Limpeza P3 (23/11/2026)
+- **P0 — Gastos estimados por pessoa (`estimates.ts`, `EstimatedExpensesEditor.tsx`, `RecorrenciasView.tsx`, `cadastro/page.tsx`):** `setEstimatedExpenses` agora recebe `scopePersonId` opcional e preserva os itens das demais pessoas quando a tela está filtrada por pessoa; linhas incompletas exibem erro de validação explícito em vez de descarte silencioso.
+- **P0 — Copy do veredito na Simulação (`CashVsInstallmentSection.tsx`):** corrigido texto para exibir sempre `"R$ X a mais no seu saldo final pagando à vista / parcelando"`.
+- **P1 — Conferência, Cenários, Configurações e Navegação:**
+  - `AnaliseTransactionsTable.tsx`: adicionado seletor **Colunas** (ocultando `Direção`, `Fixo/Variável` e `Tipo` por padrão para evitar overflow horizontal em notebooks) e `whitespace-nowrap` no subtotal de `Valor`.
+  - `ScenarioList.tsx` e `CashVsInstallmentSection.tsx`: `flex-wrap` nos cards de cenários para não cortar o menu `⋮` na barra lateral e `whitespace-nowrap` nas células de valores/sinais.
+  - `ReferenceListEditor.tsx`, `StartingBalanceEditor.tsx`, `SalaryProjectionEditor.tsx` e `configuracoes/page.tsx`: sincronização imediata da lista ao criar/remover itens (`useEffect` + `router.refresh()`), exibição de erros de gravação, bloqueio explícito de meses gerenciados pelo `dashboard-psi`, histórico de salários colapsado nos 8 meses mais recentes e `items-start` no grid de 3 colunas.
+  - `page.tsx`, `Sidebar.tsx` e `BottomNav.tsx`: rota `/` redireciona para `/analise`, removido `?` vazio em `BottomNav` e removido `ChevronDown` decorativo.
+- **P2 & P3 — Performance IA, Estado e Código Morto:**
+  - `simulacao/page.tsx` e `SimulacaoPageClient.tsx`: removido `key={personId || "couple"}` (preserva `individualBalances` e aba ativa ao trocar pessoa), suprimida chamada dupla de IA quando `CashVsInstallmentSection` já exibe `Análise da IA`, e removido o bloco legado `!isModern`.
+  - Removidos 11 componentes órfãos da UI v1 (`CategoryChangesCard`, `CategoryDonutChart`, `CommitmentsChart`, `CompositionCard`, `KpiCard`, `PersonComparisonCard`, `SavingsRateCard`, `TopExpensesCard`, `UnplannedCard`, `MonthTable`, `TransactionTable`) e corrigido plural `"1 coluna de valor"` em `PivotTable.tsx`.
+- Validação: `test-ui-scope.mjs`, `npm run lint` e `npm run build` aprovados antes do push em `main`/Vercel.
 
 ## Simulação — múltiplas compras sem cenário "Principal" (22/11/2026)
 - `cash-vs-installments.ts` e `cash-vs-installments-input.ts`: `buildCashVsInstallmentInput` e `compareCashVsInstallments` agora combinam fluxos à vista e parcelados de múltiplas compras (`cashOutflowsCents` e `installmentOutflowsCents`), respeitando meses de início e prazos distintos.

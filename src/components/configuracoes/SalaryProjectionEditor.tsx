@@ -27,34 +27,43 @@ export function SalaryProjectionEditor({
   const [month, setMonth] = useState(toReferenceMonth(new Date()));
   const [amountCents, setAmountCents] = useState(0);
   const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [showAllHistory, setShowAllHistory] = useState(false);
 
   function handleSave() {
+    setError(null);
+    if (entries.some((e) => e.referenceMonth === month && isFromPsi(e))) {
+      setError("Este mês já vem automaticamente do dashboard-psi e não pode ser sobrescrito manualmente.");
+      return;
+    }
     startTransition(async () => {
       const result = await upsertSalaryEntry(person.id, month, amountCents);
-      if (result.ok) {
-        // Meses que o dashboard-psi já informa não são sobrescritos pelo valor digitado.
-        setEntries((prev) =>
-          prev.some((e) => e.referenceMonth === month && isFromPsi(e))
-            ? prev
-            : [...prev.filter((e) => e.referenceMonth !== month), result.data].sort((a, b) =>
-                a.referenceMonth.localeCompare(b.referenceMonth)
-              )
-        );
-        setAmountCents(0);
-        syncSalaryIncomeTransactions();
-        syncComputedTaxTransactions();
+      if (!result.ok) {
+        setError(result.error);
+        return;
       }
+      setEntries((prev) =>
+        [...prev.filter((e) => e.referenceMonth !== month), result.data].sort((a, b) =>
+          a.referenceMonth.localeCompare(b.referenceMonth)
+        )
+      );
+      setAmountCents(0);
+      syncSalaryIncomeTransactions();
+      syncComputedTaxTransactions();
     });
   }
 
   function handleDelete(id: string) {
+    setError(null);
     startTransition(async () => {
       const result = await deleteSalaryEntry(id);
-      if (result.ok) {
-        setEntries((prev) => prev.filter((e) => e.id !== id));
-        syncSalaryIncomeTransactions();
-        syncComputedTaxTransactions();
+      if (!result.ok) {
+        setError(result.error);
+        return;
       }
+      setEntries((prev) => prev.filter((e) => e.id !== id));
+      syncSalaryIncomeTransactions();
+      syncComputedTaxTransactions();
     });
   }
 
@@ -95,6 +104,8 @@ export function SalaryProjectionEditor({
         </div>
       </div>
 
+      {error && <p className="-mt-3 mb-4 text-xs text-(--color-negative)">{error}</p>}
+
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-xs text-(--color-text-tertiary)">
@@ -121,9 +132,20 @@ export function SalaryProjectionEditor({
 
       {entries.length > 0 && (
         <div className="mt-4 border-t border-(--color-border) pt-3">
-          <p className="mb-2 text-xs font-medium text-(--color-text-tertiary)">Histórico cadastrado</p>
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-xs font-medium text-(--color-text-tertiary)">Histórico cadastrado ({entries.length} meses)</p>
+            {entries.length > 8 && (
+              <button
+                type="button"
+                onClick={() => setShowAllHistory((v) => !v)}
+                className="text-xs font-medium text-(--color-primary) hover:underline"
+              >
+                {showAllHistory ? "Mostrar menos" : `Ver histórico completo (${entries.length})`}
+              </button>
+            )}
+          </div>
           <ul className="space-y-1 text-sm">
-            {entries.map((e) => {
+            {(showAllHistory ? entries : entries.slice(-8)).map((e) => {
               const breakdown = isFromPsi(e) ? psiBreakdownByMonth[e.referenceMonth] : undefined;
               return (
                 <li key={e.id} className="py-0.5">

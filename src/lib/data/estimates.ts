@@ -76,13 +76,30 @@ function revalidateAll() {
   revalidatePath("/simulacao");
 }
 
-/** Salva a lista de gastos estimados (quais categorias estimar e em nome de quem). O valor é sempre calculado. */
+/**
+ * Salva a lista de gastos estimados (quais categorias estimar e em nome de quem). O valor é sempre calculado.
+ * Com `scopePersonId` (tela filtrada por pessoa) só substitui os itens dessa pessoa: os das demais são preservados.
+ */
 export async function setEstimatedExpenses(
-  items: EstimatedExpense[]
+  items: EstimatedExpense[],
+  scopePersonId?: string | null
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { error } = await createAdminClient()
+  const supabase = createAdminClient();
+  let next = items;
+  if (scopePersonId) {
+    const { data, error: readError } = await supabase.from("app_settings").select("value").eq("key", SETTINGS_KEY).maybeSingle();
+    if (readError) {
+      console.error("setEstimatedExpenses read failed:", readError);
+      return { ok: false, error: "Não foi possível salvar os gastos estimados." };
+    }
+    const current: EstimatedExpense[] = data?.value && Array.isArray(data.value) ? (data.value as EstimatedExpense[]) : await defaultEstimates(supabase);
+    const submittedIds = new Set(items.map((i) => i.id));
+    const preserved = current.filter((i) => i.personId !== scopePersonId && !submittedIds.has(i.id));
+    next = [...preserved, ...items];
+  }
+  const { error } = await supabase
     .from("app_settings")
-    .upsert({ key: SETTINGS_KEY, value: items, updated_at: new Date().toISOString() });
+    .upsert({ key: SETTINGS_KEY, value: next, updated_at: new Date().toISOString() });
   if (error) {
     console.error("setEstimatedExpenses failed:", error);
     return { ok: false, error: "Não foi possível salvar os gastos estimados." };

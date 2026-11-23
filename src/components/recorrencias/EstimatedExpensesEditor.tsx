@@ -16,6 +16,7 @@ export function EstimatedExpensesEditor({
   people,
   categories,
   types,
+  scopePersonId,
 }: {
   items: EstimatedExpense[];
   /** Média atual de cada item (dos 2 últimos meses fechados). */
@@ -23,6 +24,8 @@ export function EstimatedExpensesEditor({
   people: Person[];
   categories: Category[];
   types: TransactionType[];
+  /** Quando a tela está filtrada por pessoa, só os itens dela são substituídos ao salvar. */
+  scopePersonId?: string | null;
 }) {
   const [items, setItems] = useState(initialItems);
   const [isPending, startTransition] = useTransition();
@@ -53,9 +56,14 @@ export function EstimatedExpensesEditor({
 
   function handleSave() {
     setMessage(null);
-    const valid = items.filter((i) => i.label.trim() && i.personId && i.categoryId);
+    const incomplete = items.filter((i) => !(i.label.trim() && i.personId && i.categoryId));
+    if (incomplete.length > 0) {
+      setMessage({ tone: "error", text: `Preencha nome, pessoa e categoria em todas as linhas (${incomplete.length} incompleta${incomplete.length === 1 ? "" : "s"}) ou remova-as antes de salvar.` });
+      return;
+    }
+    const valid = items;
     startTransition(async () => {
-      const result = await setEstimatedExpenses(valid.map((i) => ({ ...i, label: i.label.trim() })));
+      const result = await setEstimatedExpenses(valid.map((i) => ({ ...i, label: i.label.trim() })), scopePersonId ?? null);
       if (!result.ok) {
         setMessage({ tone: "error", text: result.error });
         return;

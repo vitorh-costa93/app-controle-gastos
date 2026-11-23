@@ -55,7 +55,7 @@ export default async function ConfiguracoesPage() {
       />
 
       <div className="flex flex-col gap-6">
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-3">
           <ReferenceListEditor title="Pessoas" table="people" items={people} onCreate={createPerson} />
           <ReferenceListEditor title="Categorias" table="categories" items={categories} onCreate={createCategory} />
           <ReferenceListEditor title="Tipos" table="transaction_types" items={types} onCreate={createTransactionType} />

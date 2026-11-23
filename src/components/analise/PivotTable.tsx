@@ -750,7 +750,7 @@ export function PivotTable({
                 </span>
               )}
               <span className="text-(--color-text-tertiary)">
-                {visibleRows.length} linhas · {valueColumnCount} colunas de valor
+                {visibleRows.length} {visibleRows.length === 1 ? "linha" : "linhas"} · {valueColumnCount} {valueColumnCount === 1 ? "coluna" : "colunas"} de valor
               </span>
             </div>
 

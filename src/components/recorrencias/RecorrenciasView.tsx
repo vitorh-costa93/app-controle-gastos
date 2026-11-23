@@ -17,6 +17,7 @@ export function RecorrenciasView({
   people,
   categories,
   types,
+  scopePersonId,
 }: {
   recurrenceRules: RecurrenceRule[];
   installmentGroups: InstallmentGroup[];
@@ -25,11 +26,12 @@ export function RecorrenciasView({
   people: Person[];
   categories: Category[];
   types: TransactionType[];
+  scopePersonId?: string | null;
 }) {
   return (
     <div>
       <PageHeader
-        title="Cadastro"
+        title="Lançamentos"
         subtitle="Custos fixos, compras parceladas e gastos estimados que se repetem nos próximos meses."
       />
       <CadastroTabs active="recorrencias" />
@@ -44,6 +46,7 @@ export function RecorrenciasView({
           people={people}
           categories={categories}
           types={types}
+          scopePersonId={scopePersonId}
         />
       </div>
     </div>

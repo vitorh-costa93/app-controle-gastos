@@ -48,7 +48,7 @@ export function ScenarioList({
             <li key={sim.id}>
               <div
                 className={cn(
-                  "flex items-center gap-3 rounded-(--radius-lg) border p-3 transition-colors",
+                  "flex flex-wrap items-center gap-x-3 gap-y-2 rounded-(--radius-lg) border p-3 transition-colors",
                   isSelected
                     ? "border-(--color-primary) bg-(--color-primary-soft)/50"
                     : "border-(--color-border) hover:bg-black/[0.015]"
@@ -61,7 +61,7 @@ export function ScenarioList({
                   onChange={() => onToggle(sim.id)}
                   className="h-4 w-4 accent-(--color-primary)"
                 />
-                <button className="flex flex-1 items-center gap-3 text-left" onClick={() => (onOpen ?? onToggle)(sim.id)}>
+                <button className="flex min-w-0 flex-1 basis-40 items-center gap-3 text-left" onClick={() => (onOpen ?? onToggle)(sim.id)}>
                   {sim.imageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -74,8 +74,8 @@ export function ScenarioList({
                       <Luggage size={16} />
                     </div>
                   )}
-                  <div>
-                    <p className="text-sm font-medium">{sim.description}</p>
+                  <div className="min-w-0">
+                    <p className="break-words text-sm font-medium">{sim.description}</p>
                     <p className="text-xs text-(--color-text-tertiary)">
                       {sim.installments}x · {formatCurrencyBRL(sim.installmentAmountCents)} · Criado em{" "}
                       {formatDateBR(sim.createdAt.slice(0, 10))}
@@ -87,7 +87,7 @@ export function ScenarioList({
                   return verdict ? (
                     <span
                       className={cn(
-                        "shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold",
+                        "order-last ml-7 max-w-full whitespace-normal rounded-full px-2.5 py-1 text-xs font-semibold",
                         verdict.tone === "cash" && "bg-(--color-negative-soft) text-(--color-negative)",
                         verdict.tone === "installment" && "bg-(--color-primary-soft) text-(--color-primary)",
                         verdict.tone === "neutral" && "bg-black/5 text-(--color-text-secondary)"
@@ -97,7 +97,7 @@ export function ScenarioList({
                     </span>
                   ) : null;
                 })()}
-                <div className="relative">
+                <div className="relative shrink-0">
                   <button
                     className="rounded-full p-1.5 text-(--color-text-tertiary) hover:bg-black/5"
                     aria-label="Mais opções"

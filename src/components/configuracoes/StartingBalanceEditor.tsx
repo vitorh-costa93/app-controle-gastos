@@ -13,12 +13,15 @@ export function StartingBalanceEditor({ startingBalance }: { startingBalance: St
   const [amountCents, setAmountCents] = useState(startingBalance?.amountCents ?? 0);
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   function handleSave() {
     setSaved(false);
+    setError(null);
     startTransition(async () => {
       const result = await setStartingBalance(month, amountCents);
       if (result.ok) setSaved(true);
+      else setError(result.error);
     });
   }
 
@@ -51,6 +54,7 @@ export function StartingBalanceEditor({ startingBalance }: { startingBalance: St
         </p>
       )}
       {saved && <p className="mt-1 text-xs text-(--color-positive)">Saldo inicial salvo.</p>}
+      {error && <p className="mt-1 text-xs text-(--color-negative)">{error}</p>}
     </Card>
   );
 }

@@ -19,7 +19,6 @@ export default async function SimulacaoPage({ searchParams }: { searchParams: Pr
 
   return (
     <SimulacaoPageClient
-      key={personId || "couple"}
       people={people}
       personId={personId}
       initialSimulations={simulations}

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Plus, X } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -25,10 +26,15 @@ export function ReferenceListEditor({
   items: Item[];
   onCreate: (name: string) => Promise<{ ok: true } | { ok: false; error: string }>;
 }) {
+  const router = useRouter();
   const [name, setName] = useState("");
   const [list, setList] = useState(items);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setList(items);
+  }, [items]);
 
   function handleAdd() {
     if (!name.trim()) return;
@@ -40,6 +46,7 @@ export function ReferenceListEditor({
         return;
       }
       setName("");
+      router.refresh();
     });
   }
 
@@ -58,12 +65,18 @@ export function ReferenceListEditor({
             <button
               aria-label={`Remover ${item.name}`}
               className="rounded-full p-0.5 text-(--color-text-tertiary) hover:bg-black/10"
-              onClick={() =>
+              onClick={() => {
+                setError(null);
                 startTransition(async () => {
                   const result = await deactivateReferenceItem(table, item.id);
-                  if (result.ok) setList((prev) => prev.filter((i) => i.id !== item.id));
-                })
-              }
+                  if (result.ok) {
+                    setList((prev) => prev.filter((i) => i.id !== item.id));
+                    router.refresh();
+                  } else {
+                    setError(result.error);
+                  }
+                });
+              }}
             >
               <X size={12} />
             </button>

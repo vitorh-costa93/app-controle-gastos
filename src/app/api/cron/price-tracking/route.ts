@@ -15,7 +15,9 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const result = await refreshMultipleSimulationsTracking();
+    const idParam = request.nextUrl.searchParams.get("id");
+    const ids = idParam ? [idParam] : undefined;
+    const result = await refreshMultipleSimulationsTracking(ids);
     return NextResponse.json({
       ok: true,
       checkedAt: new Date().toISOString(),

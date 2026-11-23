@@ -318,13 +318,10 @@ export async function trackProductPrices(
     customUrls: rawConfig?.customUrls ?? [],
   };
 
-  const snippets = await collectRawWebSnippets(
-    [
-      `${query} novo preço à vista pix parcelado 10x kabum amazon magalu`,
-      `${query} console oficial novo brasil preço hoje`,
-    ],
-    config.customUrls
-  );
+  const snippets =
+    config.customUrls && config.customUrls.length > 0
+      ? await collectRawWebSnippets([], config.customUrls)
+      : [];
 
   let candidateOffers: VerifiedProductOffer[] = [];
   let aiRejectedCount = 0;
@@ -338,9 +335,11 @@ export async function trackProductPrices(
     try {
       const response = await openai.responses.create({
         model,
+        reasoning: { effort: "low" },
         tools: [
           {
             type: "web_search_preview",
+            search_context_size: "low",
             user_location: {
               type: "approximate",
               country: "BR",
@@ -640,13 +639,8 @@ export async function trackTravelPrices(
   const adults = Math.max(1, rawConfig?.adults ?? 2);
   const allowStops = rawConfig?.allowStops ?? true;
 
-  const snippets = await collectRawWebSnippets(
-    [
-      `${accommodationName} tarifa diária pacote ${outboundDate.slice(0, 7)} black friday preço all inclusive`,
-      `passagem aérea ${originAirports.join(" ou ")} para ${destCode} ${destLabel} ida e volta preço`,
-    ],
-    rawConfig?.customUrls ?? []
-  );
+  const customUrls = rawConfig?.customUrls ?? [];
+  const snippets = customUrls.length > 0 ? await collectRawWebSnippets([], customUrls) : [];
 
   let flightQuotes: VerifiedFlightQuote[] = [];
   let stayQuote: VerifiedStayQuote | null = null;
@@ -661,9 +655,11 @@ export async function trackTravelPrices(
     try {
       const response = await openai.responses.create({
         model,
+        reasoning: { effort: "low" },
         tools: [
           {
             type: "web_search_preview",
+            search_context_size: "low",
             user_location: {
               type: "approximate",
               country: "BR",

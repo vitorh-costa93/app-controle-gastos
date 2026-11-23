@@ -363,8 +363,11 @@ export async function refreshMultipleSimulationsTracking(
   const updatedSimulations: Simulation[] = [];
   const newAlerts: SimulationPriceAlert[] = [];
 
-  for (const r of (rows ?? []) as SimulationRow[]) {
-    const res = await refreshSimulationPriceTracking(r.id);
+  const results = await Promise.all(
+    ((rows ?? []) as SimulationRow[]).map((r) => refreshSimulationPriceTracking(r.id))
+  );
+
+  for (const res of results) {
     if (res.ok) {
       updatedSimulations.push(res.simulation);
       if (res.alert) newAlerts.push(res.alert);

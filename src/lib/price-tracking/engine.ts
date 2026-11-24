@@ -707,6 +707,10 @@ const TRAVEL_VERIFICATION_SCHEMA = {
           "airline",
           "stops_count",
           "duration_summary",
+          "outbound_departure_time",
+          "outbound_arrival_time",
+          "return_departure_time",
+          "return_arrival_time",
           "cash_total_brl",
           "installment_total_brl",
           "installments",
@@ -718,6 +722,10 @@ const TRAVEL_VERIFICATION_SCHEMA = {
           airline: { type: "string" },
           stops_count: { type: "integer" },
           duration_summary: { type: "string" },
+          outbound_departure_time: { type: "string" },
+          outbound_arrival_time: { type: "string" },
+          return_departure_time: { type: "string" },
+          return_arrival_time: { type: "string" },
           cash_total_brl: { type: "number" },
           installment_total_brl: { type: "number" },
           installments: { type: "integer" },
@@ -800,6 +808,15 @@ export async function trackTravelPrices(
   const outboundDate = rawConfig?.outboundDate || startDate || new Date().toISOString().slice(0, 10);
   const defaultRet = new Date(new Date(`${outboundDate}T12:00:00Z`).getTime() + 5 * 86400000).toISOString().slice(0, 10);
   const returnDate = rawConfig?.returnDate && rawConfig.returnDate > outboundDate ? rawConfig.returnDate : defaultRet;
+  const sameDatesForFlight = rawConfig?.sameDatesForFlight !== false;
+  const flightOutboundDate =
+    !sameDatesForFlight && rawConfig?.flightOutboundDate ? rawConfig.flightOutboundDate : outboundDate;
+  const flightReturnDate =
+    !sameDatesForFlight && rawConfig?.flightReturnDate && rawConfig.flightReturnDate > flightOutboundDate
+      ? rawConfig.flightReturnDate
+      : returnDate;
+  const includeStay = rawConfig?.includeStay !== false;
+  const includeFlight = rawConfig?.includeFlight !== false;
   const nights = calculateNights(outboundDate, returnDate);
   const adults = Math.max(1, rawConfig?.adults ?? 2);
   const allowStops = rawConfig?.allowStops ?? true;
@@ -834,20 +851,19 @@ export async function trackTravelPrices(
           },
         ],
         instructions: `Você é o Motor de Cotação e Auditoria de Viagens (Voos Multi-Origem + Resorts/Hotéis por Data) do MeuDinheiro.
-Use a busca web em tempo real para pesquisar as tarifas atuais e promoções de Black Friday dos componentes da viagem:
-1) PASSAGENS AÉREAS (Ida em ${outboundDate} e Volta em ${returnDate}, para ${adults} adultos, taxas incluídas):
+Use a busca web em tempo real para pesquisar as tarifas atuais e promoções de Black Friday dos componentes independentes da viagem:
+1) PASSAGENS AÉREAS (Ida em ${flightOutboundDate} e Volta em ${flightReturnDate}, para ${adults} adultos, taxas incluídas):
    - Compare os aeroportos de origem solicitados (${originAirports.join(", ")}) rumo ao aeroporto ${destCode} (${destLabel}).
    - Ribeirão Preto (RAO) normalmente opera com 1 escala rápida (via VCP, CGH ou CNF pela Azul/Latam/Gol).
    - Campinas / Viracopos (VCP) é hub da Azul e opera voos diretos ou com 1 conexão curta para o Nordeste/Sul.
-   - Informe o preço total de IDA E VOLTA em BRL para TODOS os ${adults} passageiros somados (sempre > 0).
+   - Informe horários típicos reais (outbound_departure_time, outbound_arrival_time, return_departure_time, return_arrival_time em HH:MM) e o preço total de IDA E VOLTA em BRL para TODOS os ${adults} passageiros somados (sempre > 0).
 2) HOSPEDAGEM / RESORT ("${accommodationName}" para ${nights} noites, Check-in ${outboundDate} e Check-out ${returnDate}, para ${adults} adultos):
    - Busque na web as tarifas reais de diárias de "${accommodationName}" (site oficial do resort, Booking, Decolar, Melhores Destinos / promoções Black Friday do resort) e calcule o valor total das ${nights} diárias para o casal (${adults} adultos) nas datas informadas (sempre > 0; NUNCA retorne 0).
    - Traga o menor valor total à vista (PIX/transferência no site oficial) e o menor valor total parcelado (em até 10x ou 12x no cartão comum sem exigir clube de férias/timeshare).`,
         input: `Busque na web agora cotações para esta viagem:
 Destino / Aeroporto: ${destCode} (${destLabel})
-Estadia / Resort: "${accommodationName}"
-Check-in / Ida: ${outboundDate}
-Check-out / Volta: ${returnDate} (${nights} noites)
+Estadia / Resort: "${accommodationName}" (Check-in ${outboundDate} · Check-out ${returnDate}, ${nights} noites)
+Passagens Aéreas: Ida ${flightOutboundDate} · Volta ${flightReturnDate}
 Passageiros / Hóspedes: ${adults} adultos
 Aeroportos de saída monitorados: ${originAirports.join(", ")} (Aceita escala: ${allowStops ? "Sim" : "Somente voo direto"})`,
         text: {
@@ -883,6 +899,10 @@ Aeroportos de saída monitorados: ${originAirports.join(", ")} (Aceita escala: $
             airline: string;
             stops_count: number;
             duration_summary: string;
+            outbound_departure_time: string;
+            outbound_arrival_time: string;
+            return_departure_time: string;
+            return_arrival_time: string;
             cash_total_brl: number;
             installment_total_brl: number;
             installments: number;
@@ -911,17 +931,24 @@ Aeroportos de saída monitorados: ${originAirports.join(", ")} (Aceita escala: $
           .map((fq) => {
             const originCode = fq.origin_airport.toUpperCase().trim();
             const originMeta = ORIGIN_AIRPORTS.find((o) => o.code === originCode);
+            const isRao = originCode === "RAO";
             return {
               originAirport: originCode,
               destinationAirport: destCode,
               airline: fq.airline,
               stopsCount: fq.stops_count,
               durationSummary: fq.duration_summary,
+              outboundDate: flightOutboundDate,
+              returnDate: flightReturnDate,
+              outboundDepartureTime: fq.outbound_departure_time || (isRao ? "06:00" : "08:15"),
+              outboundArrivalTime: fq.outbound_arrival_time || (isRao ? "10:50" : "11:25"),
+              returnDepartureTime: fq.return_departure_time || (isRao ? "14:20" : "15:40"),
+              returnArrivalTime: fq.return_arrival_time || (isRao ? "19:15" : "18:55"),
               cashTotalCents: Math.round(fq.cash_total_brl * 100),
               installmentTotalCents: Math.round(Math.max(fq.installment_total_brl, fq.cash_total_brl) * 100),
               installments: Math.max(1, Math.min(12, fq.installments || 6)),
               groundTransferCents: originMeta?.estimatedGroundCostCents ?? 20000,
-              bookingUrl: buildGoogleFlightsUrl(originCode, destCode, outboundDate, returnDate),
+              bookingUrl: buildGoogleFlightsUrl(originCode, destCode, flightOutboundDate, flightReturnDate),
               notes: fq.notes,
             };
           });
@@ -966,12 +993,18 @@ Aeroportos de saída monitorados: ${originAirports.join(", ")} (Aceita escala: $
         airline: isRao ? "Azul / Latam (1 conexão)" : "Azul Linhas Aéreas",
         stopsCount: isRao ? 1 : 0,
         durationSummary: isRao ? "4h45 (1 parada em VCP/CNF)" : "3h10 (Voo direto)",
+        outboundDate: flightOutboundDate,
+        returnDate: flightReturnDate,
+        outboundDepartureTime: isRao ? "06:00" : "08:15",
+        outboundArrivalTime: isRao ? "10:50" : "11:25",
+        returnDepartureTime: isRao ? "14:20" : "15:40",
+        returnArrivalTime: isRao ? "19:15" : "18:55",
         cashTotalCents,
         installmentTotalCents: cashTotalCents,
         installments: 6,
         groundTransferCents: originMeta?.estimatedGroundCostCents ?? 20000,
-        bookingUrl: buildGoogleFlightsUrl(originCode, destCode, outboundDate, returnDate),
-        notes: `Ida ${outboundDate} e volta ${returnDate} p/ ${adults} adultos com taxas`,
+        bookingUrl: buildGoogleFlightsUrl(originCode, destCode, flightOutboundDate, flightReturnDate),
+        notes: `Ida ${flightOutboundDate} e volta ${flightReturnDate} p/ ${adults} adultos com taxas`,
       });
     }
   }
@@ -1005,9 +1038,18 @@ Aeroportos de saída monitorados: ${originAirports.join(", ")} (Aceita escala: $
   );
   const bestFlight = flightQuotes[0];
 
-  const totalCashCents = bestFlight.cashTotalCents + stayQuote.cashTotalCents;
-  const totalInstallmentCents = bestFlight.installmentTotalCents + stayQuote.installmentTotalCents;
-  const combinedInstallments = Math.max(bestFlight.installments, stayQuote.installments, 10);
+  const activeStayCash = includeStay ? stayQuote.cashTotalCents : 0;
+  const activeStayInst = includeStay ? stayQuote.installmentTotalCents : 0;
+  const activeFlightCash = includeFlight ? bestFlight.cashTotalCents : 0;
+  const activeFlightInst = includeFlight ? bestFlight.installmentTotalCents : 0;
+
+  const totalCashCents = Math.max(100, activeStayCash + activeFlightCash);
+  const totalInstallmentCents = Math.max(100, activeStayInst + activeFlightInst);
+  const combinedInstallments = Math.max(
+    includeFlight ? bestFlight.installments : 1,
+    includeStay ? stayQuote.installments : 1,
+    10
+  );
 
   return {
     category: "travel",

@@ -144,8 +144,13 @@ export interface TravelTrackerConfig {
   destinationLabel: string; // ex.: "Maceió - AL (MCZ)"
   originAirports: string[]; // ex.: ["RAO", "VCP"]
   accommodationName: string; // ex.: "Japaratinga Lounge Resort" ou "Salinas Maragogi"
-  outboundDate: string; // "YYYY-MM-DD"
-  returnDate: string; // "YYYY-MM-DD"
+  outboundDate: string; // "YYYY-MM-DD" (check-in hospedagem)
+  returnDate: string; // "YYYY-MM-DD" (check-out hospedagem)
+  sameDatesForFlight?: boolean; // padrão true
+  flightOutboundDate?: string; // "YYYY-MM-DD" (se diferente da hospedagem)
+  flightReturnDate?: string; // "YYYY-MM-DD" (se diferente da hospedagem)
+  includeStay?: boolean; // padrão true
+  includeFlight?: boolean; // padrão true
   adults: number;
   allowStops: boolean;
   highFrequencyBlackFriday?: boolean;
@@ -177,6 +182,12 @@ export interface VerifiedFlightQuote {
   airline: string;
   stopsCount: number;
   durationSummary: string;
+  outboundDate?: string;
+  returnDate?: string;
+  outboundDepartureTime?: string;
+  outboundArrivalTime?: string;
+  returnDepartureTime?: string;
+  returnArrivalTime?: string;
   cashTotalCents: number; // total para todos os passageiros
   installmentTotalCents: number;
   installments: number;

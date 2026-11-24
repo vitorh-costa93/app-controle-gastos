@@ -33,11 +33,19 @@ import { updateSimulation } from "@/lib/data/simulations";
 import { formatCurrencyBRL, formatDateBR } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/cn";
 
+export interface TravelPartOverride {
+  includeStay: boolean;
+  includeFlight: boolean;
+  originAirport?: string;
+}
+
 export function PriceTrackingSection({
   simulations,
   snapshotsBySimId,
   alerts,
   notificationConfig,
+  travelOverrides = {},
+  onTravelOverrideChange,
   onSimulationUpdated,
   onSnapshotAdded,
   onAlertAdded,
@@ -47,6 +55,8 @@ export function PriceTrackingSection({
   snapshotsBySimId: Record<string, SimulationPriceSnapshot[]>;
   alerts: SimulationPriceAlert[];
   notificationConfig: NotificationChannelsConfig;
+  travelOverrides?: Record<string, TravelPartOverride>;
+  onTravelOverrideChange?: (simId: string, patch: Partial<TravelPartOverride>) => void;
   onSimulationUpdated: (sim: Simulation) => void;
   onSnapshotAdded: (snap: SimulationPriceSnapshot) => void;
   onAlertAdded: (alert: SimulationPriceAlert) => void;
@@ -230,47 +240,44 @@ export function PriceTrackingSection({
           </div>
         </div>
 
-        {/* Alertas de queda de preço não lidos */}
-        {unreadAlerts.length > 0 && (
-          <div className="space-y-2 border-b border-(--color-border) bg-(--color-positive-soft)/50 px-5 py-3">
-            {unreadAlerts.map((alert) => (
-              <div
-                key={alert.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-(--radius-md) border border-(--color-positive)/30 bg-(--color-surface) p-3 text-xs"
-              >
-                <div className="flex items-start gap-2.5">
-                  <TrendingDown size={16} className="mt-0.5 shrink-0 text-(--color-positive)" />
-                  <div>
-                    <p className="font-semibold text-(--color-text-primary)">{alert.title}</p>
-                    <p className="mt-0.5 text-(--color-text-secondary)">{alert.message}</p>
-                  </div>
+        {/* Apenas o alerta mais recente de queda real (sem empilhar banners) */}
+        {unreadAlerts.length > 0 && (() => {
+          const latestAlert = unreadAlerts[0];
+          return (
+            <div className="border-b border-(--color-border) bg-(--color-positive-soft)/45 px-5 py-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-2">
+                  <TrendingDown size={15} className="shrink-0 text-(--color-positive)" />
+                  <span className="font-semibold text-(--color-text-primary)">{latestAlert.title}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  {alert.offerUrl && (
+                  {latestAlert.offerUrl && (
                     <a
-                      href={alert.offerUrl}
+                      href={latestAlert.offerUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 rounded-(--radius-md) bg-(--color-positive) px-2.5 py-1 font-semibold text-white hover:opacity-90"
                     >
-                      Ver oferta <ExternalLink size={12} />
+                      Ver oferta <ExternalLink size={11} />
                     </a>
                   )}
                   <button
                     type="button"
                     onClick={() => {
-                      onAlertDismissed(alert.id);
-                      markPriceAlertRead(alert.id);
+                      unreadAlerts.forEach((a) => {
+                        onAlertDismissed(a.id);
+                        markPriceAlertRead(a.id);
+                      });
                     }}
                     className="rounded px-2 py-1 text-(--color-text-tertiary) hover:bg-black/5"
                   >
-                    OK
+                    Dispensar
                   </button>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+            </div>
+          );
+        })()}
 
         {/* Cards detalhados de cada simulação selecionada */}
         <div className="divide-y divide-(--color-border)">
@@ -354,12 +361,21 @@ export function PriceTrackingSection({
                         </>
                       ) : (
                         <>
-                          Detalhes <ChevronDown size={13} />
+                          {isTravel ? "Datas e histórico" : "Detalhes"} <ChevronDown size={13} />
                         </>
                       )}
                     </button>
                   </div>
                 </div>
+
+                {/* Proposta A para Viagem: Hospedagem e Voo 100% independentes sempre visíveis */}
+                {isTravel && meta?.stayQuote && (
+                  <TravelSplitCards
+                    sim={sim}
+                    override={travelOverrides[sim.id]}
+                    onOverrideChange={(patch) => onTravelOverrideChange?.(sim.id, patch)}
+                  />
+                )}
 
                 {isExpanded && (
                   <div className="space-y-3 border-t border-(--color-border)/60 pt-3">
@@ -886,6 +902,223 @@ function PriceHistoryChart({
               )}
             </LineChart>
           </ResponsiveContainer>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TravelSplitCards({
+  sim,
+  override,
+  onOverrideChange,
+}: {
+  sim: Simulation;
+  override?: TravelPartOverride;
+  onOverrideChange: (patch: Partial<TravelPartOverride>) => void;
+}) {
+  const rawCfg = (sim.trackerConfig ?? {}) as Partial<TravelTrackerConfig>;
+  const meta = sim.bestOfferMeta;
+  const stay = meta?.stayQuote;
+  const flights = meta?.flightQuotes ?? [];
+  if (!stay && flights.length === 0) return null;
+
+  const includeStay = override ? override.includeStay : rawCfg.includeStay !== false;
+  const includeFlight = override ? override.includeFlight : rawCfg.includeFlight !== false;
+  const activeOrigin = override?.originAirport || meta?.selectedFlightOrigin || flights[0]?.originAirport;
+  const activeFlight = flights.find((f) => f.originAirport === activeOrigin) ?? flights[0];
+
+  const stayOut = rawCfg.outboundDate || sim.startDate;
+  const stayRet = rawCfg.returnDate || sim.startDate;
+  const flightOut = activeFlight?.outboundDate || (rawCfg.sameDatesForFlight === false && rawCfg.flightOutboundDate ? rawCfg.flightOutboundDate : stayOut);
+  const flightRet = activeFlight?.returnDate || (rawCfg.sameDatesForFlight === false && rawCfg.flightReturnDate ? rawCfg.flightReturnDate : stayRet);
+
+  return (
+    <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2">
+      {/* Card 1: Hospedagem independente */}
+      {stay && (
+        <div
+          className={cn(
+            "flex flex-col justify-between gap-3 rounded-(--radius-lg) border p-3.5 transition-opacity",
+            includeStay
+              ? "border-(--color-border) bg-(--color-surface)"
+              : "border-dashed border-(--color-border) bg-black/[0.02] opacity-55"
+          )}
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-(--radius-md) bg-(--color-primary-soft) text-(--color-primary)">
+                <Hotel size={15} />
+              </span>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-(--color-text-tertiary)">Hospedagem</p>
+                <p className="text-sm font-bold text-(--color-text-primary)">{stay.accommodationName}</p>
+                <p className="text-[11px] text-(--color-text-secondary)">
+                  {formatDateBR(stayOut)} → {formatDateBR(stayRet)} · {stay.nights} noites · {stay.boardBasis}
+                </p>
+              </div>
+            </div>
+            <label className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-(--color-text-secondary)">
+              <input
+                type="checkbox"
+                checked={includeStay}
+                onChange={(e) => onOverrideChange({ includeStay: e.target.checked })}
+                className="h-3.5 w-3.5 accent-(--color-primary)"
+              />
+              Entra na conta
+            </label>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 rounded-(--radius-md) border border-(--color-border) bg-black/[0.02] p-2.5 tabular-nums">
+            <div>
+              <span className="block text-[10px] text-(--color-text-secondary)">À vista (PIX)</span>
+              <span className="text-sm font-extrabold text-(--color-positive)">{formatCurrencyBRL(stay.cashTotalCents)}</span>
+            </div>
+            <div>
+              <span className="block text-[10px] text-(--color-text-secondary)">Parcelado ({stay.installments}×)</span>
+              <span className="text-sm font-extrabold text-(--color-text-primary)">
+                {formatCurrencyBRL(stay.installmentTotalCents)}
+              </span>
+              <span className="block text-[10px] text-(--color-text-tertiary)">
+                {stay.installments}× de {formatCurrencyBRL(Math.round(stay.installmentTotalCents / Math.max(1, stay.installments)))}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-2 text-[11px]">
+            <span className="text-(--color-text-tertiary)">{stay.provider}</span>
+            <a
+              href={stay.bookingUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 font-semibold text-(--color-primary) hover:underline"
+            >
+              Site oficial <ExternalLink size={11} />
+            </a>
+          </div>
+        </div>
+      )}
+
+      {/* Card 2: Passagem Aérea independente (Cartão de Embarque) */}
+      {activeFlight && (
+        <div
+          className={cn(
+            "flex flex-col justify-between gap-3 rounded-(--radius-lg) border p-3.5 transition-opacity",
+            includeFlight
+              ? "border-(--color-border) bg-(--color-surface)"
+              : "border-dashed border-(--color-border) bg-black/[0.02] opacity-55"
+          )}
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-(--radius-md) bg-(--color-primary-soft) text-(--color-primary)">
+                <Plane size={15} />
+              </span>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-(--color-text-tertiary)">
+                  Passagem Aérea ({rawCfg.adults ?? 2} adultos c/ taxas)
+                </p>
+                <p className="text-sm font-bold text-(--color-text-primary)">
+                  {activeFlight.originAirport} → {activeFlight.destinationAirport} · {activeFlight.airline}
+                </p>
+              </div>
+            </div>
+            <label className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-(--color-text-secondary)">
+              <input
+                type="checkbox"
+                checked={includeFlight}
+                onChange={(e) => onOverrideChange({ includeFlight: e.target.checked })}
+                className="h-3.5 w-3.5 accent-(--color-primary)"
+              />
+              Entra na conta
+            </label>
+          </div>
+
+          {flights.length > 1 && (
+            <div className="flex flex-wrap gap-1.5 tabular-nums">
+              {flights.map((fq) => {
+                const selected = fq.originAirport === activeFlight.originAirport;
+                return (
+                  <button
+                    key={fq.originAirport}
+                    type="button"
+                    onClick={() => onOverrideChange({ originAirport: fq.originAirport })}
+                    className={cn(
+                      "flex-1 rounded-(--radius-md) border px-2.5 py-1.5 text-left text-xs transition-colors",
+                      selected
+                        ? "border-(--color-primary) bg-(--color-primary-soft)/70"
+                        : "border-(--color-border) bg-(--color-surface) hover:bg-black/[0.02]"
+                    )}
+                  >
+                    <div className="flex items-center justify-between font-bold">
+                      <span>{fq.originAirport === "VCP" ? "VCP · Campinas" : fq.originAirport === "RAO" ? "RAO · Rib. Preto" : fq.originAirport}</span>
+                      <span className={selected ? "text-(--color-positive)" : ""}>{formatCurrencyBRL(fq.cashTotalCents)}</span>
+                    </div>
+                    <div className="text-[10px] text-(--color-text-secondary)">
+                      {fq.stopsCount === 0 ? "Direto" : `${fq.stopsCount} escala`} · {fq.durationSummary.split(" ")[0]}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Trechos estilo cartão de embarque */}
+          <div className="space-y-2 rounded-(--radius-md) border border-dashed border-(--color-border) bg-black/[0.015] px-3 py-2 text-xs tabular-nums">
+            <div className="grid grid-cols-[72px_1fr] items-center gap-2">
+              <div>
+                <span className="block text-[9.5px] font-bold uppercase text-(--color-text-tertiary)">Ida</span>
+                <span className="font-semibold">{formatDateBR(flightOut).slice(0, 5)}</span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <span className="block text-sm font-extrabold">{activeFlight.outboundDepartureTime || (activeFlight.originAirport === "RAO" ? "06:00" : "08:15")}</span>
+                  <span className="text-[10px] font-bold text-(--color-primary)">{activeFlight.originAirport}</span>
+                </div>
+                <div className="flex-1 border-b border-(--color-border) pb-0.5 text-center text-[10px] text-(--color-text-secondary)">
+                  {activeFlight.stopsCount === 0 ? "Direto" : `${activeFlight.stopsCount} escala`} · {activeFlight.durationSummary.split(" ")[0]}
+                </div>
+                <div className="text-right">
+                  <span className="block text-sm font-extrabold">{activeFlight.outboundArrivalTime || (activeFlight.originAirport === "RAO" ? "10:50" : "11:25")}</span>
+                  <span className="text-[10px] font-bold text-(--color-primary)">{activeFlight.destinationAirport}</span>
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-[72px_1fr] items-center gap-2 border-t border-(--color-border)/60 pt-2">
+              <div>
+                <span className="block text-[9.5px] font-bold uppercase text-(--color-text-tertiary)">Volta</span>
+                <span className="font-semibold">{formatDateBR(flightRet).slice(0, 5)}</span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <span className="block text-sm font-extrabold">{activeFlight.returnDepartureTime || (activeFlight.originAirport === "RAO" ? "14:20" : "15:40")}</span>
+                  <span className="text-[10px] font-bold text-(--color-primary)">{activeFlight.destinationAirport}</span>
+                </div>
+                <div className="flex-1 border-b border-(--color-border) pb-0.5 text-center text-[10px] text-(--color-text-secondary)">
+                  {activeFlight.stopsCount === 0 ? "Direto" : `${activeFlight.stopsCount} escala`}
+                </div>
+                <div className="text-right">
+                  <span className="block text-sm font-extrabold">{activeFlight.returnArrivalTime || (activeFlight.originAirport === "RAO" ? "19:15" : "18:55")}</span>
+                  <span className="text-[10px] font-bold text-(--color-primary)">{activeFlight.originAirport}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-2 text-[11px] tabular-nums">
+            <span className="text-(--color-text-secondary)">
+              À vista <b className="text-(--color-positive)">{formatCurrencyBRL(activeFlight.cashTotalCents)}</b> · {activeFlight.installments}× de{" "}
+              <b>{formatCurrencyBRL(Math.round(activeFlight.installmentTotalCents / Math.max(1, activeFlight.installments)))}</b>
+            </span>
+            <a
+              href={activeFlight.bookingUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 font-semibold text-(--color-primary) hover:underline"
+            >
+              Google Flights <ExternalLink size={11} />
+            </a>
+          </div>
         </div>
       )}
     </div>

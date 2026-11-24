@@ -196,6 +196,13 @@ export async function recordSnapshotAndEvaluateAlerts(
     const isNewLow = meta.cashPriceCents < historicalMinCents;
 
     if (dropPercent >= thresholdPct || isNewLow) {
+      // Marca alertas anteriores não lidos desta simulação como lidos para nunca empilhar alertas repetidos
+      await supabase
+        .from("simulation_price_alerts")
+        .update({ read_at: new Date().toISOString() })
+        .eq("simulation_id", sim.id)
+        .is("read_at", null);
+
       const alertType = isNewLow ? "new_low" : "drop_detected";
       const title =
         meta.category === "travel"

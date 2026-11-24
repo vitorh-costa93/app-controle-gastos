@@ -35,7 +35,8 @@ assert.match(formCode, /Compra \/ Produto/);
 assert.match(formCode, /Viagem \(Voo \+ Estadia\)/);
 assert.match(formCode, /1\. Destino \/ Aeroporto de chegada/);
 assert.match(formCode, /2\. Estadia \/ Resort \/ Hotel/);
-assert.match(formCode, /Ida \/ Check-in/);
-assert.match(formCode, /Volta \/ Check-out/);
+assert.match(formCode, /Entrada na hospedagem \(Check-in\)/);
+assert.match(formCode, /Saída da hospedagem \(Check-out\)/);
+assert.match(formCode, /Usar as mesmas datas para o voo/);
 
 console.log("✓ Rastreamento de Preços (4 camadas Anti-Falso-Positivo + Viagens RAO/VCP + Resorts por data) validado com sucesso");

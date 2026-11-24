@@ -3,6 +3,11 @@
 Atualizado: 23/11/2026.
 
 ## Rastreamento Inteligente de Preços na Simulação — Produtos (4 Camadas) & Viagens (Voos RAO/VCP + Resorts por Data) (23/11/2026)
+- **Viagem independente (Hospedagem & Voo separados), Gráfico de Pagamento e Assistente IA (24/11/2026):**
+  - `PriceTrackingSection.tsx` e `engine.ts`: viagens agora exibem **Hospedagem** e **Passagem Aérea** em cards independentes (cada um com toggle `Entra na conta`, sem venda casada), além de cartão de embarque com datas, horários de saída/chegada, origem (`VCP` vs `RAO`) e escalas.
+  - `SimulationFormFields.tsx`: cadastro de viagem atualizado com `Entrada/Saída da hospedagem` e toggle `Usar as mesmas datas para o voo` (revelando `Ida/Volta do voo` independentes ao desmarcar).
+  - `SimulacaoPageClient.tsx`: gráfico de evolução do orçamento recortado exclusivamente para o período de pagamento (`minPayMonth → maxPayMonth`); `recordSnapshotAndEvaluateAlerts` deduplica alertas não lidos por simulação.
+  - `simulation-chat.ts` e `SimulationAssistantDrawer.tsx`: Chatbot IA conectado ao orçamento real + `web_search_preview` usando `resolveModelFor("insight")`, com criação direta de cenários em 1 clique.
 - **UI em aba única com Cenários no topo (23/11/2026):**
   - `SimulacaoPageClient.tsx`, `ScenarioList.tsx` e `NewSimulationForm.tsx`: removidas as 3 sub-abas (`Projeção do dinheiro`, `Comparar compra`, `Cenários salvos`); o bloco `Cenários` agora fica no topo em grid de 2 colunas com botão `+ Nova simulação` (modal) alimentando diretamente todas as análises abaixo, mantendo multi-seleção e acordeões sob demanda.
 - **IA auto-atualizável (`src/lib/ai/models.ts`, `openai.ts`, `engine.ts`):** implementadas `pickLatestFromList` e `resolveModelFor` (cache 12h via `/v1/models`, escolhendo automaticamente a versão mais recente da família `gpt-*-luna` e `gpt-image-*`, espelhando `dashboard-psi`), conectadas em todas as chamadas de texto, visão, imagem e transcrição.

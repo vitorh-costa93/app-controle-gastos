@@ -40,6 +40,9 @@ export interface SimulationFormValue {
   accommodationName: string;
   outboundDate: string;
   returnDate: string;
+  sameDatesForFlight: boolean;
+  flightOutboundDate: string;
+  flightReturnDate: string;
   originAirports: string[];
   adults: number;
   allowStops: boolean;
@@ -69,6 +72,9 @@ export function emptySimulationForm(): SimulationFormValue {
     accommodationName: "",
     outboundDate: defaultOut,
     returnDate: defaultRet,
+    sameDatesForFlight: true,
+    flightOutboundDate: defaultOut,
+    flightReturnDate: defaultRet,
     originAirports: ["RAO", "VCP"],
     adults: 2,
     allowStops: true,
@@ -98,6 +104,9 @@ export function formFromSimulation(sim: Simulation): SimulationFormValue {
     accommodationName: rawCfg.accommodationName || (category === "travel" ? sim.description : ""),
     outboundDate: rawCfg.outboundDate || defaultTravel.outboundDate,
     returnDate: rawCfg.returnDate || defaultTravel.returnDate,
+    sameDatesForFlight: rawCfg.sameDatesForFlight !== false,
+    flightOutboundDate: rawCfg.flightOutboundDate || rawCfg.outboundDate || defaultTravel.outboundDate,
+    flightReturnDate: rawCfg.flightReturnDate || rawCfg.returnDate || defaultTravel.returnDate,
     originAirports:
       rawCfg.originAirports && rawCfg.originAirports.length > 0 ? rawCfg.originAirports : ["RAO", "VCP"],
     adults: rawCfg.adults ?? 2,
@@ -111,8 +120,11 @@ export function formFromSimulation(sim: Simulation): SimulationFormValue {
 export function isSimulationFormValid(v: SimulationFormValue): boolean {
   if (v.category === "travel") {
     const hasTravelIdentity = Boolean(v.destinationAirport.trim() && v.accommodationName.trim());
-    const hasValidDates = Boolean(v.outboundDate && v.returnDate && v.returnDate > v.outboundDate);
-    if (!hasTravelIdentity || !hasValidDates) return false;
+    const hasValidStayDates = Boolean(v.outboundDate && v.returnDate && v.returnDate > v.outboundDate);
+    const hasValidFlightDates =
+      v.sameDatesForFlight ||
+      Boolean(v.flightOutboundDate && v.flightReturnDate && v.flightReturnDate >= v.flightOutboundDate);
+    if (!hasTravelIdentity || !hasValidStayDates || !hasValidFlightDates) return false;
     // Com rastreamento automático ativo, o usuário não precisa digitar valor manual!
     if (v.autoTrack) return true;
   } else {
@@ -140,6 +152,11 @@ export function simulationFormToInput(v: SimulationFormValue): SimulationInput {
           accommodationName: v.accommodationName.trim(),
           outboundDate: v.outboundDate,
           returnDate: v.returnDate,
+          sameDatesForFlight: v.sameDatesForFlight,
+          flightOutboundDate: v.sameDatesForFlight ? v.outboundDate : v.flightOutboundDate,
+          flightReturnDate: v.sameDatesForFlight ? v.returnDate : v.flightReturnDate,
+          includeStay: true,
+          includeFlight: true,
           adults: v.adults,
           allowStops: v.allowStops,
           highFrequencyBlackFriday: true,
@@ -392,7 +409,7 @@ export function SimulationFormFields({
           </FieldGroup>
 
           <div className="grid grid-cols-2 gap-3">
-            <FieldGroup label="Ida / Check-in">
+            <FieldGroup label="Entrada na hospedagem (Check-in)">
               <Input
                 type="date"
                 value={value.outboundDate}
@@ -405,19 +422,79 @@ export function SimulationFormFields({
                       patch.returnDate = new Date(outMs + 5 * 86400000).toISOString().slice(0, 10);
                     }
                   }
+                  if (value.sameDatesForFlight) {
+                    patch.flightOutboundDate = nextOut;
+                    if (patch.returnDate) patch.flightReturnDate = patch.returnDate;
+                  }
                   set(patch);
                 }}
               />
             </FieldGroup>
-            <FieldGroup label="Volta / Check-out">
+            <FieldGroup label="Saída da hospedagem (Check-out)">
               <Input
                 type="date"
                 min={value.outboundDate}
                 value={value.returnDate}
-                onChange={(e) => set({ returnDate: e.target.value })}
+                onChange={(e) => {
+                  const nextRet = e.target.value;
+                  set(
+                    value.sameDatesForFlight
+                      ? { returnDate: nextRet, flightReturnDate: nextRet }
+                      : { returnDate: nextRet }
+                  );
+                }}
               />
             </FieldGroup>
           </div>
+
+          <label className="flex cursor-pointer items-center justify-between gap-3 rounded-(--radius-md) border border-(--color-primary)/25 bg-(--color-surface) px-3 py-2">
+            <span>
+              <span className="block text-xs font-semibold text-(--color-text-primary)">
+                Usar as mesmas datas para o voo
+              </span>
+              <span className="block text-[11px] text-(--color-text-secondary)">
+                Desmarque se o voo sair antes ou voltar depois da hospedagem
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              role="switch"
+              checked={value.sameDatesForFlight}
+              onChange={(e) => {
+                const same = e.target.checked;
+                set(
+                  same
+                    ? {
+                        sameDatesForFlight: true,
+                        flightOutboundDate: value.outboundDate,
+                        flightReturnDate: value.returnDate,
+                      }
+                    : { sameDatesForFlight: false }
+                );
+              }}
+              className="h-4 w-4 accent-(--color-primary)"
+            />
+          </label>
+
+          {!value.sameDatesForFlight && (
+            <div className="grid grid-cols-2 gap-3 rounded-(--radius-md) border border-dashed border-(--color-border) bg-(--color-surface) p-3">
+              <FieldGroup label="Ida do voo">
+                <Input
+                  type="date"
+                  value={value.flightOutboundDate}
+                  onChange={(e) => set({ flightOutboundDate: e.target.value })}
+                />
+              </FieldGroup>
+              <FieldGroup label="Volta do voo">
+                <Input
+                  type="date"
+                  min={value.flightOutboundDate}
+                  value={value.flightReturnDate}
+                  onChange={(e) => set({ flightReturnDate: e.target.value })}
+                />
+              </FieldGroup>
+            </div>
+          )}
 
           <div>
             <span className="mb-1 block text-xs font-medium text-(--color-text-secondary)">

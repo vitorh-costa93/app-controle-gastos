@@ -317,6 +317,108 @@ const PRODUCT_VERIFICATION_SCHEMA = {
   },
 } as const;
 
+const PRODUCT_HISTORY_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["points"],
+  properties: {
+    points: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["date", "price_brl", "source"],
+        properties: {
+          date: { type: "string" },
+          price_brl: { type: "number" },
+          source: { type: "string" },
+        },
+      },
+    },
+  },
+} as const;
+
+async function fetchProductPriceHistoryOneYear(
+  query: string,
+  minSanityPriceCents: number
+): Promise<PriceHistoryPoint[]> {
+  if (!isAiConfigured()) return [];
+  const openai = getOpenAIClient();
+  const model = await resolveModelFor("extraction");
+  const t0 = Date.now();
+  const now = new Date();
+  const todayIso = now.toISOString().slice(0, 10);
+  const oneYearAgo = new Date(now);
+  oneYearAgo.setUTCDate(oneYearAgo.getUTCDate() - 365);
+  const oneYearAgoIso = oneYearAgo.toISOString().slice(0, 10);
+
+  try {
+    const response = await openai.responses.create({
+      model,
+      reasoning: { effort: "low" },
+      tools: [
+        {
+          type: "web_search_preview",
+          search_context_size: "medium",
+          user_location: {
+            type: "approximate",
+            country: "BR",
+            region: "SP",
+            city: "Araraquara",
+          },
+        },
+      ],
+      instructions: `Você é um pesquisador de histórico de preços no varejo brasileiro (Buscapé, Zoom, Keepa Brasil, Promobit, Pelando, Canaltech, TechTudo, TudoCelular).
+Busque o histórico REAL de preços observados no Brasil para "${query}" ao longo dos ÚLTIMOS 12 MESES completos (de ${oneYearAgoIso} até ${todayIso}).
+Retorne entre 12 e 24 pontos cronológicos cobrindo todos os meses do último ano (pelo menos 1 registro por mês + picos/mínimas sazonais como Black Friday anterior, Natal, Dia do Consumidor, Prime Day e Black Friday atual).
+Use somente preços reais observados (nunca abaixo do piso R$ ${(minSanityPriceCents / 100).toFixed(2)}). Nunca invente dados; se algum mês não tiver registro confiável, pule-o.`,
+      input: `Levante o histórico de preços dos últimos 12 meses (${oneYearAgoIso} a ${todayIso}) no Brasil para: "${query}".`,
+      text: {
+        format: {
+          type: "json_schema",
+          name: "product_price_history_1y",
+          strict: true,
+          schema: PRODUCT_HISTORY_SCHEMA,
+        },
+      },
+    });
+
+    const u = response.usage;
+    await logAiUsage({
+      task: "extraction",
+      model,
+      ok: true,
+      inputTokens: u?.input_tokens,
+      cachedTokens: u?.input_tokens_details?.cached_tokens,
+      outputTokens: u?.output_tokens,
+      durationMs: Date.now() - t0,
+    });
+
+    const raw = response.output_text;
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as {
+      points?: Array<{ date: string; price_brl: number; source: string }>;
+    };
+    const byDate = new Map<string, PriceHistoryPoint>();
+    for (const pt of parsed.points ?? []) {
+      if (!pt?.date || !/^\d{4}-\d{2}-\d{2}$/.test(pt.date)) continue;
+      if (pt.date < oneYearAgoIso || pt.date > todayIso) continue;
+      const priceCents = Math.round(Number(pt.price_brl) * 100);
+      if (!Number.isFinite(priceCents) || priceCents < minSanityPriceCents) continue;
+      byDate.set(pt.date, {
+        date: pt.date,
+        priceCents,
+        source: pt.source || "Histórico Web",
+      });
+    }
+    return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));
+  } catch (err) {
+    await logAiUsage({ task: "extraction", model, ok: false, durationMs: Date.now() - t0, error: String(err) });
+    console.error("fetchProductPriceHistoryOneYear error:", err);
+    return [];
+  }
+}
+
 /**
  * Executa o rastreamento de um Produto (ex.: PlayStation 5) aplicando o Pipeline Anti-Falso-Positivo de 4 Camadas.
  * Retorna o menor preço à vista e o menor preço parcelado DA MESMA LOJA vencedora, além de todas as lojas aprovadas.
@@ -350,6 +452,11 @@ export async function trackProductPrices(
   let aiRejectedCount = 0;
   let aiRejectedReasons: string[] = [];
   let verificationSummary = "";
+
+  const yearHistoryPromise = fetchProductPriceHistoryOneYear(
+    query,
+    config.minSanityPriceCents ?? 1000
+  );
 
   if (isAiConfigured()) {
     const openai = getOpenAIClient();
@@ -480,6 +587,14 @@ ${snippets.length > 0 ? `\nDados adicionais coletados:\n${snippets.join("\n\n").
       await logAiUsage({ task: "extraction", model, ok: false, durationMs: Date.now() - t0, error: String(err) });
       console.error("trackProductPrices AI error:", err);
     }
+  }
+
+  const yearHistory = await yearHistoryPromise;
+  if (yearHistory.length > 0) {
+    const mergedHistory = new Map<string, PriceHistoryPoint>();
+    for (const pt of yearHistory) mergedHistory.set(pt.date, pt);
+    for (const pt of historicalPrices) mergedHistory.set(pt.date, pt);
+    historicalPrices = Array.from(mergedHistory.values()).sort((a, b) => a.date.localeCompare(b.date));
   }
 
   // Passa cada oferta pelo filtro determinístico das 4 camadas

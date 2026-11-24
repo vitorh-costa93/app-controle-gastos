@@ -7,6 +7,7 @@ import type { VerifiedProductOffer } from "@/types/db";
 import type { Simulation, SimulationPriceSnapshot } from "@/types/domain";
 import {
   computePriceHistoryStats,
+  HISTORY_WINDOW_DAYS,
   HistoryWindowKey,
   mergePriceHistoryPoints,
 } from "@/lib/price-tracking/history-stats";
@@ -20,6 +21,8 @@ const WINDOW_OPTIONS: Array<{ key: HistoryWindowKey; label: string }> = [
   { key: "1a", label: "1a" },
 ];
 
+const DAY_MS = 86_400_000;
+
 function getStoreInitials(store: string): string {
   const cleaned = store.replace(/[^a-zA-Z0-9À-ÿ ]/g, " ").trim();
   if (!cleaned) return "L";
@@ -30,10 +33,36 @@ function getStoreInitials(store: string): string {
   return cleaned.slice(0, 2).toUpperCase();
 }
 
-function formatShortChartDate(isoDay: string): string {
+function parseIsoDayUtcMs(isoDay: string): number {
   const [y, m, d] = isoDay.split("-").map(Number);
-  if (!y || !m || !d) return isoDay;
-  return new Date(y, m - 1, d).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+  if (!y || !m || !d) return Date.now();
+  return Date.UTC(y, m - 1, d);
+}
+
+function buildWindowTicks(windowStartMs: number, nowMs: number, windowKey: HistoryWindowKey): number[] {
+  const count = windowKey === "1a" || windowKey === "6m" ? 7 : windowKey === "3m" ? 4 : 5;
+  const ticks: number[] = [];
+  for (let i = 0; i < count; i++) {
+    ticks.push(Math.round(windowStartMs + ((nowMs - windowStartMs) * i) / (count - 1)));
+  }
+  return ticks;
+}
+
+function formatAxisTick(ts: number, windowKey: HistoryWindowKey): string {
+  const d = new Date(ts);
+  if (windowKey === "1a" || windowKey === "6m") {
+    return d.toLocaleDateString("pt-BR", { month: "short", year: "2-digit", timeZone: "UTC" });
+  }
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", timeZone: "UTC" });
+}
+
+function formatTooltipDate(ts: number): string {
+  return new Date(ts).toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
 }
 
 export function ProductVisorPanel({
@@ -52,7 +81,7 @@ export function ProductVisorPanel({
   onUploadScreenshot: (simId: string, file: File) => void;
 }) {
   const [showAllOffers, setShowAllOffers] = useState(false);
-  const [windowKey, setWindowKey] = useState<HistoryWindowKey>("3m");
+  const [windowKey, setWindowKey] = useState<HistoryWindowKey>("1a");
 
   const meta = sim.bestOfferMeta;
   const offers = meta?.productOffers ?? [];
@@ -75,11 +104,22 @@ export function ProductVisorPanel({
     [mergedPoints, windowKey, currentCashCents]
   );
 
+  const { nowMs, windowStartMs, xTicks } = useMemo(() => {
+    const today = new Date();
+    const end = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+    const start = end - HISTORY_WINDOW_DAYS[windowKey] * DAY_MS;
+    return {
+      nowMs: end,
+      windowStartMs: start,
+      xTicks: buildWindowTicks(start, end, windowKey),
+    };
+  }, [windowKey]);
+
   const chartData = useMemo(
     () =>
       stats.points.map((pt) => ({
+        ts: parseIsoDayUtcMs(pt.date),
         date: pt.date,
-        label: formatShortChartDate(pt.date),
         price: pt.priceCents / 100,
         source: pt.source,
       })),
@@ -300,11 +340,15 @@ export function ProductVisorPanel({
                     </defs>
                     <CartesianGrid vertical={false} stroke="var(--color-border)" strokeDasharray="3 3" />
                     <XAxis
-                      dataKey="label"
+                      dataKey="ts"
+                      type="number"
+                      scale="time"
+                      domain={[windowStartMs, nowMs]}
+                      ticks={xTicks}
+                      tickFormatter={(v) => formatAxisTick(Number(v), windowKey)}
                       tick={{ fontSize: 10, fill: "var(--color-text-tertiary)" }}
                       axisLine={false}
                       tickLine={false}
-                      minTickGap={24}
                     />
                     <YAxis
                       tick={{ fontSize: 10, fill: "var(--color-text-tertiary)" }}
@@ -316,7 +360,7 @@ export function ProductVisorPanel({
                     />
                     <Tooltip
                       formatter={(v) => [formatCurrencyBRL(Math.round(Number(v) * 100)), "Preço"]}
-                      labelFormatter={(label) => `Data: ${String(label)}`}
+                      labelFormatter={(v) => `Data: ${formatTooltipDate(Number(v))}`}
                       contentStyle={{ borderRadius: 10, border: "1px solid var(--color-border)", fontSize: 11 }}
                     />
                     <Area

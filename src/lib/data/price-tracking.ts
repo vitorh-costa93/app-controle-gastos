@@ -316,6 +316,15 @@ export async function refreshSimulationPriceTracking(
       ? await trackTravelPrices(sim.description, sim.start_date, trackerConfig as Partial<TravelTrackerConfig>)
       : await trackProductPrices(sim.description, trackerConfig as Partial<ProductTrackerConfig>);
 
+  const prevHistory = sim.best_offer_meta?.historicalPrices ?? [];
+  if (prevHistory.length > 0 || (meta.historicalPrices?.length ?? 0) > 0) {
+    const mergedHistory = new Map(prevHistory.map((pt) => [pt.date, pt]));
+    for (const pt of meta.historicalPrices ?? []) {
+      mergedHistory.set(pt.date, pt);
+    }
+    meta.historicalPrices = Array.from(mergedHistory.values()).sort((a, b) => a.date.localeCompare(b.date));
+  }
+
   const { snapshot, alert } = await recordSnapshotAndEvaluateAlerts(sim, meta);
 
   const { data: updatedRow, error: updErr } = await supabase

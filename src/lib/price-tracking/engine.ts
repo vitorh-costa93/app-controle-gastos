@@ -949,7 +949,137 @@ function buildAccommodationUrl(
   if (lower.includes("salinas") && lower.includes("macei")) {
     return `https://www.salinas.com.br/pt/maceio/`;
   }
+  if (lower.includes("la torre")) {
+    return `https://www.resortlatorre.com.br/`;
+  }
   return `https://www.booking.com/searchresults.pt-br.html?ss=${encodeURIComponent(`${accommodationName} ${destLabel}`)}&checkin=${outboundDate}&checkout=${returnDate}&group_adults=${adults}&group_children=${children}&no_rooms=1`;
+}
+
+const TRAVEL_HISTORY_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["stay_points", "flight_points"],
+  properties: {
+    stay_points: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["date", "price_brl", "source"],
+        properties: {
+          date: { type: "string" },
+          price_brl: { type: "number" },
+          source: { type: "string" },
+        },
+      },
+    },
+    flight_points: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["date", "price_brl", "source"],
+        properties: {
+          date: { type: "string" },
+          price_brl: { type: "number" },
+          source: { type: "string" },
+        },
+      },
+    },
+  },
+} as const;
+
+async function fetchTravelPriceHistoryOneYear(params: {
+  accommodationName: string;
+  destinationAirport: string;
+  originAirports: string[];
+  nights: number;
+  travelersLabel: string;
+}): Promise<{ stayPoints: PriceHistoryPoint[]; flightPoints: PriceHistoryPoint[] }> {
+  if (!isAiConfigured()) return { stayPoints: [], flightPoints: [] };
+  const openai = getOpenAIClient();
+  const model = await resolveModelFor("extraction");
+  const t0 = Date.now();
+  const now = new Date();
+  const todayIso = now.toISOString().slice(0, 10);
+  const oneYearAgo = new Date(now);
+  oneYearAgo.setUTCDate(oneYearAgo.getUTCDate() - 365);
+  const oneYearAgoIso = oneYearAgo.toISOString().slice(0, 10);
+
+  try {
+    const response = await openai.responses.create({
+      model,
+      reasoning: { effort: "low" },
+      tools: [
+        {
+          type: "web_search_preview",
+          search_context_size: "medium",
+          user_location: {
+            type: "approximate",
+            country: "BR",
+            region: "SP",
+            city: "Araraquara",
+          },
+        },
+      ],
+      instructions: `Você é um pesquisador de histórico de preços de turismo no Brasil (Melhores Destinos, Google Flights, Kayak, Booking, Zarpo, sites oficiais dos resorts).
+Levante preços reais observados nos ÚLTIMOS 12 MESES (${oneYearAgoIso} a ${todayIso}) para:
+1) stay_points: pacote de ${params.nights} diárias no "${params.accommodationName}" para ${params.travelersLabel} (incluindo Black Friday anterior, baixa temporada, férias escolares e Black Friday atual).
+2) flight_points: passagens aéreas ida+volta para ${params.travelersLabel} saindo de ${params.originAirports.join("/")} para ${params.destinationAirport}.
+Retorne de 8 a 18 pontos cronológicos por série (date YYYY-MM-DD, price_brl total em reais, source). Nunca invente dados abaixo do piso plausível.`,
+      input: `Histórico de preços dos últimos 12 meses (${oneYearAgoIso} a ${todayIso}) para hospedagem "${params.accommodationName}" (${params.nights} noites) e voos ${params.originAirports.join("/")}->${params.destinationAirport} (${params.travelersLabel}).`,
+      text: {
+        format: {
+          type: "json_schema",
+          name: "travel_price_history_1y",
+          strict: true,
+          schema: TRAVEL_HISTORY_SCHEMA,
+        },
+      },
+    });
+
+    const u = response.usage;
+    await logAiUsage({
+      task: "extraction",
+      model,
+      ok: true,
+      inputTokens: u?.input_tokens,
+      cachedTokens: u?.input_tokens_details?.cached_tokens,
+      outputTokens: u?.output_tokens,
+      durationMs: Date.now() - t0,
+    });
+
+    const raw = response.output_text;
+    if (!raw) return { stayPoints: [], flightPoints: [] };
+    const parsed = JSON.parse(raw) as {
+      stay_points?: Array<{ date: string; price_brl: number; source: string }>;
+      flight_points?: Array<{ date: string; price_brl: number; source: string }>;
+    };
+
+    const sanitize = (
+      items: Array<{ date: string; price_brl: number; source: string }> | undefined,
+      minCents: number
+    ) => {
+      const byDate = new Map<string, PriceHistoryPoint>();
+      for (const pt of items ?? []) {
+        if (!pt?.date || !/^\d{4}-\d{2}-\d{2}$/.test(pt.date)) continue;
+        if (pt.date < oneYearAgoIso || pt.date > todayIso) continue;
+        const priceCents = Math.round(Number(pt.price_brl) * 100);
+        if (!Number.isFinite(priceCents) || priceCents < minCents) continue;
+        byDate.set(pt.date, { date: pt.date, priceCents, source: pt.source || "Histórico Web" });
+      }
+      return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));
+    };
+
+    return {
+      stayPoints: sanitize(parsed.stay_points, 50000),
+      flightPoints: sanitize(parsed.flight_points, 30000),
+    };
+  } catch (err) {
+    await logAiUsage({ task: "extraction", model, ok: false, durationMs: Date.now() - t0, error: String(err) });
+    console.error("fetchTravelPriceHistoryOneYear error:", err);
+    return { stayPoints: [], flightPoints: [] };
+  }
 }
 
 /**
@@ -995,6 +1125,16 @@ export async function trackTravelPrices(
   let rejectedCount = 0;
   let rejectedReasons: string[] = [];
 
+  const travelHistoryPromise = fetchTravelPriceHistoryOneYear({
+    accommodationName,
+    destinationAirport: destCode,
+    originAirports,
+    nights,
+    travelersLabel,
+  });
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+
   if (isAiConfigured()) {
     const openai = getOpenAIClient();
     const model = await resolveModelFor("extraction");
@@ -1006,7 +1146,7 @@ export async function trackTravelPrices(
         tools: [
           {
             type: "web_search_preview",
-            search_context_size: "low",
+            search_context_size: "high",
             user_location: {
               type: "approximate",
               country: "BR",
@@ -1016,16 +1156,17 @@ export async function trackTravelPrices(
           },
         ],
         instructions: `Você é o Motor de Cotação e Auditoria de Viagens (Voos Multi-Origem + Resorts/Hotéis por Data) do MeuDinheiro.
-Use a busca web em tempo real para pesquisar as tarifas atuais e promoções de Black Friday dos componentes independentes da viagem:
+Data de referência de HOJE: ${todayIso}. Use a busca web em tempo real para pesquisar as tarifas ATIVAS HOJE (incluindo campanhas de Black Friday, Blue Week, cupons oficiais e tarifas promocionais vigentes hoje) dos componentes independentes da viagem:
 1) PASSAGENS AÉREAS (Ida em ${flightOutboundDate} e Volta em ${flightReturnDate}, para ${travelersLabel}, taxas incluídas):
    - Compare os aeroportos de origem solicitados (${originAirports.join(", ")}) rumo ao aeroporto ${destCode} (${destLabel}).
    - Ribeirão Preto (RAO) normalmente opera com 1 escala rápida (via VCP, CGH ou CNF pela Azul/Latam/Gol).
    - Campinas / Viracopos (VCP) é hub da Azul e opera voos diretos ou com 1 conexão curta para o Nordeste/Sul.
    - Informe horários típicos reais (outbound_departure_time, outbound_arrival_time, return_departure_time, return_arrival_time em HH:MM) e o preço total de IDA E VOLTA em BRL somando todos os viajantes (${travelersLabel}, incluindo taxa de pet na cabine se houver pet) — sempre > 0.
 2) HOSPEDAGEM / RESORT ("${accommodationName}" para ${nights} noites, Check-in ${outboundDate} e Check-out ${returnDate}, para ${travelersLabel}):
-   - Busque na web as tarifas reais de diárias de "${accommodationName}" (site oficial do resort, Booking, Decolar, Melhores Destinos / promoções Black Friday do resort) e calcule o valor total das ${nights} diárias para ${travelersLabel} nas datas informadas (incluindo taxa pet se houver pet; sempre > 0; NUNCA retorne 0).
-   - Traga o menor valor total à vista (PIX/transferência no site oficial) e o menor valor total parcelado (em até 10x ou 12x no cartão comum sem exigir clube de férias/timeshare).`,
-        input: `Busque na web agora cotações para esta viagem:
+   - PESQUISE EXPLICITAMENTE promoções de Black Friday / Blue Week ATIVAS HOJE (${todayIso}) no site oficial e motor de reservas do resort (ex.: Omnibees, HSystem, resortlatorre.com.br, salinas.com.br, japaratingaresort.com.br, Zarpo, Booking, Melhores Destinos).
+   - Priorize a tarifa promocional real vigente HOJE com desconto à vista/PIX ou Black Friday sobre tarifas cheias antigas, calculando o total das ${nights} diárias para ${travelersLabel} (incluindo taxa pet se houver pet; sempre > 0).
+   - Informe o menor valor total à vista (PIX/transferência no site oficial) e o menor valor total parcelado (em até 10x ou 12x no cartão comum sem exigir clube de férias/timeshare), marcando is_black_friday_promo=true se houver campanha ativa.`,
+        input: `Busque na web agora (data ${todayIso}) cotações e promoções ativas de Black Friday para esta viagem:
 Destino / Aeroporto: ${destCode} (${destLabel})
 Estadia / Resort: "${accommodationName}" (Check-in ${outboundDate} · Check-out ${returnDate}, ${nights} noites)
 Passagens Aéreas: Ida ${flightOutboundDate} · Volta ${flightReturnDate}
@@ -1219,6 +1360,17 @@ Aeroportos de saída monitorados: ${originAirports.join(", ")} (Aceita escala: $
     10
   );
 
+  const { stayPoints, flightPoints } = await travelHistoryPromise;
+  const combinedHistoryMap = new Map<string, PriceHistoryPoint>();
+  for (const sp of stayPoints) {
+    const matchingFlight = flightPoints.find((fp) => fp.date === sp.date);
+    combinedHistoryMap.set(sp.date, {
+      date: sp.date,
+      priceCents: sp.priceCents + (matchingFlight?.priceCents ?? bestFlight.cashTotalCents),
+      source: sp.source,
+    });
+  }
+
   return {
     category: "travel",
     checkedAt: new Date().toISOString(),
@@ -1236,5 +1388,10 @@ Aeroportos de saída monitorados: ${originAirports.join(", ")} (Aceita escala: $
     flightQuotes,
     selectedFlightOrigin: bestFlight.originAirport,
     stayQuote,
+    ...(stayPoints.length > 0 ? { stayHistoricalPrices: stayPoints } : {}),
+    ...(flightPoints.length > 0 ? { flightHistoricalPrices: flightPoints } : {}),
+    ...(combinedHistoryMap.size > 0
+      ? { historicalPrices: Array.from(combinedHistoryMap.values()).sort((a, b) => a.date.localeCompare(b.date)) }
+      : {}),
   };
 }

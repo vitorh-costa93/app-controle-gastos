@@ -1,12 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { Person, TravelTrackerConfig } from "@/types/db";
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
-import { ChevronDown, ChevronUp, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { Simulation, MonthSummary, SimulationPriceAlert, SimulationPriceSnapshot } from "@/types/domain";
-import { buildScenarioComparison, calcSimulationInstallments, summarizeScenarioImpact } from "@/lib/domain/simulation";
+import { buildScenarioComparison, calcSimulationInstallments } from "@/lib/domain/simulation";
 import { accumulateBalance } from "@/lib/domain/finance";
 import { StartingBalance } from "@/lib/data/settings";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -15,16 +15,12 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { NewSimulationForm } from "./NewSimulationForm";
 import { ScenarioList } from "./ScenarioList";
-import { LeftoverComparisonChart, AccumulatedBalanceChart } from "./SimulationCharts";
 import { BaseCaixinhaYield } from "./BaseCaixinhaYield";
-import { ImpactSummaryCard } from "./ImpactSummaryCard";
 import { BaseBudget, CashVsInstallmentSection, YieldParams, analyzeSimulation } from "./CashVsInstallmentSection";
 import { PriceTrackingSection, TravelPartOverride } from "./PriceTrackingSection";
-import { YieldAssumptionCard } from "./YieldAssumptionCard";
 import { SimulationAssistantDrawer } from "./SimulationAssistantDrawer";
 import type { AssistantFinancialContext } from "@/lib/data/simulation-chat";
 import type { CdiRate } from "@/lib/data/cdi";
-import { generateScenarioAiSummary } from "@/lib/data/simulation-analysis";
 import { deleteSimulation, restoreSimulation } from "@/lib/data/simulations";
 import { NotificationChannelsConfig, refreshSimulationPriceTracking } from "@/lib/data/price-tracking";
 import { SimulationEditModal } from "./SimulationEditModal";
@@ -64,8 +60,6 @@ export function SimulacaoPageClient({
   const searchParams = useSearchParams();
   const [individualBalances, setIndividualBalances] = useState<Record<string, number>>({});
   const effectiveStartingBalance = personId ? { month: undefined, amountCents: individualBalances[personId] ?? 0 } : startingBalance;
-  const [showBudgetCharts, setShowBudgetCharts] = useState(false);
-  const [showBaseProjection, setShowBaseProjection] = useState(false);
   const [showNewModal, setShowNewModal] = useState(false);
   const [showAssistant, setShowAssistant] = useState(false);
   const [travelOverrides, setTravelOverrides] = useState<Record<string, TravelPartOverride>>({});
@@ -79,11 +73,6 @@ export function SimulacaoPageClient({
   );
   const [percentOfCdi, setPercentOfCdi] = useState(100);
   const [cdiAnnualPercent, setCdiAnnualPercent] = useState(cdi.annualPercent);
-  const effectiveCdi = useMemo<CdiRate>(
-    () => (cdiAnnualPercent === cdi.annualPercent ? cdi : { ...cdi, annualPercent: cdiAnnualPercent }),
-    [cdi, cdiAnnualPercent]
-  );
-  const [aiState, setAiState] = useState<{ key: string; summary: string } | null>(null);
 
   const baseMap = useMemo(() => new Map(baseSummaries.map((s) => [s.referenceMonth, s])), [baseSummaries]);
   const baseAccumulated = useMemo(
@@ -167,11 +156,6 @@ export function SimulacaoPageClient({
     [comparison, paymentPeriod]
   );
 
-  const impact = useMemo(() => {
-    if (!hasSelected) return null;
-    return summarizeScenarioImpact(selectedSimulations, comparison);
-  }, [hasSelected, selectedSimulations, comparison]);
-
   const yieldParams = useMemo<YieldParams>(
     () => ({ cdiAnnualPercent, percentOfCdi }),
     [cdiAnnualPercent, percentOfCdi]
@@ -197,30 +181,6 @@ export function SimulacaoPageClient({
     (sim: Simulation) => computePurchaseFeasibility(sim, baseAccumulated),
     [baseAccumulated]
   );
-
-  const hasCashVsInstallmentAi = useMemo(
-    () => Boolean(hasSelected && analyzeSimulation(selectedSimulations, yieldParams, base)?.result.installment),
-    [hasSelected, selectedSimulations, yieldParams, base]
-  );
-
-  const aiRequestKey = hasSelected && !hasCashVsInstallmentAi
-    ? JSON.stringify({ personId, selectedSimulations, comparison, startingBalance: effectiveStartingBalance, horizon })
-    : null;
-
-  useEffect(() => {
-    if (!hasSelected || !aiRequestKey) return;
-    let cancelled = false;
-    const timer = setTimeout(() => {
-      generateScenarioAiSummary(selectedSimulations, comparison).then((summary) => {
-        if (!cancelled) setAiState({ key: aiRequestKey, summary });
-      });
-    }, 500);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aiRequestKey]);
 
   function toggleSimulation(id: string) {
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -268,9 +228,7 @@ export function SimulacaoPageClient({
     }
   }
 
-  const aiSummary = aiState?.key === aiRequestKey ? aiState.summary : null;
-  const aiLoading = hasSelected && aiState?.key !== aiRequestKey;
-  const combinedTitle = selectedSimulations.map((s) => s.description).join(" + ");
+  // `aiState` / `aiSummary` removidos na UI direta (zero acordeões).
 
   const assistantContext = useMemo<AssistantFinancialContext>(() => {
     const personObj = people.find((p) => p.id === personId);
@@ -308,13 +266,61 @@ export function SimulacaoPageClient({
         subtitle="Planeje suas próximas compras e viagens e veja o impacto no seu orçamento."
       />
 
-      {(isModern || personId) && <div className="modern-simulation-person">
-        {(isModern || personId) && <label>Pessoa <select value={personId} onChange={(event) => { const params = new URLSearchParams(searchParams.toString()); if (event.target.value) params.set("personId", event.target.value); else params.delete("personId"); router.push(`${pathname}${params.size ? `?${params}` : ""}`); }}><option value="">Casal</option>{people.filter((person) => person.name.trim().toLocaleLowerCase("pt-BR") !== "casal").map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select></label>}
-        {personId && <div><p>{individualBalances[personId] ? "Saldo inicial individual usado apenas nesta simulação." : "Saldo inicial individual não informado; projeção parte de zero."}</p><label htmlFor="individual-balance">Saldo inicial individual</label><CurrencyInput id="individual-balance" valueCents={individualBalances[personId] ?? 0} onChange={(amount) => setIndividualBalances((previous) => ({ ...previous, [personId]: amount }))} /></div>}
-        <Button type="button" size="sm" onClick={() => setShowAssistant(true)} className="ml-auto h-9 gap-1.5 px-3 text-xs">
-          <Sparkles size={14} /> Assistente IA
-        </Button>
-      </div>}
+      {(isModern || personId) && (
+        <div className="modern-simulation-person">
+          <label>
+            Pessoa
+            <select
+              value={personId}
+              onChange={(event) => {
+                const params = new URLSearchParams(searchParams.toString());
+                if (event.target.value) params.set("personId", event.target.value);
+                else params.delete("personId");
+                router.push(`${pathname}${params.size ? `?${params}` : ""}`);
+              }}
+            >
+              <option value="">Casal</option>
+              {people
+                .filter((person) => person.name.trim().toLocaleLowerCase("pt-BR") !== "casal")
+                .map((person) => (
+                  <option key={person.id} value={person.id}>
+                    {person.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+          {personId && (
+            <div>
+              <p>
+                {individualBalances[personId]
+                  ? "Saldo inicial individual usado apenas nesta simulação."
+                  : "Saldo inicial individual não informado; projeção parte de zero."}
+              </p>
+              <label htmlFor="individual-balance">Saldo inicial individual</label>
+              <CurrencyInput
+                id="individual-balance"
+                valueCents={individualBalances[personId] ?? 0}
+                onChange={(amount) => setIndividualBalances((previous) => ({ ...previous, [personId]: amount }))}
+              />
+            </div>
+          )}
+          <label className="inline-flex items-center gap-1.5 text-xs text-(--color-text-secondary)">
+            <span>Caixinha</span>
+            <select
+              value={percentOfCdi}
+              onChange={(e) => setPercentOfCdi(Number(e.target.value))}
+              aria-label="Rendimento da Caixinha"
+            >
+              <option value={100}>100% CDI ({cdiAnnualPercent.toFixed(2).replace(".", ",")}%)</option>
+              <option value={115}>115% CDI (Turbo)</option>
+              <option value={120}>120% CDI (Ultravioleta)</option>
+            </select>
+          </label>
+          <Button type="button" size="sm" onClick={() => setShowAssistant(true)} className="ml-auto h-9 gap-1.5 px-3 text-xs">
+            <Sparkles size={14} /> Assistente IA
+          </Button>
+        </div>
+      )}
       <div className="mb-5">
         <ScenarioList
           simulations={simulations}
@@ -356,64 +362,14 @@ export function SimulacaoPageClient({
                 }
               />
               {hasSelected ? (
-                <>
-                  <div className="modern-simulation-impact"><CashVsInstallmentSection simulations={selectedSimulations} params={yieldParams} base={base} /></div>
-                  <div className="flex flex-wrap justify-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowBaseProjection((v) => !v)}
-                      className="inline-flex items-center justify-center gap-1.5 rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-3.5 py-2 text-center text-xs font-semibold text-(--color-text-secondary) hover:bg-black/5"
-                    >
-                      {showBaseProjection ? (
-                        <>
-                          Ocultar projeção sem compras <ChevronUp size={14} />
-                        </>
-                      ) : (
-                        <>
-                          Ver projeção sem compras (Caixinha) <ChevronDown size={14} />
-                        </>
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowBudgetCharts((v) => !v)}
-                      className="inline-flex items-center justify-center gap-1.5 rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-3.5 py-2 text-center text-xs font-semibold text-(--color-text-secondary) hover:bg-black/5"
-                    >
-                      {showBudgetCharts ? (
-                        <>
-                          Ocultar evolução mensal do orçamento e impacto <ChevronUp size={14} />
-                        </>
-                      ) : (
-                        <>
-                          Ver evolução mensal do orçamento e impacto <ChevronDown size={14} />
-                        </>
-                      )}
-                    </button>
-                  </div>
-                  {showBaseProjection && (
-                    <Card className="p-5">
-                      <h2 className="modern-simulation-title">Saldo acumulado projetado</h2>
-                      <p className="modern-simulation-subtitle">Com base no que já está cadastrado, sem compras simuladas. Horizonte: {formatMonthLabel(horizon.from)} → {formatMonthLabel(horizon.to)}.</p>
-                      <BaseCaixinhaYield summaries={baseSummaries} accumulated={baseAccumulated} cdiAnnualPercent={cdiAnnualPercent} onCdiAnnualPercent={setCdiAnnualPercent} percentOfCdi={percentOfCdi} onPercentOfCdi={setPercentOfCdi} horizon={horizon} />
-                    </Card>
-                  )}
-                  {showBudgetCharts && (
-                    <>
-                      <Card className="p-5">
-                        <h2 className="modern-simulation-title">Evolução do orçamento · {combinedTitle}</h2>
-                        <p className="modern-simulation-subtitle">Período do pagamento: {formatMonthLabel(paymentPeriod.from)} → {formatMonthLabel(paymentPeriod.to)}{selectedSimulations.length > 1 ? ` · ${selectedSimulations.length} itens combinados` : ""}</p>
-                        <h3 className="modern-simulation-chart-title">Saldo no final do mês</h3>
-                        <LeftoverComparisonChart comparison={paymentComparison} />
-                        <h3 className="modern-simulation-chart-title">Saldo acumulado</h3>
-                        <AccumulatedBalanceChart comparison={paymentComparison} />
-                      </Card>
-                      {impact && <ImpactSummaryCard impact={impact} />}
-                    </>
-                  )}
-                  {!hasCashVsInstallmentAi && (
-                    <Card className="flex gap-3 bg-(--color-primary-soft)/40 p-4"><Sparkles size={18} className="mt-0.5 shrink-0 text-(--color-primary)" /><div><p className="mb-1 text-sm font-semibold text-(--color-primary)">Insight da IA</p>{aiLoading ? <p className="text-sm text-(--color-text-secondary)">Analisando cenário...</p> : <p className="text-sm text-(--color-text-secondary)">{aiSummary}</p>}</div></Card>
-                  )}
-                </>
+                <div className="modern-simulation-impact">
+                  <CashVsInstallmentSection
+                    simulations={selectedSimulations}
+                    params={yieldParams}
+                    base={base}
+                    monthlyComparison={paymentComparison}
+                  />
+                </div>
               ) : (
                 <Card className="p-5 text-sm text-(--color-text-secondary)">
                   Ligue pelo menos um componente acima (<b>Hospedagem</b> ou <b>Passagem Aérea</b>) para calcular o impacto financeiro.
@@ -428,9 +384,6 @@ export function SimulacaoPageClient({
             </Card>
           )}
         </section>
-        <aside className="modern-simulation-sidebar" aria-label="Premissas de rendimento">
-          <YieldAssumptionCard cdi={effectiveCdi} percentOfCdi={percentOfCdi} onChange={setPercentOfCdi} />
-        </aside>
       </div>}
 
       {showNewModal && (

@@ -3,6 +3,11 @@
 Atualizado: 24/11/2026.
 
 ## Rastreamento Inteligente de Preços na Simulação — Produtos (4 Camadas) & Viagens (Voos RAO/VCP + Resorts por Data) (23/11/2026)
+- **Simulação Direta v3: Multi-Dropdown, Zero Acordeões, Toggle Mensal e Histórico 1a para Voos/Hospedagem (24/11/2026):**
+  - `ScenarioList.tsx`, `SimulacaoPageClient.tsx` e `modern-simulation.css`: substituída a grade grande de cenários por **Multi-Dropdown** compacto no topo + faixa horizontal apenas dos itens selecionados com imagens geradas por IA; CDI movido para a barra superior (largura total 100%, sem coluna lateral vazia).
+  - `CashVsInstallmentSection.tsx`: removidos todos os 3 acordeões (`Ver projeção sem compras`, `Ver evolução mensal`, `Ver análise detalhada`) e adicionado toggle direto **`Saldo acumulado`** | **`Dinheiro guardado por mês`** (`BarChart` Sem compra × Com compra) no gráfico principal.
+  - `PriceHistoryVisorCard.tsx`, `ProductVisorPanel.tsx` e `PriceTrackingSection.tsx`: alternador **`Abas`** | **`Lado a lado`** no rastreamento e gráfico de histórico 1a + termômetro anti-Black-Fraude para **Hospedagem**, **Voo** e **Total** nas viagens.
+  - `engine.ts` e `price-tracking.ts`: busca paralela `fetchTravelPriceHistoryOneYear` (12 meses de voos e resorts) e reforço de busca Black Friday/Blue Week em sites oficiais (ex.: La Torre). `src/components/analise/` preservado intacto.
 - **Polimento completo de UI/UX em `/simulacao` (24/11/2026):**
   - `ProductVisorPanel.tsx`, `PriceTrackingSection.tsx`, `CashVsInstallmentSection.tsx`, `ScenarioList.tsx`, `SimulationFormFields.tsx`, `SimulationAssistantDrawer.tsx`, `ChatMarkdown.tsx`, `SimulacaoPageClient.tsx` e `modern-simulation.css`: corrigidos alinhamentos de botões (`size="sm"`), sobreposição dos badges (`Menor preço`, `Melhor entre as compras`), cortes nos eixos X/Y dos gráficos Recharts, responsividade de datas/tabelas em mobile (390px), trava de scroll e `role="dialog"` no drawer de IA, uso consistente de tokens `--color-*` e barra lateral de rendimento `sticky`.
 - **Painel Visor de Ofertas, Histórico de Preços (40d/3m/6m/1a) e Melhor Data de Compra (24/11/2026):**

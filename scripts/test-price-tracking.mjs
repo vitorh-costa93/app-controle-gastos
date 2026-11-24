@@ -48,10 +48,17 @@ assert.match(historyStatsCode, /"3m": 90/);
 assert.match(historyStatsCode, /"6m": 180/);
 assert.match(historyStatsCode, /"1a": 365/);
 
-const visorCode = fs.readFileSync(path.join(root, "src/components/simulacao/ProductVisorPanel.tsx"), "utf8");
+const visorCode = fs.readFileSync(path.join(root, "src/components/simulacao/PriceHistoryVisorCard.tsx"), "utf8");
 assert.match(visorCode, /Como está o preço hoje/);
 assert.match(visorCode, /Histórico de preço/);
-assert.match(visorCode, /Avisar quando baixar/);
+
+const productPanelCode = fs.readFileSync(path.join(root, "src/components/simulacao/ProductVisorPanel.tsx"), "utf8");
+assert.match(productPanelCode, /Avisar quando baixar/);
+assert.match(productPanelCode, /PriceHistoryVisorCard/);
+
+const trackingSectionCode = fs.readFileSync(path.join(root, "src/components/simulacao/PriceTrackingSection.tsx"), "utf8");
+assert.match(trackingSectionCode, /TravelPriceHistorySection/);
+assert.match(trackingSectionCode, /Lado a lado/);
 
 const feasibilityCode = fs.readFileSync(path.join(root, "src/lib/utils/best-purchase-date.ts"), "utf8");
 assert.match(feasibilityCode, /export function computePurchaseFeasibility/);

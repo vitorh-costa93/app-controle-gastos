@@ -234,6 +234,8 @@ export interface BestOfferMeta {
   productOffers?: VerifiedProductOffer[];
   // Histórico de preços (Buscapé/Zoom/Keepa + snapshots capturados)
   historicalPrices?: PriceHistoryPoint[];
+  stayHistoricalPrices?: PriceHistoryPoint[];
+  flightHistoricalPrices?: PriceHistoryPoint[];
   // Para viagem: cotações de voo (RAO vs VCP) + cotação do resort nas datas
   flightQuotes?: VerifiedFlightQuote[];
   selectedFlightOrigin?: string;

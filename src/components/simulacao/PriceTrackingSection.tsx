@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import {
   Bell,
   ChevronDown,
@@ -17,6 +17,8 @@ import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, X
 import { Simulation, SimulationPriceAlert, SimulationPriceSnapshot } from "@/types/domain";
 import { TravelTrackerConfig, VerifiedProductOffer } from "@/types/db";
 import { ProductVisorPanel } from "@/components/simulacao/ProductVisorPanel";
+import { PriceHistoryVisorCard } from "@/components/simulacao/PriceHistoryVisorCard";
+import { mergePriceHistoryPoints } from "@/lib/price-tracking/history-stats";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -66,12 +68,24 @@ export function PriceTrackingSection({
   const [isRefreshingAll, startRefreshAll] = useTransition();
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
+  const [layoutMode, setLayoutMode] = useState<"tabs" | "side">("tabs");
+  const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [alertModalOpen, setAlertModalOpen] = useState(false);
   const [notifForm, setNotifForm] = useState<NotificationChannelsConfig>(notificationConfig);
   const [notifStatus, setNotifStatus] = useState<string | null>(null);
   const [pushPermission, setPushPermission] = useState<string>(() =>
     typeof window !== "undefined" && "Notification" in window ? Notification.permission : "default"
   );
+
+  const resolvedActiveTabId =
+    activeTabId && simulations.some((s) => s.id === activeTabId)
+      ? activeTabId
+      : simulations[0]?.id ?? null;
+
+  const displayedSimulations =
+    simulations.length > 1 && layoutMode === "tabs"
+      ? simulations.filter((s) => s.id === resolvedActiveTabId)
+      : simulations;
 
   function toggleExpanded(id: string) {
     setExpandedIds((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -220,6 +234,34 @@ export function PriceTrackingSection({
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {simulations.length > 1 && (
+              <div className="flex items-center gap-0.5 rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setLayoutMode("tabs")}
+                  className={cn(
+                    "rounded-[calc(var(--radius-md)-2px)] px-2.5 py-1 text-[11px] font-semibold transition-colors",
+                    layoutMode === "tabs"
+                      ? "bg-(--color-primary-soft) text-(--color-primary)"
+                      : "text-(--color-text-secondary) hover:text-(--color-text-primary)"
+                  )}
+                >
+                  Abas
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLayoutMode("side")}
+                  className={cn(
+                    "rounded-[calc(var(--radius-md)-2px)] px-2.5 py-1 text-[11px] font-semibold transition-colors",
+                    layoutMode === "side"
+                      ? "bg-(--color-primary-soft) text-(--color-primary)"
+                      : "text-(--color-text-secondary) hover:text-(--color-text-primary)"
+                  )}
+                >
+                  Lado a lado
+                </button>
+              </div>
+            )}
             <Button
               type="button"
               variant="secondary"
@@ -242,6 +284,38 @@ export function PriceTrackingSection({
             </Button>
           </div>
         </div>
+
+        {/* Barra de Abas quando há múltiplos itens e layoutMode === "tabs" */}
+        {simulations.length > 1 && layoutMode === "tabs" && (
+          <div className="flex flex-wrap gap-1.5 border-b border-(--color-border) bg-black/[0.015] px-5 py-2.5">
+            {simulations.map((s) => {
+              const isTabTravel =
+                s.category === "travel" ||
+                s.description.toLocaleLowerCase("pt-BR").includes("japaratinga") ||
+                s.description.toLocaleLowerCase("pt-BR").includes("salinas") ||
+                s.description.toLocaleLowerCase("pt-BR").includes("la torre");
+              const isActive = s.id === resolvedActiveTabId;
+              const priceCents = s.cashPriceCents ?? s.totalAmountCents;
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setActiveTabId(s.id)}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-(--radius-md) border px-3 py-1.5 text-xs font-semibold transition-colors",
+                    isActive
+                      ? "border-(--color-primary) bg-(--color-primary-soft) text-(--color-primary)"
+                      : "border-(--color-border) bg-(--color-surface) text-(--color-text-secondary) hover:bg-black/[0.02]"
+                  )}
+                >
+                  {isTabTravel ? <Plane size={13} /> : <ShoppingBag size={13} />}
+                  <span>{s.description}</span>
+                  <span className="tabular-nums text-(--color-positive)">{formatCurrencyBRL(priceCents)}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* Apenas o alerta mais recente de queda real (sem empilhar banners) */}
         {unreadAlerts.length > 0 && (() => {
@@ -283,8 +357,14 @@ export function PriceTrackingSection({
         })()}
 
         {/* Cards detalhados de cada simulação selecionada */}
-        <div className="divide-y divide-(--color-border)">
-          {simulations.map((sim) => {
+        <div
+          className={cn(
+            simulations.length > 1 && layoutMode === "side"
+              ? "grid grid-cols-1 divide-y divide-(--color-border) xl:grid-cols-2 xl:divide-x xl:divide-y-0"
+              : "divide-y divide-(--color-border)"
+          )}
+        >
+          {displayedSimulations.map((sim) => {
             const meta = sim.bestOfferMeta;
             const history = snapshotsBySimId[sim.id] ?? [];
             const isRefreshingThis = refreshingId === sim.id || isRefreshingAll;
@@ -388,11 +468,18 @@ export function PriceTrackingSection({
 
                 {/* Proposta A para Viagem: Hospedagem e Voo 100% independentes sempre visíveis */}
                 {isTravel && meta?.stayQuote && (
-                  <TravelSplitCards
-                    sim={sim}
-                    override={travelOverrides[sim.id]}
-                    onOverrideChange={(patch) => onTravelOverrideChange?.(sim.id, patch)}
-                  />
+                  <>
+                    <TravelSplitCards
+                      sim={sim}
+                      override={travelOverrides[sim.id]}
+                      onOverrideChange={(patch) => onTravelOverrideChange?.(sim.id, patch)}
+                    />
+                    <TravelPriceHistorySection
+                      sim={sim}
+                      history={history}
+                      override={travelOverrides[sim.id]}
+                    />
+                  </>
                 )}
 
                 {isTravel && isExpanded && (
@@ -1052,5 +1139,99 @@ function TravelSplitCards({
         </div>
       )}
     </div>
+  );
+}
+
+function TravelPriceHistorySection({
+  sim,
+  history,
+  override,
+}: {
+  sim: Simulation;
+  history: SimulationPriceSnapshot[];
+  override?: TravelPartOverride;
+}) {
+  const [series, setSeries] = useState<"stay" | "flight" | "total">("stay");
+  const meta = sim.bestOfferMeta;
+  const stay = meta?.stayQuote;
+  const flights = meta?.flightQuotes ?? [];
+  const activeFlight =
+    flights.find((f) => f.originAirport === (override?.originAirport || meta?.selectedFlightOrigin)) ?? flights[0];
+
+  const staySnaps = useMemo<SimulationPriceSnapshot[]>(
+    () =>
+      history
+        .filter((h) => (h.stayCashPriceCents ?? 0) > 0)
+        .map((h) => ({ ...h, cashPriceCents: h.stayCashPriceCents! })),
+    [history]
+  );
+
+  const flightSnaps = useMemo<SimulationPriceSnapshot[]>(
+    () =>
+      history
+        .filter((h) => (h.flightCashPriceCents ?? 0) > 0)
+        .map((h) => ({ ...h, cashPriceCents: h.flightCashPriceCents! })),
+    [history]
+  );
+
+  const currentStayCents = stay?.cashTotalCents ?? 0;
+  const currentFlightCents = activeFlight?.cashTotalCents ?? 0;
+  const currentTotalCents =
+    currentStayCents + currentFlightCents > 0
+      ? currentStayCents + currentFlightCents
+      : sim.cashPriceCents ?? sim.totalAmountCents;
+
+  const stayPoints = useMemo(
+    () => mergePriceHistoryPoints(meta?.stayHistoricalPrices, staySnaps, currentStayCents || null),
+    [meta?.stayHistoricalPrices, staySnaps, currentStayCents]
+  );
+
+  const flightPoints = useMemo(
+    () => mergePriceHistoryPoints(meta?.flightHistoricalPrices, flightSnaps, currentFlightCents || null),
+    [meta?.flightHistoricalPrices, flightSnaps, currentFlightCents]
+  );
+
+  const totalPoints = useMemo(
+    () => mergePriceHistoryPoints(meta?.historicalPrices, history, currentTotalCents),
+    [meta?.historicalPrices, history, currentTotalCents]
+  );
+
+  const activePoints =
+    series === "stay" ? stayPoints : series === "flight" ? flightPoints : totalPoints;
+  const activeCurrent =
+    series === "stay" ? currentStayCents : series === "flight" ? currentFlightCents : currentTotalCents;
+
+  return (
+    <PriceHistoryVisorCard
+      idPrefix={`${sim.id}-${series}`}
+      points={activePoints}
+      currentPriceCents={activeCurrent}
+      title="Histórico de preço (Hospedagem & Voo)"
+      headerExtra={
+        <div className="flex items-center gap-0.5 rounded-(--radius-md) border border-(--color-border) bg-black/[0.02] p-0.5">
+          {(
+            [
+              { key: "stay", label: "Hospedagem" },
+              { key: "flight", label: "Voo" },
+              { key: "total", label: "Total" },
+            ] as const
+          ).map((opt) => (
+            <button
+              key={opt.key}
+              type="button"
+              onClick={() => setSeries(opt.key)}
+              className={cn(
+                "rounded-[calc(var(--radius-md)-2px)] px-2 py-0.5 text-[11px] font-semibold transition-colors",
+                series === opt.key
+                  ? "bg-(--color-surface) text-(--color-primary) shadow-xs"
+                  : "text-(--color-text-tertiary) hover:text-(--color-text-primary)"
+              )}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      }
+    />
   );
 }

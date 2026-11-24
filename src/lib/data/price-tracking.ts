@@ -316,14 +316,21 @@ export async function refreshSimulationPriceTracking(
       ? await trackTravelPrices(sim.description, sim.start_date, trackerConfig as Partial<TravelTrackerConfig>)
       : await trackProductPrices(sim.description, trackerConfig as Partial<ProductTrackerConfig>);
 
-  const prevHistory = sim.best_offer_meta?.historicalPrices ?? [];
-  if (prevHistory.length > 0 || (meta.historicalPrices?.length ?? 0) > 0) {
-    const mergedHistory = new Map(prevHistory.map((pt) => [pt.date, pt]));
-    for (const pt of meta.historicalPrices ?? []) {
-      mergedHistory.set(pt.date, pt);
-    }
-    meta.historicalPrices = Array.from(mergedHistory.values()).sort((a, b) => a.date.localeCompare(b.date));
-  }
+  const mergeHist = (prev?: { date: string; priceCents: number; source?: string }[], next?: { date: string; priceCents: number; source?: string }[]) => {
+    const p = prev ?? [];
+    const n = next ?? [];
+    if (p.length === 0 && n.length === 0) return undefined;
+    const map = new Map(p.map((pt) => [pt.date, pt]));
+    for (const pt of n) map.set(pt.date, pt);
+    return Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
+  };
+
+  const mergedAll = mergeHist(sim.best_offer_meta?.historicalPrices, meta.historicalPrices);
+  const mergedStay = mergeHist(sim.best_offer_meta?.stayHistoricalPrices, meta.stayHistoricalPrices);
+  const mergedFlight = mergeHist(sim.best_offer_meta?.flightHistoricalPrices, meta.flightHistoricalPrices);
+  if (mergedAll) meta.historicalPrices = mergedAll;
+  if (mergedStay) meta.stayHistoricalPrices = mergedStay;
+  if (mergedFlight) meta.flightHistoricalPrices = mergedFlight;
 
   const { snapshot, alert } = await recordSnapshotAndEvaluateAlerts(sim, meta);
 

@@ -6,9 +6,8 @@
 .modern-simulation-comparison{display:flex;flex-direction:column;gap:16px}
 .modern-simulation [hidden]{display:none!important}
 .modern-simulation-impact{order:-1}
-.modern-simulation-layout{display:grid;grid-template-columns:minmax(0,1.8fr) minmax(280px,1fr);gap:16px;align-items:start}
-.modern-simulation-main,.modern-simulation-sidebar,.modern-simulation-impact{display:flex;flex-direction:column;gap:16px;min-width:0}
-.modern-simulation-sidebar{position:sticky;top:16px}
+.modern-simulation-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;align-items:start}
+.modern-simulation-main,.modern-simulation-impact{display:flex;flex-direction:column;gap:16px;min-width:0}
 .modern-simulation-title{font-size:16px;line-height:1.3;font-weight:700;color:var(--color-text-primary)}
 .modern-simulation-subtitle{margin:4px 0 16px;font-size:12px;line-height:1.5;color:var(--color-text-secondary)}
 .modern-simulation-chart-title{font-size:13px;font-weight:600;margin:16px 0 8px}

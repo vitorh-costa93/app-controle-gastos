@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { Luggage, MoreVertical, Pencil, Plus, RefreshCw, ShieldCheck, ShoppingBag, Trash2, Undo2 } from "lucide-react";
 import { Simulation } from "@/types/domain";
 import { Card } from "@/components/ui/Card";
@@ -42,6 +42,15 @@ export function ScenarioList({
   const [menuId, setMenuId] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
 
+  useEffect(() => {
+    if (!menuId) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuId(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [menuId]);
+
   return (
     <Card className="p-5">
       <div className="mb-3.5 flex flex-wrap items-center justify-between gap-2">
@@ -50,7 +59,7 @@ export function ScenarioList({
           <p className="text-xs text-(--color-text-secondary)">Marque as compras que entram juntas na simulação.</p>
         </div>
         {onAddNew && (
-          <Button type="button" onClick={onAddNew} className="gap-1.5 px-3 py-1.5 text-xs">
+          <Button type="button" size="sm" onClick={onAddNew} className="gap-1.5 text-xs">
             <Plus size={14} /> Nova simulação
           </Button>
         )}
@@ -80,7 +89,8 @@ export function ScenarioList({
                     className="h-4 w-4 shrink-0 accent-(--color-primary)"
                   />
                   <button
-                    className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                    type="button"
+                    className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left"
                     onClick={() => (onOpen ?? onToggle)(sim.id)}
                   >
                   {sim.imageUrl ? (
@@ -117,7 +127,7 @@ export function ScenarioList({
                           "mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold",
                           feasibility.tone === "positive" && "bg-(--color-positive-soft) text-(--color-positive)",
                           feasibility.tone === "info" && "bg-(--color-primary-soft) text-(--color-primary)",
-                          feasibility.tone === "warning" && "bg-amber-500/15 text-amber-700"
+                          feasibility.tone === "warning" && "bg-(--color-warning-soft) text-(--color-warning)"
                         )}
                       >
                         {feasibility.label}
@@ -199,6 +209,7 @@ export function ScenarioList({
       {archived.length > 0 && (
         <div className="mt-4 border-t border-(--color-border) pt-3">
           <button
+            type="button"
             className="text-xs font-medium text-(--color-text-secondary) hover:text-(--color-text-primary)"
             onClick={() => setShowArchived((v) => !v)}
           >
@@ -212,6 +223,7 @@ export function ScenarioList({
                     {sim.description} · {sim.installments}x · {formatCurrencyBRL(sim.installmentAmountCents)}
                   </span>
                   <button
+                    type="button"
                     className="flex shrink-0 items-center gap-1 rounded-(--radius-md) px-2 py-1 text-xs font-medium text-(--color-primary) hover:bg-black/5"
                     onClick={() =>
                       startTransition(async () => {

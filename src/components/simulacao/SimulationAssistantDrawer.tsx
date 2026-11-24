@@ -92,11 +92,16 @@ export function SimulationAssistantDrawer({
 
   useEffect(() => {
     if (!open) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
   }, [open, onClose]);
 
   useEffect(() => {
@@ -243,7 +248,10 @@ export function SimulationAssistantDrawer({
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/35 backdrop-blur-[1px]" onClick={onClose}>
       <div
-        className={`flex h-full w-full max-w-[460px] flex-col bg-(--color-surface) shadow-2xl transition-colors ${
+        role="dialog"
+        aria-modal="true"
+        aria-label="Assistente IA"
+        className={`flex h-dvh w-full max-w-[460px] flex-col bg-(--color-surface) shadow-2xl transition-colors ${
           isDragging ? "ring-2 ring-inset ring-(--color-primary)" : ""
         }`}
         onClick={(e) => e.stopPropagation()}
@@ -267,7 +275,7 @@ export function SimulationAssistantDrawer({
             type="button"
             onClick={onClose}
             aria-label="Fechar assistente"
-            className="rounded-full p-1 text-slate-300 hover:bg-white/10 hover:text-white"
+            className="rounded-full p-2 text-slate-300 hover:bg-white/10 hover:text-white"
           >
             <X size={18} />
           </button>
@@ -303,8 +311,8 @@ export function SimulationAssistantDrawer({
               <div
                 className={
                   m.role === "user"
-                    ? "max-w-[85%] rounded-2xl rounded-br-xs bg-(--color-primary) px-3.5 py-2.5 text-xs leading-relaxed text-white"
-                    : "max-w-[95%] rounded-2xl rounded-bl-xs border border-(--color-border) bg-(--color-surface) px-3.5 py-2.5 text-xs leading-relaxed text-(--color-text-primary)"
+                    ? "min-w-0 max-w-[85%] overflow-hidden rounded-2xl rounded-br-xs bg-(--color-primary) px-3.5 py-2.5 text-xs leading-relaxed text-white"
+                    : "min-w-0 max-w-[95%] overflow-hidden rounded-2xl rounded-bl-xs border border-(--color-border) bg-(--color-surface) px-3.5 py-2.5 text-xs leading-relaxed text-(--color-text-primary)"
                 }
               >
                 {m.role === "user" ? (
@@ -357,9 +365,10 @@ export function SimulationAssistantDrawer({
                         </div>
                         <Button
                           type="button"
+                          size="sm"
                           onClick={() => handleAddSuggestion(key, s)}
                           disabled={isAdded || isAdding}
-                          className="shrink-0 gap-1 px-2.5 py-1.5 text-[11px]"
+                          className="shrink-0 gap-1 px-2.5 text-[11px]"
                         >
                           {isAdded ? (
                             <>
@@ -421,7 +430,7 @@ export function SimulationAssistantDrawer({
             e.preventDefault();
             sendText(input);
           }}
-          className="flex items-center gap-2 border-t border-(--color-border) bg-(--color-surface) p-3"
+          className="flex items-center gap-2 border-t border-(--color-border) bg-(--color-surface) p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
         >
           <input
             ref={fileInputRef}
@@ -453,12 +462,12 @@ export function SimulationAssistantDrawer({
             onPaste={handlePaste}
             placeholder="Pergunte, cole um print (Ctrl+V) ou peça sugestões..."
             disabled={isSending}
-            className="flex-1 rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-3 py-2 text-xs outline-none focus:border-(--color-primary)"
+            className="h-9 flex-1 rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-3 text-xs outline-none focus:border-(--color-primary)"
           />
           <Button
             type="submit"
             disabled={(!input.trim() && pendingImages.length === 0) || isSending}
-            className="gap-1.5 px-3 py-2 text-xs"
+            className="h-9 gap-1.5 px-3 py-0 text-xs"
           >
             <Send size={13} /> Enviar
           </Button>

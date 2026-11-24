@@ -349,7 +349,7 @@ export function SimulationFormFields({
         </div>
       ) : (
         <div className="space-y-3 rounded-(--radius-lg) border border-(--color-primary)/25 bg-(--color-primary-soft)/20 p-3.5">
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-xs font-semibold uppercase tracking-wide text-(--color-primary)">
               Configuração da Viagem (Voos + Hospedagem por Data)
             </span>
@@ -418,7 +418,7 @@ export function SimulationFormFields({
             </div>
           </FieldGroup>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <FieldGroup label="Entrada na hospedagem (Check-in)">
               <Input
                 type="date"
@@ -487,7 +487,7 @@ export function SimulationFormFields({
           </label>
 
           {!value.sameDatesForFlight && (
-            <div className="grid grid-cols-2 gap-3 rounded-(--radius-md) border border-dashed border-(--color-border) bg-(--color-surface) p-3">
+            <div className="grid grid-cols-1 gap-3 rounded-(--radius-md) border border-dashed border-(--color-border) bg-(--color-surface) p-3 sm:grid-cols-2">
               <FieldGroup label="Ida do voo">
                 <Input
                   type="date"
@@ -603,7 +603,7 @@ export function SimulationFormFields({
               variant="secondary"
               onClick={handleFetchBestPrices}
               disabled={isSearching}
-              className="w-full justify-center gap-2 border-(--color-primary)/40 bg-(--color-surface) text-xs font-semibold text-(--color-primary) hover:bg-(--color-primary-soft)"
+              className="h-auto min-h-10 w-full justify-center gap-2 whitespace-normal border-(--color-primary)/40 bg-(--color-surface) py-2 text-center text-xs font-semibold text-(--color-primary) hover:bg-(--color-primary-soft)"
             >
               <Search size={14} />
               {isSearching
@@ -671,9 +671,9 @@ export function SimulationFormFields({
               </div>
             )}
 
-            <div className="flex items-center justify-between pt-1">
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
               <span className="flex items-center gap-1 text-[11px] text-(--color-text-tertiary)">
-                <Sparkles size={12} />
+                <Sparkles size={12} className="shrink-0" />
                 {value.cashPriceCents > 0
                   ? `Valores preenchidos: ${formatCurrencyBRL(value.cashPriceCents)} à vista / ${formatCurrencyBRL(value.installmentTotalCents)} (${value.installments}x)`
                   : "Se você clicar em Adicionar direto, buscamos os valores automaticamente."}
@@ -681,7 +681,7 @@ export function SimulationFormFields({
               <button
                 type="button"
                 onClick={() => setShowManualPrices((s) => !s)}
-                className="text-[11px] font-semibold text-(--color-primary) hover:underline"
+                className="shrink-0 text-[11px] font-semibold text-(--color-primary) hover:underline"
               >
                 {showManualPrices ? "Ocultar ajuste manual" : "Ajustar valores manualmente"}
               </button>

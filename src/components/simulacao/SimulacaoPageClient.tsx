@@ -311,7 +311,7 @@ export function SimulacaoPageClient({
       {(isModern || personId) && <div className="modern-simulation-person">
         {(isModern || personId) && <label>Pessoa <select value={personId} onChange={(event) => { const params = new URLSearchParams(searchParams.toString()); if (event.target.value) params.set("personId", event.target.value); else params.delete("personId"); router.push(`${pathname}${params.size ? `?${params}` : ""}`); }}><option value="">Casal</option>{people.filter((person) => person.name.trim().toLocaleLowerCase("pt-BR") !== "casal").map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select></label>}
         {personId && <div><p>{individualBalances[personId] ? "Saldo inicial individual usado apenas nesta simulação." : "Saldo inicial individual não informado; projeção parte de zero."}</p><label htmlFor="individual-balance">Saldo inicial individual</label><CurrencyInput id="individual-balance" valueCents={individualBalances[personId] ?? 0} onChange={(amount) => setIndividualBalances((previous) => ({ ...previous, [personId]: amount }))} /></div>}
-        <Button type="button" onClick={() => setShowAssistant(true)} className="ml-auto gap-1.5 px-3 py-1.5 text-xs">
+        <Button type="button" size="sm" onClick={() => setShowAssistant(true)} className="ml-auto h-9 gap-1.5 px-3 text-xs">
           <Sparkles size={14} /> Assistente IA
         </Button>
       </div>}
@@ -362,7 +362,7 @@ export function SimulacaoPageClient({
                     <button
                       type="button"
                       onClick={() => setShowBaseProjection((v) => !v)}
-                      className="inline-flex items-center gap-1.5 rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-3.5 py-1.5 text-xs font-semibold text-(--color-text-secondary) hover:bg-black/5"
+                      className="inline-flex items-center justify-center gap-1.5 rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-3.5 py-2 text-center text-xs font-semibold text-(--color-text-secondary) hover:bg-black/5"
                     >
                       {showBaseProjection ? (
                         <>
@@ -377,7 +377,7 @@ export function SimulacaoPageClient({
                     <button
                       type="button"
                       onClick={() => setShowBudgetCharts((v) => !v)}
-                      className="inline-flex items-center gap-1.5 rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-3.5 py-1.5 text-xs font-semibold text-(--color-text-secondary) hover:bg-black/5"
+                      className="inline-flex items-center justify-center gap-1.5 rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-3.5 py-2 text-center text-xs font-semibold text-(--color-text-secondary) hover:bg-black/5"
                     >
                       {showBudgetCharts ? (
                         <>

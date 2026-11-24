@@ -223,17 +223,19 @@ export function PriceTrackingSection({
             <Button
               type="button"
               variant="secondary"
+              size="sm"
               onClick={() => setAlertModalOpen(true)}
-              className="gap-1.5 px-3 py-1.5 text-xs"
+              className="gap-1.5 text-xs"
             >
               <Bell size={13} />
               Alertas no Celular
             </Button>
             <Button
               type="button"
+              size="sm"
               onClick={handleRefreshAllSelected}
               disabled={isRefreshingAll || refreshingId !== null}
-              className="gap-1.5 px-3 py-1.5 text-xs"
+              className="gap-1.5 text-xs"
             >
               <RefreshCw size={13} className={cn(isRefreshingAll && "animate-spin")} />
               {isRefreshingAll ? "Atualizando preços..." : "Atualizar preços agora"}
@@ -302,13 +304,13 @@ export function PriceTrackingSection({
                       {isTravel ? <Plane size={15} /> : <ShoppingBag size={15} />}
                     </span>
                     <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
                         <h4 className="text-sm font-semibold">{sim.description}</h4>
                         <span className="rounded-full bg-(--color-primary-soft) px-2 py-0.5 text-[11px] font-semibold text-(--color-primary)">
                           {isTravel ? "Viagem" : "Produto"}
                         </span>
                         {meta && (
-                          <span className="truncate text-xs text-(--color-text-secondary)">
+                          <span className="max-w-full truncate text-xs text-(--color-text-secondary)">
                             · {meta.storeOrProvider}
                           </span>
                         )}
@@ -331,12 +333,12 @@ export function PriceTrackingSection({
                   </div>
 
                   <div className="flex flex-wrap items-center gap-1.5">
-                    {meta?.offerUrl && (
+                    {isTravel && meta?.offerUrl && (
                       <a
                         href={meta.offerUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-2.5 py-1 text-xs font-semibold text-(--color-primary) hover:bg-(--color-primary-soft)"
+                        className="inline-flex h-8 items-center gap-1 rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-2.5 text-xs font-semibold text-(--color-primary) hover:bg-(--color-primary-soft)"
                       >
                         Abrir <ExternalLink size={11} />
                       </a>
@@ -344,18 +346,19 @@ export function PriceTrackingSection({
                     <Button
                       type="button"
                       variant="secondary"
+                      size="sm"
                       onClick={() => handleRefreshSingle(sim.id)}
                       disabled={isRefreshingThis}
-                      className="gap-1 px-2.5 py-1 text-xs"
+                      className="min-w-[88px] gap-1 px-2.5 text-xs"
                     >
                       <RefreshCw size={12} className={cn(isRefreshingThis && "animate-spin")} />
-                      {isRefreshingThis ? "..." : "Atualizar"}
+                      {isRefreshingThis ? "Buscando" : "Atualizar"}
                     </Button>
                     {isTravel && (
                       <button
                         type="button"
                         onClick={() => toggleExpanded(sim.id)}
-                        className="inline-flex items-center gap-1 rounded-(--radius-md) px-2.5 py-1 text-xs font-semibold text-(--color-text-secondary) hover:bg-black/5"
+                        className="inline-flex h-8 items-center gap-1 rounded-(--radius-md) px-2.5 text-xs font-semibold text-(--color-text-secondary) hover:bg-black/5"
                       >
                         {isExpanded ? (
                           <>
@@ -561,7 +564,7 @@ function TravelTrackingDetailsCard({
   return (
     <div className="space-y-3 rounded-(--radius-lg) border border-(--color-border) bg-black/[0.015] p-4">
       {/* Barra rápida para alterar Destino, Resort/Estadia e Datas da Viagem */}
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-5">
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <label className="mb-1 block text-[11px] font-semibold text-(--color-text-secondary)">
             Destino / Aeroporto
@@ -569,7 +572,7 @@ function TravelTrackingDetailsCard({
           <select
             value={destinationAirport}
             onChange={(e) => setDestinationAirport(e.target.value)}
-            className="w-full rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-2.5 py-1.5 text-xs"
+            className="h-9 w-full rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-2.5 text-xs"
           >
             <option value="MCZ">Maceió - AL (MCZ)</option>
             <option value="REC">Recife - PE (REC)</option>
@@ -580,7 +583,7 @@ function TravelTrackingDetailsCard({
             <option value="POA">Gramado / POA (POA)</option>
           </select>
         </div>
-        <div className="sm:col-span-2">
+        <div>
           <label className="mb-1 block text-[11px] font-semibold text-(--color-text-secondary)">
             Estadia / Resort monitorado
           </label>
@@ -589,7 +592,7 @@ function TravelTrackingDetailsCard({
             value={accommodationName}
             onChange={(e) => setAccommodationName(e.target.value)}
             placeholder="Ex.: Japaratinga Lounge Resort ou Salinas Maragogi"
-            className="w-full rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-2.5 py-1.5 text-xs"
+            className="h-9 w-full rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-2.5 text-xs"
           />
         </div>
         <div>
@@ -600,7 +603,7 @@ function TravelTrackingDetailsCard({
             type="date"
             value={outboundDate}
             onChange={(e) => setOutboundDate(e.target.value)}
-            className="w-full rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-2.5 py-1.5 text-xs"
+            className="h-9 w-full rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-2.5 text-xs"
           />
         </div>
         <div>
@@ -613,13 +616,14 @@ function TravelTrackingDetailsCard({
               min={outboundDate}
               value={returnDate}
               onChange={(e) => setReturnDate(e.target.value)}
-              className="w-full rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-2 py-1.5 text-xs"
+              className="h-9 min-w-0 flex-1 rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-2 text-xs"
             />
             <Button
               type="button"
+              size="sm"
               onClick={handleApplyNewTravelDates}
               disabled={isUpdatingDates}
-              className="shrink-0 px-2.5 py-1.5 text-xs"
+              className="h-9 shrink-0 px-3 text-xs"
             >
               {isUpdatingDates ? "..." : "Cotar"}
             </Button>
@@ -724,7 +728,7 @@ function TravelTrackingDetailsCard({
               </div>
             </div>
 
-            <div className="mt-3 flex items-center justify-between border-t border-(--color-border)/60 pt-2.5">
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-(--color-border)/60 pt-2.5">
               <span className="text-[11px] text-(--color-text-secondary)">
                 Total Voo + Estadia: <b>{formatCurrencyBRL(meta?.cashPriceCents ?? sim.cashPriceCents ?? 0)}</b> à vista
               </span>
@@ -779,16 +783,23 @@ function PriceHistoryChart({
       </div>
 
       {chartData.length >= 2 && (
-        <div className="h-44 w-full">
+        <div className="h-44 min-w-0 w-full">
           <ResponsiveContainer width="100%" height={176}>
-            <LineChart data={chartData} margin={{ top: 6, right: 12, left: 0, bottom: 0 }}>
+            <LineChart data={chartData} margin={{ top: 6, right: 20, left: 4, bottom: 0 }}>
               <CartesianGrid vertical={false} stroke="var(--color-border)" />
-              <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--color-text-tertiary)" }} axisLine={false} tickLine={false} />
+              <XAxis
+                dataKey="date"
+                interval="preserveStartEnd"
+                padding={{ left: 8, right: 12 }}
+                tick={{ fontSize: 10, fill: "var(--color-text-tertiary)" }}
+                axisLine={false}
+                tickLine={false}
+              />
               <YAxis
                 tick={{ fontSize: 10, fill: "var(--color-text-tertiary)" }}
                 axisLine={false}
                 tickLine={false}
-                width={66}
+                width={74}
                 tickFormatter={(v) => `R$ ${Number(v).toLocaleString("pt-BR")}`}
               />
               <Tooltip
@@ -865,11 +876,11 @@ function TravelSplitCards({
           )}
         >
           <div className="flex items-start justify-between gap-2">
-            <div className="flex items-center gap-2.5">
+            <div className="flex min-w-0 items-center gap-2.5">
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-(--radius-md) bg-(--color-primary-soft) text-(--color-primary)">
                 <Hotel size={15} />
               </span>
-              <div>
+              <div className="min-w-0">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-(--color-text-tertiary)">Hospedagem</p>
                 <p className="text-sm font-bold text-(--color-text-primary)">{stay.accommodationName}</p>
                 <p className="text-[11px] text-(--color-text-secondary)">
@@ -929,11 +940,11 @@ function TravelSplitCards({
           )}
         >
           <div className="flex items-start justify-between gap-2">
-            <div className="flex items-center gap-2.5">
+            <div className="flex min-w-0 items-center gap-2.5">
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-(--radius-md) bg-(--color-primary-soft) text-(--color-primary)">
                 <Plane size={15} />
               </span>
-              <div>
+              <div className="min-w-0">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-(--color-text-tertiary)">
                   Passagem Aérea ({formatTravelersSummary(rawCfg.adults ?? 2, rawCfg.children ?? 0, rawCfg.pets ?? 0)} c/ taxas)
                 </p>
@@ -963,13 +974,13 @@ function TravelSplitCards({
                     type="button"
                     onClick={() => onOverrideChange({ originAirport: fq.originAirport })}
                     className={cn(
-                      "flex-1 rounded-(--radius-md) border px-2.5 py-1.5 text-left text-xs transition-colors",
+                      "min-w-[140px] flex-1 rounded-(--radius-md) border px-2.5 py-1.5 text-left text-xs transition-colors",
                       selected
                         ? "border-(--color-primary) bg-(--color-primary-soft)/70"
                         : "border-(--color-border) bg-(--color-surface) hover:bg-black/[0.02]"
                     )}
                   >
-                    <div className="flex items-center justify-between font-bold">
+                    <div className="flex items-center justify-between gap-2 font-bold">
                       <span>{fq.originAirport === "VCP" ? "VCP · Campinas" : fq.originAirport === "RAO" ? "RAO · Rib. Preto" : fq.originAirport}</span>
                       <span className={selected ? "text-(--color-positive)" : ""}>{formatCurrencyBRL(fq.cashTotalCents)}</span>
                     </div>

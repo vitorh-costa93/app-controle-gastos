@@ -3,6 +3,8 @@
 Atualizado: 24/11/2026.
 
 ## Rastreamento Inteligente de Preços na Simulação — Produtos (4 Camadas) & Viagens (Voos RAO/VCP + Resorts por Data) (23/11/2026)
+- **Polimento completo de UI/UX em `/simulacao` (24/11/2026):**
+  - `ProductVisorPanel.tsx`, `PriceTrackingSection.tsx`, `CashVsInstallmentSection.tsx`, `ScenarioList.tsx`, `SimulationFormFields.tsx`, `SimulationAssistantDrawer.tsx`, `ChatMarkdown.tsx`, `SimulacaoPageClient.tsx` e `modern-simulation.css`: corrigidos alinhamentos de botões (`size="sm"`), sobreposição dos badges (`Menor preço`, `Melhor entre as compras`), cortes nos eixos X/Y dos gráficos Recharts, responsividade de datas/tabelas em mobile (390px), trava de scroll e `role="dialog"` no drawer de IA, uso consistente de tokens `--color-*` e barra lateral de rendimento `sticky`.
 - **Painel Visor de Ofertas, Histórico de Preços (40d/3m/6m/1a) e Melhor Data de Compra (24/11/2026):**
   - `ProductVisorPanel.tsx`, `PriceTrackingSection.tsx` e `history-stats.ts`: produtos exibem layout estilo Visor com imagem + ações à esquerda, lista de `Ofertas` com destaque verde `Menor preço` e expansão `Ver todas as ofertas`, gráfico de área verde com padrão `1a` e eixo temporal proporcional cobrindo os 365 dias inteiros (`40d` / `3m` / `6m` / `1a`), além de termômetro anti-Black-Fraude (`Como está o preço hoje` vs mediana).
   - `engine.ts` (`fetchProductPriceHistoryOneYear` em paralelo com `trackProductPrices`) e `price-tracking.ts`: busca dedicada dos últimos 12 meses completos em comparadores brasileiros e preservação acumulativa de `historicalPrices` entre atualizações.

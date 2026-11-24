@@ -103,8 +103,8 @@ export function CashVsInstallmentSection({
 
 function SectionHeader({ title, subtitle, badge }: { title: string; subtitle: string; badge?: string }) {
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-(--color-border) px-5 py-4">
-      <div>
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-(--color-border) px-5 py-4">
+      <div className="min-w-0">
         <h3 className="text-[15px] font-semibold">{title}</h3>
         <p className="mt-0.5 text-xs text-(--color-text-secondary)">{subtitle}</p>
       </div>
@@ -168,7 +168,7 @@ function HeadlineCard({
         {inst ? (
           <div
             className={cn(
-              "flex items-center gap-4 rounded-(--radius-md) p-4",
+              "flex items-start gap-4 rounded-(--radius-md) p-4 sm:items-center",
               inst.winner === "tie"
                 ? "bg-black/[0.04]"
                 : inst.winner === "cash"
@@ -322,14 +322,21 @@ function ImpactCard({
           )}
         </div>
 
-        <div>
+        <div className="min-w-0">
           <h4 className="mb-2 text-sm font-semibold">Saldo acumulado mês a mês</h4>
-          <div className="h-64 w-full" role="img" aria-label="Saldo acumulado em cada cenário ao longo dos meses">
+          <div className="h-64 min-w-0 w-full" role="img" aria-label="Saldo acumulado em cada cenário ao longo dos meses">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+              <LineChart data={data} margin={{ top: 8, right: 22, left: 4, bottom: 0 }}>
                 <CartesianGrid vertical={false} stroke="var(--color-border)" />
-                <XAxis dataKey="label" axisLine={false} tickLine={false} tick={axisTick} interval="preserveStartEnd" />
-                <YAxis axisLine={false} tickLine={false} tick={axisTick} width={64} tickFormatter={(v) => formatCurrencyBRL(Number(v)).replace(",00", "")} />
+                <XAxis
+                  dataKey="label"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={axisTick}
+                  interval="preserveStartEnd"
+                  padding={{ left: 10, right: 14 }}
+                />
+                <YAxis axisLine={false} tickLine={false} tick={axisTick} width={74} tickFormatter={(v) => formatCurrencyBRL(Number(v)).replace(",00", "")} />
                 <Tooltip
                   formatter={(v) => formatCurrencyBRL(Number(v))}
                   contentStyle={{ borderRadius: 12, border: "1px solid var(--color-border)", fontSize: 12 }}
@@ -350,7 +357,7 @@ function ImpactCard({
           <button
             type="button"
             onClick={onToggleDetails}
-            className="inline-flex items-center gap-1.5 rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-3.5 py-1.5 text-xs font-semibold text-(--color-text-secondary) hover:bg-black/5"
+            className="inline-flex items-center justify-center gap-1.5 rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-3.5 py-2 text-center text-xs font-semibold text-(--color-text-secondary) hover:bg-black/5"
           >
             {showDetails ? (
               <>
@@ -366,7 +373,7 @@ function ImpactCard({
 
         {showDetails && (
           <>
-            <div className={cn("grid grid-cols-1 gap-3", inst ? "md:grid-cols-3" : "md:grid-cols-2")}>
+            <div className={cn("grid grid-cols-1 gap-4 pt-2", inst ? "md:grid-cols-3" : "md:grid-cols-2")}>
               <ScenarioCard
                 color={COLORS.none}
                 title="Não comprar"
@@ -393,8 +400,9 @@ function ImpactCard({
               )}
             </div>
 
-            <div className="overflow-x-auto">
+            <div>
               <h4 className="mb-1 text-sm font-semibold">Mês a mês — saldo acumulado depois da sobra e da compra</h4>
+              <div className="overflow-x-auto">
               <table className="w-full min-w-[640px] border-collapse text-[13px] tabular-nums">
                 <thead>
                   <tr className="text-[11px] font-semibold text-(--color-text-secondary)">
@@ -439,6 +447,7 @@ function ImpactCard({
                   )}
                 </tbody>
               </table>
+              </div>
             </div>
 
             {inst && (
@@ -486,7 +495,7 @@ function ScenarioCard({
   best?: boolean;
 }) {
   return (
-    <div className={cn("relative rounded-(--radius-md) p-4", best ? "border-2 border-(--color-positive)" : "border border-(--color-border)")}>
+    <div className={cn("relative rounded-(--radius-md) p-4", best ? "border-2 border-(--color-positive) pt-5" : "border border-(--color-border)")}>
       {best && (
         <span className="absolute -top-3 left-3.5 rounded-full bg-(--color-positive-soft) px-2.5 py-1 text-xs font-semibold text-(--color-positive)">
           Melhor entre as compras
@@ -532,10 +541,20 @@ function AiAnalysisCard({ simulation, input }: { simulation: Simulation; input: 
   const text = state?.key === key ? state.text : null;
 
   return (
-    <Card className="flex gap-3 border-(--color-primary)/20 bg-(--color-primary-soft)/40 p-5">
+    <Card className="flex flex-wrap items-start gap-3 border-(--color-primary)/20 bg-(--color-primary-soft)/40 p-5 sm:flex-nowrap">
       <Sparkles size={18} className="mt-0.5 shrink-0 text-(--color-primary)" />
-      <div className="flex-1">
-        <p className="mb-1 text-sm font-semibold text-(--color-primary)">Análise da IA · à vista × parcelado</p>
+      <div className="min-w-0 flex-1">
+        <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-semibold text-(--color-primary)">Análise da IA · à vista × parcelado</p>
+          <button
+            type="button"
+            onClick={() => setNonce((n) => n + 1)}
+            disabled={text === null}
+            className="rounded-(--radius-md) bg-black/5 px-3 py-1.5 text-xs font-semibold text-(--color-text-primary) hover:bg-black/10 disabled:opacity-50"
+          >
+            Refazer
+          </button>
+        </div>
         {text === null ? (
           <div className="space-y-2">
             <div className="h-3 w-full animate-pulse rounded bg-black/10" />
@@ -547,14 +566,6 @@ function AiAnalysisCard({ simulation, input }: { simulation: Simulation; input: 
         )}
         <p className="mt-2 text-xs text-(--color-text-tertiary)">Gerado a partir das taxas ao lado · não é recomendação de investimento.</p>
       </div>
-      <button
-        type="button"
-        onClick={() => setNonce((n) => n + 1)}
-        disabled={text === null}
-        className="self-start rounded-(--radius-md) bg-black/5 px-3 py-1.5 text-xs font-semibold text-(--color-text-primary) hover:bg-black/10 disabled:opacity-50"
-      >
-        Refazer
-      </button>
     </Card>
   );
 }
@@ -586,9 +597,12 @@ function BreakEvenCard({
       </p>
       <div className="relative mt-4 h-2 rounded-full bg-black/[0.06]">
         <div className="absolute inset-y-0 left-0 rounded-full bg-(--chart-3)" style={{ width: `${markerPct}%` }} />
-        <div className="absolute -top-1 h-4 w-[3px] rounded bg-(--color-text-primary)" style={{ left: `calc(${markerPct}% - 1px)` }} />
+        <div
+          className="absolute -top-1 h-4 w-[3px] -translate-x-1/2 rounded bg-(--color-text-primary)"
+          style={{ left: `clamp(2px, ${markerPct}%, calc(100% - 2px))` }}
+        />
       </div>
-      <div className="mt-1.5 flex justify-between text-[11px] text-(--color-text-tertiary)">
+      <div className="mt-1.5 flex flex-wrap justify-between gap-2 text-[11px] tabular-nums text-(--color-text-tertiary)">
         <span>{formatCurrencyBRL(cash)} (à vista)</span>
         <span>{formatCurrencyBRL(offer)} (oferta)</span>
       </div>
@@ -609,7 +623,8 @@ function SensitivityCard({ input }: { input: CashVsInstallmentInput }) {
     <Card className="p-5">
       <h3 className="text-[15px] font-semibold">E se o CDI mudar?</h3>
       <p className="mt-0.5 text-xs text-(--color-text-secondary)">Sensibilidade do resultado</p>
-      <table className="mt-2 w-full border-collapse text-[13px] tabular-nums">
+      <div className="mt-2 overflow-x-auto">
+      <table className="w-full min-w-[320px] border-collapse text-[13px] tabular-nums">
         <thead>
           <tr className="text-[11px] font-semibold text-(--color-text-secondary)">
             <th className="border-b border-(--color-border) py-2 text-left">CDI a.a.</th>
@@ -630,6 +645,7 @@ function SensitivityCard({ input }: { input: CashVsInstallmentInput }) {
           ))}
         </tbody>
       </table>
+      </div>
       <p className="mt-2 text-xs text-(--color-text-tertiary)">
         {allCash
           ? "Em todos esses cenários de CDI, pagar à vista continua melhor."

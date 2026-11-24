@@ -25,7 +25,7 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
           href={match[2]}
           target="_blank"
           rel="noopener noreferrer"
-          className="underline decoration-current/50 underline-offset-2 hover:opacity-80"
+          className="underline decoration-current/50 underline-offset-2 [overflow-wrap:anywhere] hover:opacity-80"
         >
           {match[1]}
         </a>
@@ -44,7 +44,7 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
       );
     } else if (match[5] !== undefined) {
       nodes.push(
-        <code key={key} className="rounded bg-black/10 px-1 py-0.5 font-mono text-[11px]">
+        <code key={key} className="rounded bg-black/10 px-1 py-0.5 font-mono text-[11px] [overflow-wrap:anywhere]">
           {match[5]}
         </code>
       );
@@ -66,7 +66,7 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
   return nodes;
 }
 
-export function ChatMarkdown({ content }: { content: string; isUser?: boolean }) {
+export function ChatMarkdown({ content, isUser }: { content: string; isUser?: boolean }) {
   const lines = content.replace(/\r\n/g, "\n").split("\n");
   const blocks: ReactNode[] = [];
   let i = 0;
@@ -90,7 +90,7 @@ export function ChatMarkdown({ content }: { content: string; isUser?: boolean })
     const headingMatch = trimmed.match(/^#{1,4}\s+(.+)$/);
     if (headingMatch) {
       blocks.push(
-        <p key={`h-${blockIdx++}`} className="font-semibold text-(--color-text-primary)">
+        <p key={`h-${blockIdx++}`} className={isUser ? "font-semibold text-white" : "font-semibold text-(--color-text-primary)"}>
           {renderInline(headingMatch[1], `h-${blockIdx}`)}
         </p>
       );

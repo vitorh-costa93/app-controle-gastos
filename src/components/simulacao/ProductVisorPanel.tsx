@@ -184,7 +184,7 @@ export function ProductVisorPanel({
         </div>
 
         {/* Coluna de Ofertas */}
-        <div className="space-y-2">
+        <div className="min-w-0 space-y-2">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <div>
               <h5 className="text-xs font-bold text-(--color-text-primary)">Ofertas</h5>
@@ -202,7 +202,7 @@ export function ProductVisorPanel({
               Clique em <b>Atualizar</b> acima para buscar ofertas nas lojas oficiais e o histórico de preço.
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-2 pt-2.5">
               {visibleOffers.map((offer, idx) => {
                 const isBest = idx === 0;
                 const isActiveStore =
@@ -246,7 +246,7 @@ export function ProductVisorPanel({
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 tabular-nums">
-                      <div className="text-right">
+                      <div className="text-left sm:text-right">
                         <div className="text-sm font-bold text-(--color-text-primary)">
                           {formatCurrencyBRL(offer.cashPriceCents)}
                         </div>
@@ -313,7 +313,7 @@ export function ProductVisorPanel({
                 type="button"
                 onClick={() => setWindowKey(opt.key)}
                 className={cn(
-                  "rounded-sm px-2.5 py-1 text-[11px] font-semibold transition-colors",
+                  "rounded-[calc(var(--radius-md)-2px)] px-2.5 py-1 text-[11px] font-semibold transition-colors",
                   windowKey === opt.key
                     ? "bg-(--color-surface) text-(--color-text-primary) shadow-xs"
                     : "text-(--color-text-tertiary) hover:text-(--color-text-primary)"
@@ -327,11 +327,11 @@ export function ProductVisorPanel({
 
         <div className="grid gap-3 lg:grid-cols-[1.65fr_1fr]">
           {/* Gráfico de Área (Estilo Visor) */}
-          <div className="rounded-(--radius-lg) border border-(--color-border) bg-(--color-surface) p-3.5">
+          <div className="min-w-0 rounded-(--radius-lg) border border-(--color-border) bg-(--color-surface) p-3.5">
             {chartData.length >= 2 ? (
               <div className="h-44 w-full">
                 <ResponsiveContainer width="100%" height={176}>
-                  <AreaChart data={chartData} margin={{ top: 8, right: 10, left: 0, bottom: 0 }}>
+                  <AreaChart data={chartData} margin={{ top: 8, right: 20, left: 4, bottom: 0 }}>
                     <defs>
                       <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#22c55e" stopOpacity={0.28} />
@@ -345,6 +345,7 @@ export function ProductVisorPanel({
                       scale="time"
                       domain={[windowStartMs, nowMs]}
                       ticks={xTicks}
+                      padding={{ left: 10, right: 16 }}
                       tickFormatter={(v) => formatAxisTick(Number(v), windowKey)}
                       tick={{ fontSize: 10, fill: "var(--color-text-tertiary)" }}
                       axisLine={false}
@@ -354,7 +355,7 @@ export function ProductVisorPanel({
                       tick={{ fontSize: 10, fill: "var(--color-text-tertiary)" }}
                       axisLine={false}
                       tickLine={false}
-                      width={62}
+                      width={72}
                       domain={["auto", "auto"]}
                       tickFormatter={(v) => `R$ ${Number(v).toLocaleString("pt-BR")}`}
                     />
@@ -409,7 +410,7 @@ export function ProductVisorPanel({
                 ) : stats.status === "above" ? (
                   <>
                     O preço está pelo menos{" "}
-                    <b className="text-amber-600">
+                    <b className="text-(--color-warning)">
                       {absDeltaPct}% acima da mediana
                     </b>{" "}
                     de {stats.windowDays} dias: <b>{formatCurrencyBRL(stats.medianCents)}</b>.
@@ -427,7 +428,7 @@ export function ProductVisorPanel({
               <div className="relative h-2 w-full rounded-full bg-gradient-to-r from-emerald-500 via-sky-500 to-amber-500">
                 <span
                   className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-slate-900 bg-white shadow-sm"
-                  style={{ left: `${Math.round(stats.positionRatio * 100)}%` }}
+                  style={{ left: `clamp(8px, ${Math.round(stats.positionRatio * 100)}%, calc(100% - 8px))` }}
                   title={`Preço atual: ${formatCurrencyBRL(currentCashCents)}`}
                 />
               </div>

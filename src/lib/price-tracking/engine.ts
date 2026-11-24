@@ -1,6 +1,7 @@
 import "server-only";
 import {
   BestOfferMeta,
+  PriceHistoryPoint,
   ProductTrackerConfig,
   TravelTrackerConfig,
   VerifiedFlightQuote,
@@ -258,7 +259,7 @@ export function verifyProductOfferFourLayers(
 const PRODUCT_VERIFICATION_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["verification_summary", "rejected_count", "rejected_reasons", "offers"],
+  required: ["verification_summary", "rejected_count", "rejected_reasons", "offers", "price_history"],
   properties: {
     verification_summary: { type: "string" },
     rejected_count: { type: "integer" },
@@ -300,6 +301,19 @@ const PRODUCT_VERIFICATION_SCHEMA = {
         },
       },
     },
+    price_history: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["date", "price_brl", "source"],
+        properties: {
+          date: { type: "string" },
+          price_brl: { type: "number" },
+          source: { type: "string" },
+        },
+      },
+    },
   },
 } as const;
 
@@ -332,6 +346,7 @@ export async function trackProductPrices(
       : [];
 
   let candidateOffers: VerifiedProductOffer[] = [];
+  let historicalPrices: PriceHistoryPoint[] = [];
   let aiRejectedCount = 0;
   let aiRejectedReasons: string[] = [];
   let verificationSummary = "";
@@ -369,7 +384,10 @@ Use a busca web em tempo real para encontrar e validar ofertas REAIS e COMPRÁVE
      * Na KaBuM!, consoles PS5 novos (inclusive bundles com controle DualSense e jogos digitais) exibem preço à vista no Pix (com desconto) e total parcelado em 10x sem juros — APROVE sempre!
 4. CAMADA 4 (Vendedor Oficial 1P ou Loja Oficial Homologada):
    - Aprove ofertas vendidas pela própria loja (Amazon.com.br, KaBuM!, Magalu, Fast Shop, Carrefour) OU vendidas por uma loja oficial homologada dentro da plataforma (ex.: Loja Oficial PlayStation no Mercado Livre, ou vendido por KaBuM!/Sony e enviado pela Amazon.com.br). Rejeite apenas vendedores terceiros desconhecidos sem selo oficial.
-- Retorne todas as ofertas aprovadas (entre 2 e 5 lojas oficiais) ordenadas do menor para o maior preço à vista.`,
+- Retorne todas as ofertas aprovadas (entre 2 e 5 lojas oficiais) ordenadas do menor para o maior preço à vista.
+5. HISTÓRICO DE PREÇOS REAL (Anti-Black-Fraude):
+   - Também pesquise comparadores/rastreadores brasileiros (Buscapé, Zoom, Keepa, Promobit) para levantar preços históricos reais observados do produto entre os últimos 40 dias e 1 ano.
+   - Retorne de 6 a 18 pontos cronológicos em "price_history" (date no formato "YYYY-MM-DD", price_brl em reais e source com o nome do comparador/loja). Use apenas preços realmente encontrados na web; NUNCA invente números — se não houver histórico confiável, retorne [].`,
         input: `Busque na web agora ofertas reais no Brasil para: "${query}"
 Piso mínimo de sanidade: R$ ${(config.minSanityPriceCents! / 100).toFixed(2)}
 Data da verificação: ${new Date().toISOString().slice(0, 10)} (Semana de Black Friday)
@@ -416,6 +434,11 @@ ${snippets.length > 0 ? `\nDados adicionais coletados:\n${snippets.join("\n\n").
             is_official_seller: boolean;
             notes: string;
           }>;
+          price_history?: Array<{
+            date: string;
+            price_brl: number;
+            source: string;
+          }>;
         };
         verificationSummary = parsed.verification_summary;
         aiRejectedCount = parsed.rejected_count ?? 0;
@@ -437,6 +460,21 @@ ${snippets.length > 0 ? `\nDados adicionais coletados:\n${snippets.join("\n\n").
           isOfficialSeller: o.is_official_seller,
           notes: o.notes,
         }));
+
+        const todayIso = new Date().toISOString().slice(0, 10);
+        const minCents = config.minSanityPriceCents ?? 1000;
+        const historyMap = new Map<string, PriceHistoryPoint>();
+        for (const h of parsed.price_history ?? []) {
+          if (!h?.date || !/^\d{4}-\d{2}-\d{2}$/.test(h.date) || h.date > todayIso) continue;
+          const priceCents = Math.round(Number(h.price_brl) * 100);
+          if (!Number.isFinite(priceCents) || priceCents < minCents) continue;
+          historyMap.set(h.date, {
+            date: h.date,
+            priceCents,
+            source: h.source || "Comparador",
+          });
+        }
+        historicalPrices = Array.from(historyMap.values()).sort((a, b) => a.date.localeCompare(b.date));
       }
     } catch (err) {
       await logAiUsage({ task: "extraction", model, ok: false, durationMs: Date.now() - t0, error: String(err) });
@@ -534,6 +572,7 @@ ${snippets.length > 0 ? `\nDados adicionais coletados:\n${snippets.join("\n\n").
     rejectedCount,
     rejectedReasons: rejectedReasons.slice(0, 6),
     productOffers: approvedOffers,
+    ...(historicalPrices.length > 0 ? { historicalPrices } : {}),
   };
 }
 

@@ -6,6 +6,7 @@ import { Simulation } from "@/types/domain";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { formatCurrencyBRL } from "@/lib/utils/format";
+import type { PurchaseFeasibility } from "@/lib/utils/best-purchase-date";
 import { cn } from "@/lib/utils/cn";
 
 export function ScenarioList({
@@ -21,6 +22,7 @@ export function ScenarioList({
   onAddNew,
   layout = "grid",
   verdictFor,
+  feasibilityFor,
 }: {
   simulations: Simulation[];
   archived: Simulation[];
@@ -34,6 +36,7 @@ export function ScenarioList({
   onAddNew?: () => void;
   layout?: "list" | "grid";
   verdictFor: (sim: Simulation) => { label: string; tone: "cash" | "installment" | "neutral" } | null;
+  feasibilityFor?: (sim: Simulation) => PurchaseFeasibility | null;
 }) {
   const [, startTransition] = useTransition();
   const [menuId, setMenuId] = useState<string | null>(null);
@@ -57,6 +60,7 @@ export function ScenarioList({
         {simulations.map((sim) => {
           const isSelected = selectedIds.includes(sim.id);
           const verdict = verdictFor(sim);
+          const feasibility = feasibilityFor?.(sim) ?? null;
           return (
             <li key={sim.id}>
               <div
@@ -107,6 +111,18 @@ export function ScenarioList({
                       {sim.cashPriceCents ? `À vista ${formatCurrencyBRL(sim.cashPriceCents)} · ` : ""}
                       {sim.installments}x de {formatCurrencyBRL(sim.installmentAmountCents)}
                     </p>
+                    {feasibility && (
+                      <span
+                        className={cn(
+                          "mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                          feasibility.tone === "positive" && "bg-(--color-positive-soft) text-(--color-positive)",
+                          feasibility.tone === "info" && "bg-(--color-primary-soft) text-(--color-primary)",
+                          feasibility.tone === "warning" && "bg-amber-500/15 text-amber-700"
+                        )}
+                      >
+                        {feasibility.label}
+                      </span>
+                    )}
                   </div>
                   </button>
                   <div className="relative shrink-0">

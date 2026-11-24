@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { Person, TravelTrackerConfig } from "@/types/db";
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
@@ -29,6 +29,7 @@ import { deleteSimulation, restoreSimulation } from "@/lib/data/simulations";
 import { NotificationChannelsConfig, refreshSimulationPriceTracking } from "@/lib/data/price-tracking";
 import { SimulationEditModal } from "./SimulationEditModal";
 import { formatCurrencyBRL, formatMonthLabel } from "@/lib/utils/format";
+import { computePurchaseFeasibility } from "@/lib/utils/best-purchase-date";
 import { useInterface } from "@/components/layout/InterfaceProvider";
 import "./modern-simulation.css";
 
@@ -192,6 +193,11 @@ export function SimulacaoPageClient({
       : { label: `Parcelar ganha ${formatCurrencyBRL(-r.advantageCashCents)}`, tone: "installment" };
   }
 
+  const feasibilityFor = useCallback(
+    (sim: Simulation) => computePurchaseFeasibility(sim, baseAccumulated),
+    [baseAccumulated]
+  );
+
   const hasCashVsInstallmentAi = useMemo(
     () => Boolean(hasSelected && analyzeSimulation(selectedSimulations, yieldParams, base)?.result.installment),
     [hasSelected, selectedSimulations, yieldParams, base]
@@ -320,6 +326,7 @@ export function SimulacaoPageClient({
           onRestore={handleRestore}
           onRefreshTrack={handleRefreshTrack}
           verdictFor={verdictFor}
+          feasibilityFor={feasibilityFor}
           selectedIds={selectedIds}
           onToggle={toggleSimulation}
         />

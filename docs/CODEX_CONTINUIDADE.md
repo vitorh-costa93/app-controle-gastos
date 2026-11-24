@@ -3,6 +3,9 @@
 Atualizado: 24/11/2026.
 
 ## Rastreamento Inteligente de Preços na Simulação — Produtos (4 Camadas) & Viagens (Voos RAO/VCP + Resorts por Data) (23/11/2026)
+- **Painel Visor de Ofertas, Histórico de Preços (40d/3m/6m/1a) e Melhor Data de Compra (24/11/2026):**
+  - `ProductVisorPanel.tsx`, `PriceTrackingSection.tsx` e `history-stats.ts`: produtos agora exibem layout estilo Visor com imagem + ações (`Avisar quando baixar` e `Print`) à esquerda, lista de `Ofertas` com destaque verde `Menor preço` e expansão `Ver todas as ofertas`, gráfico de área verde (`40d` / `3m` / `6m` / `1a`) combinando histórico web (`Buscapé/Zoom/Keepa/Promobit` via `engine.ts`) + snapshots reais, e termômetro anti-Black-Fraude (`Como está o preço hoje` vs mediana).
+  - `best-purchase-date.ts`, `ScenarioList.tsx` e `SimulacaoPageClient.tsx`: selo automático de viabilidade/melhor data de compra em cada cenário com base na série acumulada projetada.
 - **Chat IA com Markdown e upload de imagens (24/11/2026):**
   - `ChatMarkdown.tsx`: renderização segura de Markdown (`**negrito**`, `*itálico*`, listas com `-` e numeradas, títulos, separadores, código inline e links) nas respostas do assistente sem expor asteriscos crus.
   - `SimulationAssistantDrawer.tsx` e `simulation-chat.ts`: suporte a envio de até 4 imagens por mensagem (seletor de arquivo, colagem `Ctrl+V` e drag-and-drop com compressão client-side em canvas) encaminhadas via `input_image` na Responses API da OpenAI.

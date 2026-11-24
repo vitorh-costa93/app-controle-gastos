@@ -212,6 +212,12 @@ export interface VerifiedStayQuote {
   notes?: string;
 }
 
+export interface PriceHistoryPoint {
+  date: string; // YYYY-MM-DD
+  priceCents: number;
+  source?: string;
+}
+
 export interface BestOfferMeta {
   category: SimulationCategory;
   checkedAt: string;
@@ -226,6 +232,8 @@ export interface BestOfferMeta {
   rejectedReasons?: string[];
   // Para produto: todas as ofertas de lojas oficiais aprovadas nas 4 camadas
   productOffers?: VerifiedProductOffer[];
+  // Histórico de preços (Buscapé/Zoom/Keepa + snapshots capturados)
+  historicalPrices?: PriceHistoryPoint[];
   // Para viagem: cotações de voo (RAO vs VCP) + cotação do resort nas datas
   flightQuotes?: VerifiedFlightQuote[];
   selectedFlightOrigin?: string;

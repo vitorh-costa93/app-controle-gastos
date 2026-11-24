@@ -3,7 +3,6 @@
 import { useState, useTransition } from "react";
 import {
   Bell,
-  Camera,
   ChevronDown,
   ChevronUp,
   ExternalLink,
@@ -17,6 +16,7 @@ import {
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Simulation, SimulationPriceAlert, SimulationPriceSnapshot } from "@/types/domain";
 import { TravelTrackerConfig, VerifiedProductOffer } from "@/types/db";
+import { ProductVisorPanel } from "@/components/simulacao/ProductVisorPanel";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -351,23 +351,37 @@ export function PriceTrackingSection({
                       <RefreshCw size={12} className={cn(isRefreshingThis && "animate-spin")} />
                       {isRefreshingThis ? "..." : "Atualizar"}
                     </Button>
-                    <button
-                      type="button"
-                      onClick={() => toggleExpanded(sim.id)}
-                      className="inline-flex items-center gap-1 rounded-(--radius-md) px-2.5 py-1 text-xs font-semibold text-(--color-text-secondary) hover:bg-black/5"
-                    >
-                      {isExpanded ? (
-                        <>
-                          Ocultar <ChevronUp size={13} />
-                        </>
-                      ) : (
-                        <>
-                          {isTravel ? "Datas e histórico" : "Detalhes"} <ChevronDown size={13} />
-                        </>
-                      )}
-                    </button>
+                    {isTravel && (
+                      <button
+                        type="button"
+                        onClick={() => toggleExpanded(sim.id)}
+                        className="inline-flex items-center gap-1 rounded-(--radius-md) px-2.5 py-1 text-xs font-semibold text-(--color-text-secondary) hover:bg-black/5"
+                      >
+                        {isExpanded ? (
+                          <>
+                            Ocultar <ChevronUp size={13} />
+                          </>
+                        ) : (
+                          <>
+                            Datas e histórico <ChevronDown size={13} />
+                          </>
+                        )}
+                      </button>
+                    )}
                   </div>
                 </div>
+
+                {/* Visor de Produto: Foto + Ofertas + Histórico 40d/3m/6m/1a + Termômetro */}
+                {!isTravel && (
+                  <ProductVisorPanel
+                    sim={sim}
+                    history={history}
+                    isRefreshing={isRefreshingThis}
+                    onSelectOffer={handleSelectStoreOffer}
+                    onOpenAlerts={() => setAlertModalOpen(true)}
+                    onUploadScreenshot={handleUploadOfferScreenshot}
+                  />
+                )}
 
                 {/* Proposta A para Viagem: Hospedagem e Voo 100% independentes sempre visíveis */}
                 {isTravel && meta?.stayQuote && (
@@ -378,7 +392,7 @@ export function PriceTrackingSection({
                   />
                 )}
 
-                {isExpanded && (
+                {isTravel && isExpanded && (
                   <div className="space-y-3 border-t border-(--color-border)/60 pt-3">
                     <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-(--color-text-secondary)">
                       <span>
@@ -386,113 +400,15 @@ export function PriceTrackingSection({
                           ? `Última checagem: ${new Date(meta.checkedAt).toLocaleString("pt-BR")}`
                           : "Clique em 'Atualizar' para buscar o menor preço à vista e parcelado."}
                       </span>
-                      {!isTravel && (
-                        <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-2.5 py-1 text-xs font-semibold text-(--color-text-primary) hover:bg-black/5">
-                          <Camera size={12} className="text-(--color-primary)" />
-                          Ler Print de Oferta
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            disabled={isRefreshingThis}
-                            onChange={(e) => {
-                              const f = e.target.files?.[0];
-                              if (f) handleUploadOfferScreenshot(sim.id, f);
-                              e.currentTarget.value = "";
-                            }}
-                          />
-                        </label>
-                      )}
                     </div>
 
-                {/* Detalhamento se for COMPRA / PRODUTO */}
-                {!isTravel && meta?.productOffers && meta.productOffers.length > 0 && (
-                  <div className="space-y-3">
-                    <div className="overflow-x-auto rounded-(--radius-md) border border-(--color-border)">
-                      <table className="w-full border-collapse text-xs tabular-nums">
-                        <thead>
-                          <tr className="border-b border-(--color-border) bg-black/[0.025] text-[11px] font-semibold text-(--color-text-secondary)">
-                            <th className="px-3 py-2 text-left">Loja</th>
-                            <th className="px-3 py-2 text-left">Produto</th>
-                            <th className="px-3 py-2 text-right">À vista (PIX)</th>
-                            <th className="px-3 py-2 text-right">Parcelado</th>
-                            <th className="px-3 py-2 text-right">Ação</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-(--color-border)/60">
-                          {meta.productOffers.map((offer, idx) => {
-                            const isActiveStore =
-                              sim.cashPriceCents === offer.cashPriceCents &&
-                              sim.totalAmountCents === offer.installmentTotalCents;
-                            return (
-                              <tr
-                                key={`${offer.store}-${idx}`}
-                                className={cn(isActiveStore && "bg-(--color-positive-soft)/40 font-medium")}
-                              >
-                                <td className="whitespace-nowrap px-3 py-2.5">
-                                  <div className="font-semibold text-(--color-text-primary)">{offer.store}</div>
-                                  <div className="text-[11px] text-(--color-text-tertiary)">{offer.seller}</div>
-                                </td>
-                                <td className="px-3 py-2.5">
-                                  <div className="line-clamp-1 font-medium text-(--color-text-primary)">
-                                    {offer.title}
-                                  </div>
-                                </td>
-                                <td className="whitespace-nowrap px-3 py-2.5 text-right font-bold text-(--color-positive)">
-                                  {formatCurrencyBRL(offer.cashPriceCents)}
-                                </td>
-                                <td className="whitespace-nowrap px-3 py-2.5 text-right">
-                                  <div className="font-semibold text-(--color-text-primary)">
-                                    {formatCurrencyBRL(offer.installmentTotalCents)}
-                                  </div>
-                                  <div className="text-[11px] text-(--color-text-tertiary)">
-                                    {offer.installments}x de{" "}
-                                    {formatCurrencyBRL(Math.round(offer.installmentTotalCents / offer.installments))}
-                                  </div>
-                                </td>
-                                <td className="whitespace-nowrap px-3 py-2.5 text-right">
-                                  <div className="flex items-center justify-end gap-2">
-                                    {!isActiveStore ? (
-                                      <button
-                                        type="button"
-                                        onClick={() => handleSelectStoreOffer(sim, offer)}
-                                        className="rounded-(--radius-md) bg-(--color-primary-soft) px-2.5 py-1 text-[11px] font-semibold text-(--color-primary) hover:opacity-85"
-                                      >
-                                        Aplicar
-                                      </button>
-                                    ) : (
-                                      <span className="rounded-full bg-(--color-positive-soft) px-2 py-0.5 text-[10px] font-semibold text-(--color-positive)">
-                                        Na simulação
-                                      </span>
-                                    )}
-                                    <a
-                                      href={offer.url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="inline-flex items-center gap-1 text-(--color-primary) hover:underline"
-                                    >
-                                      Loja <ExternalLink size={11} />
-                                    </a>
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-
-                {/* Detalhamento se for VIAGEM (Voos Multi-Origem RAO/VCP + Resort/Estadia por Data) */}
-                {isTravel && (
-                  <TravelTrackingDetailsCard
-                    sim={sim}
-                    onSimulationUpdated={onSimulationUpdated}
-                    onSnapshotAdded={onSnapshotAdded}
-                    onAlertAdded={onAlertAdded}
-                  />
-                )}
+                    {/* Detalhamento se for VIAGEM (Voos Multi-Origem RAO/VCP + Resort/Estadia por Data) */}
+                    <TravelTrackingDetailsCard
+                      sim={sim}
+                      onSimulationUpdated={onSimulationUpdated}
+                      onSnapshotAdded={onSnapshotAdded}
+                      onAlertAdded={onAlertAdded}
+                    />
 
                 {/* Gráfico de Histórico de Evolução do Preço */}
                 {history.length > 0 && <PriceHistoryChart history={history} isTravel={isTravel} />}

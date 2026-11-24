@@ -39,4 +39,22 @@ assert.match(formCode, /Entrada na hospedagem \(Check-in\)/);
 assert.match(formCode, /Saída da hospedagem \(Check-out\)/);
 assert.match(formCode, /Usar as mesmas datas para o voo/);
 
-console.log("✓ Rastreamento de Preços (4 camadas Anti-Falso-Positivo + Viagens RAO/VCP + Resorts por data) validado com sucesso");
+// 5. Verifica Histórico de Preços (Visor 40d/3m/6m/1a + Termômetro) e Viabilidade de Compra
+const historyStatsCode = fs.readFileSync(path.join(root, "src/lib/price-tracking/history-stats.ts"), "utf8");
+assert.match(historyStatsCode, /export function mergePriceHistoryPoints/);
+assert.match(historyStatsCode, /export function computePriceHistoryStats/);
+assert.match(historyStatsCode, /"40d": 40/);
+assert.match(historyStatsCode, /"3m": 90/);
+assert.match(historyStatsCode, /"6m": 180/);
+assert.match(historyStatsCode, /"1a": 365/);
+
+const visorCode = fs.readFileSync(path.join(root, "src/components/simulacao/ProductVisorPanel.tsx"), "utf8");
+assert.match(visorCode, /Como está o preço hoje/);
+assert.match(visorCode, /Histórico de preço/);
+assert.match(visorCode, /Avisar quando baixar/);
+
+const feasibilityCode = fs.readFileSync(path.join(root, "src/lib/utils/best-purchase-date.ts"), "utf8");
+assert.match(feasibilityCode, /export function computePurchaseFeasibility/);
+assert.match(feasibilityCode, /Viável à vista agora/);
+
+console.log("✓ Rastreamento de Preços (4 camadas Anti-Falso-Positivo + Viagens RAO/VCP + Resorts por data + Histórico Visor) validado com sucesso");

@@ -1,6 +1,7 @@
 "use client";
 
-import { ReactNode, useMemo, useState } from "react";
+import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { RotateCcw } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { PriceHistoryPoint } from "@/types/db";
 import {
@@ -16,6 +17,7 @@ const WINDOW_OPTIONS: Array<{ key: HistoryWindowKey; label: string }> = [
   { key: "3m", label: "3m" },
   { key: "6m", label: "6m" },
   { key: "1a", label: "1a" },
+  { key: "18m", label: "18m" },
 ];
 
 const DAY_MS = 86_400_000;
@@ -26,18 +28,18 @@ function parseIsoDayUtcMs(isoDay: string): number {
   return Date.UTC(y, m - 1, d);
 }
 
-function buildWindowTicks(windowStartMs: number, nowMs: number, windowKey: HistoryWindowKey): number[] {
-  const count = windowKey === "1a" || windowKey === "6m" ? 7 : windowKey === "3m" ? 4 : 5;
+function buildWindowTicks(startMs: number, endMs: number, count: number): number[] {
+  const safeCount = Math.max(2, count);
   const ticks: number[] = [];
-  for (let i = 0; i < count; i++) {
-    ticks.push(Math.round(windowStartMs + ((nowMs - windowStartMs) * i) / (count - 1)));
+  for (let i = 0; i < safeCount; i++) {
+    ticks.push(Math.round(startMs + ((endMs - startMs) * i) / (safeCount - 1)));
   }
   return ticks;
 }
 
-function formatAxisTick(ts: number, windowKey: HistoryWindowKey): string {
+function formatAxisTick(ts: number, spanDays: number): string {
   const d = new Date(ts);
-  if (windowKey === "1a" || windowKey === "6m") {
+  if (spanDays > 95) {
     return d.toLocaleDateString("pt-BR", { month: "short", year: "2-digit", timeZone: "UTC" });
   }
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", timeZone: "UTC" });
@@ -66,22 +68,32 @@ export function PriceHistoryVisorCard({
   headerExtra?: ReactNode;
 }) {
   const [windowKey, setWindowKey] = useState<HistoryWindowKey>("1a");
+  const [zoomDomain, setZoomDomain] = useState<[number, number] | null>(null);
+  const chartWrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setZoomDomain(null);
+  }, [idPrefix]);
 
   const stats = useMemo(
     () => computePriceHistoryStats(points, windowKey, currentPriceCents),
     [points, windowKey, currentPriceCents]
   );
 
-  const { nowMs, windowStartMs, xTicks } = useMemo(() => {
+  const { nowMs, windowStartMs } = useMemo(() => {
     const today = new Date();
     const end = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
     const start = end - HISTORY_WINDOW_DAYS[windowKey] * DAY_MS;
-    return {
-      nowMs: end,
-      windowStartMs: start,
-      xTicks: buildWindowTicks(start, end, windowKey),
-    };
+    return { nowMs: end, windowStartMs: start };
   }, [windowKey]);
+
+  const [activeStartMs, activeEndMs] = zoomDomain ?? [windowStartMs, nowMs];
+  const activeSpanDays = Math.max(1, (activeEndMs - activeStartMs) / DAY_MS);
+
+  const xTicks = useMemo(
+    () => buildWindowTicks(activeStartMs, activeEndMs, activeSpanDays > 120 ? 7 : 5),
+    [activeStartMs, activeEndMs, activeSpanDays]
+  );
 
   const chartData = useMemo(
     () =>
@@ -94,6 +106,38 @@ export function PriceHistoryVisorCard({
     [stats.points]
   );
 
+  useEffect(() => {
+    const el = chartWrapRef.current;
+    if (!el || chartData.length < 2) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = el.getBoundingClientRect();
+      const plotWidth = Math.max(1, rect.width - 96);
+      const rawRatio = (e.clientX - rect.left - 76) / plotWidth;
+      const ratio = Math.max(0, Math.min(1, rawRatio));
+
+      setZoomDomain((prev) => {
+        const [curStart, curEnd] = prev ?? [windowStartMs, nowMs];
+        const curSpan = curEnd - curStart;
+        const fullSpan = nowMs - windowStartMs;
+        const anchor = curStart + curSpan * ratio;
+        const factor = e.deltaY < 0 ? 0.78 : 1.28;
+        const nextSpan = Math.max(5 * DAY_MS, Math.min(fullSpan, curSpan * factor));
+
+        if (nextSpan >= fullSpan * 0.98) {
+          return null;
+        }
+
+        const nextStart = Math.max(windowStartMs, Math.min(nowMs - nextSpan, anchor - nextSpan * ratio));
+        return [Math.round(nextStart), Math.round(nextStart + nextSpan)];
+      });
+    };
+
+    el.addEventListener("wheel", handleWheel, { passive: false });
+    return () => el.removeEventListener("wheel", handleWheel);
+  }, [chartData.length, windowStartMs, nowMs]);
+
   const absDeltaPct = Math.round(Math.abs(stats.deltaFromMedianPct));
   const gradientId = `visor-hist-${idPrefix.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 14)}`;
 
@@ -104,30 +148,44 @@ export function PriceHistoryVisorCard({
           <h5 className="text-xs font-bold text-(--color-text-primary)">{title}</h5>
           {headerExtra}
         </div>
-        <div className="flex items-center gap-1 rounded-(--radius-md) border border-(--color-border) bg-black/[0.02] p-0.5">
-          {WINDOW_OPTIONS.map((opt) => (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {zoomDomain !== null && (
             <button
-              key={opt.key}
               type="button"
-              onClick={() => setWindowKey(opt.key)}
-              className={cn(
-                "rounded-[calc(var(--radius-md)-2px)] px-2.5 py-1 text-[11px] font-semibold transition-colors",
-                windowKey === opt.key
-                  ? "bg-(--color-surface) text-(--color-text-primary) shadow-xs"
-                  : "text-(--color-text-tertiary) hover:text-(--color-text-primary)"
-              )}
+              onClick={() => setZoomDomain(null)}
+              className="inline-flex items-center gap-1 rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-2 py-1 text-[11px] font-semibold text-(--color-primary) hover:bg-(--color-primary-soft)"
             >
-              {opt.label}
+              <RotateCcw size={11} /> Resetar zoom
             </button>
-          ))}
+          )}
+          <div className="flex items-center gap-1 rounded-(--radius-md) border border-(--color-border) bg-black/[0.02] p-0.5">
+            {WINDOW_OPTIONS.map((opt) => (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => {
+                  setWindowKey(opt.key);
+                  setZoomDomain(null);
+                }}
+                className={cn(
+                  "rounded-[calc(var(--radius-md)-2px)] px-2.5 py-1 text-[11px] font-semibold transition-colors",
+                  windowKey === opt.key
+                    ? "bg-(--color-surface) text-(--color-text-primary) shadow-xs"
+                    : "text-(--color-text-tertiary) hover:text-(--color-text-primary)"
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       <div className="grid gap-3 lg:grid-cols-[1.65fr_1fr]">
-        {/* Gráfico de Área (Estilo Visor) */}
+        {/* Gráfico de Área (Estilo Visor com Zoom via scroll) */}
         <div className="min-w-0 rounded-(--radius-lg) border border-(--color-border) bg-(--color-surface) p-3.5">
           {chartData.length >= 2 ? (
-            <div className="h-44 w-full">
+            <div ref={chartWrapRef} className="h-44 w-full cursor-zoom-in select-none">
               <ResponsiveContainer width="100%" height={176}>
                 <AreaChart data={chartData} margin={{ top: 8, right: 20, left: 4, bottom: 0 }}>
                   <defs>
@@ -141,10 +199,11 @@ export function PriceHistoryVisorCard({
                     dataKey="ts"
                     type="number"
                     scale="time"
-                    domain={[windowStartMs, nowMs]}
+                    allowDataOverflow
+                    domain={[activeStartMs, activeEndMs]}
                     ticks={xTicks}
                     padding={{ left: 10, right: 16 }}
-                    tickFormatter={(v) => formatAxisTick(Number(v), windowKey)}
+                    tickFormatter={(v) => formatAxisTick(Number(v), activeSpanDays)}
                     tick={{ fontSize: 10, fill: "var(--color-text-tertiary)" }}
                     axisLine={false}
                     tickLine={false}
@@ -181,13 +240,20 @@ export function PriceHistoryVisorCard({
             </div>
           )}
 
-          <p className="mt-2 text-[11px] leading-relaxed text-(--color-text-secondary) tabular-nums">
-            Nos últimos {stats.windowDays} dias: menor preço{" "}
-            <b className="text-(--color-text-primary)">{formatCurrencyBRL(stats.minCents)}</b>, maior preço{" "}
-            <b className="text-(--color-text-primary)">{formatCurrencyBRL(stats.maxCents)}</b>, mediana{" "}
-            <b className="text-(--color-text-primary)">{formatCurrencyBRL(stats.medianCents)}</b>, em{" "}
-            {stats.observedDays} {stats.observedDays === 1 ? "dia observado" : "dias observados"}.
-          </p>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] leading-relaxed text-(--color-text-secondary) tabular-nums">
+            <p>
+              Nos últimos {stats.windowDays} dias: menor preço{" "}
+              <b className="text-(--color-text-primary)">{formatCurrencyBRL(stats.minCents)}</b>, maior preço{" "}
+              <b className="text-(--color-text-primary)">{formatCurrencyBRL(stats.maxCents)}</b>, mediana{" "}
+              <b className="text-(--color-text-primary)">{formatCurrencyBRL(stats.medianCents)}</b>, em{" "}
+              {stats.observedDays} {stats.observedDays === 1 ? "dia observado" : "dias observados"}.
+            </p>
+            {chartData.length >= 2 && (
+              <span className="text-[10px] text-(--color-text-tertiary)">
+                Role o mouse no gráfico para dar zoom
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Card "Como está o preço hoje" (Anti-Black-Fraude) */}

@@ -348,9 +348,9 @@ async function fetchProductPriceHistoryOneYear(
   const t0 = Date.now();
   const now = new Date();
   const todayIso = now.toISOString().slice(0, 10);
-  const oneYearAgo = new Date(now);
-  oneYearAgo.setUTCDate(oneYearAgo.getUTCDate() - 365);
-  const oneYearAgoIso = oneYearAgo.toISOString().slice(0, 10);
+  const eighteenMonthsAgo = new Date(now);
+  eighteenMonthsAgo.setUTCDate(eighteenMonthsAgo.getUTCDate() - 548);
+  const eighteenMonthsAgoIso = eighteenMonthsAgo.toISOString().slice(0, 10);
 
   try {
     const response = await openai.responses.create({
@@ -369,10 +369,10 @@ async function fetchProductPriceHistoryOneYear(
         },
       ],
       instructions: `Você é um pesquisador de histórico de preços no varejo brasileiro (Buscapé, Zoom, Keepa Brasil, Promobit, Pelando, Canaltech, TechTudo, TudoCelular).
-Busque o histórico REAL de preços observados no Brasil para "${query}" ao longo dos ÚLTIMOS 12 MESES completos (de ${oneYearAgoIso} até ${todayIso}).
-Retorne entre 12 e 24 pontos cronológicos cobrindo todos os meses do último ano (pelo menos 1 registro por mês + picos/mínimas sazonais como Black Friday anterior, Natal, Dia do Consumidor, Prime Day e Black Friday atual).
+Busque o histórico REAL de preços observados no Brasil para "${query}" ao longo dos ÚLTIMOS 18 MESES completos (de ${eighteenMonthsAgoIso} até ${todayIso}).
+Retorne entre 12 e 26 pontos cronológicos cobrindo todos os meses dos últimos 18 meses (pelo menos 1 registro por mês + picos/mínimas sazonais como Black Friday anterior, Natal, Dia do Consumidor, Prime Day e Black Friday atual).
 Use somente preços reais observados (nunca abaixo do piso R$ ${(minSanityPriceCents / 100).toFixed(2)}). Nunca invente dados; se algum mês não tiver registro confiável, pule-o.`,
-      input: `Levante o histórico de preços dos últimos 12 meses (${oneYearAgoIso} a ${todayIso}) no Brasil para: "${query}".`,
+      input: `Levante o histórico de preços dos últimos 18 meses (${eighteenMonthsAgoIso} a ${todayIso}) no Brasil para: "${query}".`,
       text: {
         format: {
           type: "json_schema",
@@ -402,7 +402,7 @@ Use somente preços reais observados (nunca abaixo do piso R$ ${(minSanityPriceC
     const byDate = new Map<string, PriceHistoryPoint>();
     for (const pt of parsed.points ?? []) {
       if (!pt?.date || !/^\d{4}-\d{2}-\d{2}$/.test(pt.date)) continue;
-      if (pt.date < oneYearAgoIso || pt.date > todayIso) continue;
+      if (pt.date < eighteenMonthsAgoIso || pt.date > todayIso) continue;
       const priceCents = Math.round(Number(pt.price_brl) * 100);
       if (!Number.isFinite(priceCents) || priceCents < minSanityPriceCents) continue;
       byDate.set(pt.date, {
@@ -1002,9 +1002,9 @@ async function fetchTravelPriceHistoryOneYear(params: {
   const t0 = Date.now();
   const now = new Date();
   const todayIso = now.toISOString().slice(0, 10);
-  const oneYearAgo = new Date(now);
-  oneYearAgo.setUTCDate(oneYearAgo.getUTCDate() - 365);
-  const oneYearAgoIso = oneYearAgo.toISOString().slice(0, 10);
+  const eighteenMonthsAgo = new Date(now);
+  eighteenMonthsAgo.setUTCDate(eighteenMonthsAgo.getUTCDate() - 548);
+  const eighteenMonthsAgoIso = eighteenMonthsAgo.toISOString().slice(0, 10);
 
   try {
     const response = await openai.responses.create({
@@ -1023,11 +1023,11 @@ async function fetchTravelPriceHistoryOneYear(params: {
         },
       ],
       instructions: `Você é um pesquisador de histórico de preços de turismo no Brasil (Melhores Destinos, Google Flights, Kayak, Booking, Zarpo, sites oficiais dos resorts).
-Levante preços reais observados nos ÚLTIMOS 12 MESES (${oneYearAgoIso} a ${todayIso}) para:
+Levante preços reais observados nos ÚLTIMOS 18 MESES (${eighteenMonthsAgoIso} a ${todayIso}) para:
 1) stay_points: pacote de ${params.nights} diárias no "${params.accommodationName}" para ${params.travelersLabel} (incluindo Black Friday anterior, baixa temporada, férias escolares e Black Friday atual).
 2) flight_points: passagens aéreas ida+volta para ${params.travelersLabel} saindo de ${params.originAirports.join("/")} para ${params.destinationAirport}.
-Retorne de 8 a 18 pontos cronológicos por série (date YYYY-MM-DD, price_brl total em reais, source). Nunca invente dados abaixo do piso plausível.`,
-      input: `Histórico de preços dos últimos 12 meses (${oneYearAgoIso} a ${todayIso}) para hospedagem "${params.accommodationName}" (${params.nights} noites) e voos ${params.originAirports.join("/")}->${params.destinationAirport} (${params.travelersLabel}).`,
+Retorne de 10 a 22 pontos cronológicos por série (date YYYY-MM-DD, price_brl total em reais, source). Nunca invente dados abaixo do piso plausível.`,
+      input: `Histórico de preços dos últimos 18 meses (${eighteenMonthsAgoIso} a ${todayIso}) para hospedagem "${params.accommodationName}" (${params.nights} noites) e voos ${params.originAirports.join("/")}->${params.destinationAirport} (${params.travelersLabel}).`,
       text: {
         format: {
           type: "json_schema",
@@ -1063,7 +1063,7 @@ Retorne de 8 a 18 pontos cronológicos por série (date YYYY-MM-DD, price_brl to
       const byDate = new Map<string, PriceHistoryPoint>();
       for (const pt of items ?? []) {
         if (!pt?.date || !/^\d{4}-\d{2}-\d{2}$/.test(pt.date)) continue;
-        if (pt.date < oneYearAgoIso || pt.date > todayIso) continue;
+        if (pt.date < eighteenMonthsAgoIso || pt.date > todayIso) continue;
         const priceCents = Math.round(Number(pt.price_brl) * 100);
         if (!Number.isFinite(priceCents) || priceCents < minCents) continue;
         byDate.set(pt.date, { date: pt.date, priceCents, source: pt.source || "Histórico Web" });

@@ -1,13 +1,14 @@
 import type { PriceHistoryPoint } from "@/types/db";
 import type { SimulationPriceSnapshot } from "@/types/domain";
 
-export type HistoryWindowKey = "40d" | "3m" | "6m" | "1a";
+export type HistoryWindowKey = "40d" | "3m" | "6m" | "1a" | "18m";
 
 export const HISTORY_WINDOW_DAYS: Record<HistoryWindowKey, number> = {
   "40d": 40,
   "3m": 90,
   "6m": 180,
   "1a": 365,
+  "18m": 548,
 };
 
 export interface PriceHistoryStats {

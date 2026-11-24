@@ -47,6 +47,7 @@ assert.match(historyStatsCode, /"40d": 40/);
 assert.match(historyStatsCode, /"3m": 90/);
 assert.match(historyStatsCode, /"6m": 180/);
 assert.match(historyStatsCode, /"1a": 365/);
+assert.match(historyStatsCode, /"18m": 548/);
 
 const visorCode = fs.readFileSync(path.join(root, "src/components/simulacao/PriceHistoryVisorCard.tsx"), "utf8");
 assert.match(visorCode, /Como está o preço hoje/);

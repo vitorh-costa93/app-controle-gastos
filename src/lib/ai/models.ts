@@ -121,6 +121,7 @@ const PRICES: Record<string, [number, number, number]> = {
   "gpt-5.6-terra": [2, 0.2, 12],
   "gpt-6.1-sol": [2, 0.2, 10],
   "gpt-4o-mini": [0.15, 0.075, 0.6],
+  "gpt-image-2.6-flare": [5, 1.25, 30],
   "gpt-image-2.5-flare": [5, 1.25, 30],
   "gpt-image-2": [5, 1.25, 30],
   "gpt-image-1.5": [5, 1.25, 32],

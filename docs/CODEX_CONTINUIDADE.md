@@ -3,6 +3,9 @@
 Atualizado: 24/11/2026.
 
 ## Rastreamento Inteligente de Preços na Simulação — Produtos (4 Camadas) & Viagens (Voos RAO/VCP + Resorts por Data) (23/11/2026)
+- **Histórico de 18 meses (`18m`), Zoom com scroll do mouse e atualização em lote (24/11/2026):**
+  - `history-stats.ts`, `engine.ts` e `PriceHistoryVisorCard.tsx`: adicionada janela `18m` (548 dias) na UI e nas buscas paralelas de produtos e viagens, além de zoom interativo com o scroll do mouse (`wheel` listener + botão `Resetar zoom`) no gráfico histórico.
+  - `models.ts`: incluído `gpt-image-2.6-flare` na tabela `PRICES` de estimativa de custo.
 - **Simulação Direta v3: Multi-Dropdown, Zero Acordeões, Toggle Mensal e Histórico 1a para Voos/Hospedagem (24/11/2026):**
   - `ScenarioList.tsx`, `SimulacaoPageClient.tsx` e `modern-simulation.css`: substituída a grade grande de cenários por **Multi-Dropdown** compacto no topo + faixa horizontal apenas dos itens selecionados com imagens geradas por IA; CDI movido para a barra superior (largura total 100%, sem coluna lateral vazia).
   - `CashVsInstallmentSection.tsx`: removidos todos os 3 acordeões (`Ver projeção sem compras`, `Ver evolução mensal`, `Ver análise detalhada`) e adicionado toggle direto **`Saldo acumulado`** | **`Dinheiro guardado por mês`** (`BarChart` Sem compra × Com compra) no gráfico principal.

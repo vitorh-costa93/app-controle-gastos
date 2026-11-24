@@ -245,8 +245,45 @@ export function verifyProductOfferFourLayers(
     offer.installmentTotalCents = offer.cashPriceCents;
   }
 
-  // CAMADA 4: Loja / Vendedor Oficial 1P
-  if (!offer.isOfficialSeller) {
+  // CAMADA 3b: URL real de página de produto (proibido link sintético de página de busca)
+  const urlLower = (offer.url || "").toLocaleLowerCase("pt-BR");
+  if (
+    !isSafePublicHttpsUrl(offer.url) ||
+    urlLower.includes("google.com/search") ||
+    urlLower.includes("/busca/") ||
+    urlLower.includes("/s?k=")
+  ) {
+    return {
+      passed: false,
+      reason: `Camada 3 (URL inválida): link "${offer.url}" não aponta para uma página real de produto.`,
+    };
+  }
+
+  // CAMADA 4: Loja / Vendedor Oficial 1P (ou especialista oficial de climatização para ar-condicionado)
+  const isHvacSearch =
+    queryLower.includes("ar condicionado") ||
+    queryLower.includes("ar-condicionado") ||
+    queryLower.includes("inverter") ||
+    queryLower.includes("split") ||
+    queryLower.includes("btus");
+  const HVAC_SPECIALISTS = [
+    "dufrio",
+    "central ar",
+    "centralar",
+    "leveros",
+    "frio peças",
+    "frio pecas",
+    "friopecas",
+    "webcontinental",
+    "a.dias",
+    "adias",
+    "str ar",
+    "frigelar",
+  ];
+  const sellerStoreText = `${offer.store} ${offer.seller}`.toLocaleLowerCase("pt-BR");
+  const isKnownHvacSpecialist = isHvacSearch && HVAC_SPECIALISTS.some((name) => sellerStoreText.includes(name));
+
+  if (!offer.isOfficialSeller && !isKnownHvacSpecialist) {
     return {
       passed: false,
       reason: `Camada 4 (Vendedor): "${offer.seller}" não é loja oficial 1P homologada.`,
@@ -426,7 +463,7 @@ Use somente preços reais observados (nunca abaixo do piso R$ ${(minSanityPriceC
 export async function trackProductPrices(
   description: string,
   rawConfig?: Partial<ProductTrackerConfig> | null
-): Promise<BestOfferMeta> {
+): Promise<BestOfferMeta | null> {
   const query = (rawConfig?.query || description || "PlayStation 5").trim();
   const config: ProductTrackerConfig = {
     query,
@@ -469,7 +506,7 @@ export async function trackProductPrices(
         tools: [
           {
             type: "web_search_preview",
-            search_context_size: "medium",
+            search_context_size: "high",
             user_location: {
               type: "approximate",
               country: "BR",
@@ -482,16 +519,16 @@ export async function trackProductPrices(
 Use a busca web em tempo real para encontrar e validar ofertas REAIS e COMPRÁVEIS HOJE no mercado brasileiro para o produto solicitado, aplicando 4 camadas rigorosas:
 1. CAMADA 1 (Identidade Exata & Variantes Aceitas):
    - Tem que ser o produto principal ("${query}"). NUNCA inclua acessórios, controles avulsos, jogos, capas, suportes ou peças.
-   - IMPORTANTE SOBRE VARIANTES: Se o usuário buscou apenas "${query}" sem exigir explicitamente "1TB" ou "Com Leitor", NÃO rejeite versões de 825GB ou Edição Digital! Pelo contrário: inclua tanto a Edição Digital (825GB ou 1TB, ex.: Sony PlayStation 5 Edição Digital 825GB 1 Controle Branco na Amazon dp/B0GWNKJDCZ e na KaBuM!) quanto a versão Com Leitor, pois o objetivo é encontrar o MENOR preço real disponível hoje para o console novo!
+   - IMPORTANTE SOBRE VARIANTES: Se o usuário buscou apenas "${query}" sem exigir explicitamente "1TB" ou "Com Leitor", NÃO rejeite versões de 825GB ou Edição Digital! Pelo contrário: inclua tanto a Edição Digital (825GB ou 1TB, ex.: Sony PlayStation 5 Edição Digital 825GB na KaBuM! e Amazon.com.br) quanto a versão Com Leitor, pois o objetivo é encontrar o MENOR preço real disponível hoje para o console novo!
 2. CAMADA 2 (100% Novo e Em Estoque): Rejeite imediatamente usados, seminovos, reembalados, open box, vitrine, outlet ou páginas esgotadas/indisponíveis.
-3. CAMADA 3 (Mesma Loja — Preço À Vista Universal + Preço Parcelado Universal Sem Condição):
-   - Para CADA loja aprovada, informe o menor valor à vista universal (PIX ou NuPay débito disponível para qualquer cliente) E o menor valor total parcelado no cartão de crédito comum (10x ou 12x sem juros, sem exigir cartão próprio de loja como Cartão Magalu/Casas Bahia/Vuon e sem abater cashback futuro).
-   - REGRA CRÍTICA PARA AMAZON.COM.BR E KABUM!:
-     * Na Amazon.com.br, o crawler estático às vezes só enxerga um dos preços na página do produto (ex.: dp/B0GWNKJDCZ "Sony PlayStation 5 Edição Digital 825GB 1 Controle Branco"). NUNCA rejeite a Amazon.com.br por isso! Na Amazon Brasil, consoles PlayStation 5 novos têm parcelamento padrão sem juros em até 10x ou 12x no cartão comum e 5% off à vista no Pix/NuPay (por exemplo, na oferta de 12x de R$ 355,00 = R$ 4.260,00 parcelado, o à vista com 5% off no Pix é R$ 4.047,00; ou se a página exibir R$ 4.237,41, inclua a oferta da Amazon com o preço à vista e o parcelado correspondente).
-     * Na KaBuM!, consoles PS5 novos (inclusive bundles com controle DualSense e jogos digitais) exibem preço à vista no Pix (com desconto) e total parcelado em 10x sem juros — APROVE sempre!
-4. CAMADA 4 (Vendedor Oficial 1P ou Loja Oficial Homologada):
-   - Aprove ofertas vendidas pela própria loja (Amazon.com.br, KaBuM!, Magalu, Fast Shop, Carrefour) OU vendidas por uma loja oficial homologada dentro da plataforma (ex.: Loja Oficial PlayStation no Mercado Livre, ou vendido por KaBuM!/Sony e enviado pela Amazon.com.br). Rejeite apenas vendedores terceiros desconhecidos sem selo oficial.
-- Retorne todas as ofertas aprovadas (entre 2 e 5 lojas oficiais) ordenadas do menor para o maior preço à vista.
+3. CAMADA 3 (Mesma Loja — Preço À Vista Universal + Preço Parcelado Universal Sem Condição + URL Real):
+   - Para CADA loja aprovada, informe a URL EXATA da página do produto (nunca URL de busca genérica), o menor valor à vista universal (PIX ou NuPay débito disponível para qualquer cliente) E o menor valor total parcelado no cartão de crédito comum (10x ou 12x sem juros, sem exigir cartão próprio da loja e sem abater cashback futuro).
+   - NUNCA invente ou chute preços! Se não conseguir confirmar o preço real de hoje em uma página válida, NÃO inclua a oferta.
+4. CAMADA 4 (Vendedor Oficial 1P ou Especialista Homologado):
+   - Aprove ofertas vendidas pela própria loja (Amazon.com.br, KaBuM!, Magalu, Fast Shop, Carrefour, Mercado Livre Loja Oficial).
+   - Para climatização / ar-condicionado, aprove também especialistas oficiais brasileiros (Dufrio, CentralAr, Leveros, Frio Peças, WebContinental, A.Dias, Frigelar, STR Ar).
+   - Rejeite vendedores terceiros desconhecidos sem selo oficial.
+- Retorne todas as ofertas aprovadas (entre 1 e 5 lojas) ordenadas do menor para o maior preço à vista.
 5. HISTÓRICO DE PREÇOS REAL (Anti-Black-Fraude):
    - Também pesquise comparadores/rastreadores brasileiros (Buscapé, Zoom, Keepa, Promobit) para levantar preços históricos reais observados do produto entre os últimos 40 dias e 1 ano.
    - Retorne de 6 a 18 pontos cronológicos em "price_history" (date no formato "YYYY-MM-DD", price_brl em reais e source com o nome do comparador/loja). Use apenas preços realmente encontrados na web; NUNCA invente números — se não houver histórico confiável, retorne [].`,
@@ -558,9 +595,7 @@ ${snippets.length > 0 ? `\nDados adicionais coletados:\n${snippets.join("\n\n").
           cashPriceCents: Math.round(o.cash_price_brl * 100),
           installmentTotalCents: Math.round(Math.max(o.installment_total_brl, o.cash_price_brl) * 100),
           installments: Math.max(1, Math.min(24, o.installments || 10)),
-          url: isSafePublicHttpsUrl(o.url)
-            ? o.url
-            : `https://www.google.com/search?tbm=shop&q=${encodeURIComponent(`${o.store} ${o.title}`)}`,
+          url: isSafePublicHttpsUrl(o.url) ? o.url : "",
           inStock: o.in_stock,
           isNew: o.is_new,
           isUnconditioned: o.is_unconditioned,
@@ -612,60 +647,9 @@ ${snippets.length > 0 ? `\nDados adicionais coletados:\n${snippets.join("\n\n").
     }
   }
 
-  // Fallback determinístico seguro caso todas as requisições externas falhem
+  // NUNCA fabricar preços sintéticos quando nenhuma oferta real passar pelas 4 camadas
   if (approvedOffers.length === 0) {
-    verificationSummary = "";
-    const encoded = encodeURIComponent(query);
-    const isPs5 = query.toLocaleLowerCase("pt-BR").includes("playstation 5") || query.toLocaleLowerCase("pt-BR").includes("ps5");
-    const baseCash = isPs5 ? 334900 : 250000;
-    const baseInst = isPs5 ? 369900 : 275000;
-    approvedOffers.push(
-      {
-        store: "KaBuM!",
-        seller: "Vendido e entregue por KaBuM!",
-        title: isPs5 ? "Console PlayStation 5 Slim Sony, SSD 1TB, Edição Digital - CFI-2014B01X" : `${query} (Novo · Oficial)`,
-        skuOrModel: isPs5 ? "CFI-2014B01X" : null,
-        cashPriceCents: baseCash,
-        installmentTotalCents: baseInst,
-        installments: 10,
-        url: `https://www.kabum.com.br/busca/${encoded}`,
-        inStock: true,
-        isNew: true,
-        isUnconditioned: true,
-        isOfficialSeller: true,
-        notes: "PIX com desconto universal + 10x sem juros no cartão comum",
-      },
-      {
-        store: "Amazon.com.br",
-        seller: "Vendido e entregue por Amazon.com.br",
-        title: isPs5 ? "PlayStation®5 Slim Digital Edition 1TB - Lacrado Novo" : `${query} (1P Oficial)`,
-        skuOrModel: isPs5 ? "CFI-2014B01X" : null,
-        cashPriceCents: baseCash + 14000,
-        installmentTotalCents: baseCash + 25000,
-        installments: 10,
-        url: `https://www.amazon.com.br/s?k=${encoded}`,
-        inStock: true,
-        isNew: true,
-        isUnconditioned: true,
-        isOfficialSeller: true,
-        notes: "Frete grátis Prime p/ Araraquara · 10x sem juros cartão comum",
-      },
-      {
-        store: "Magazine Luiza",
-        seller: "Vendido e entregue por Magalu",
-        title: isPs5 ? "Console PlayStation 5 Slim 1TB Sony Novo Oficial" : `${query} (Magalu 1P)`,
-        skuOrModel: isPs5 ? "CFI-2014B01X" : null,
-        cashPriceCents: baseCash + 5000,
-        installmentTotalCents: baseInst + 6000,
-        installments: 10,
-        url: `https://www.magazineluiza.com.br/busca/${encoded}/`,
-        inStock: true,
-        isNew: true,
-        isUnconditioned: true,
-        isOfficialSeller: true,
-        notes: "Preço universal PIX e 10x sem exigir Cartão Magalu",
-      }
-    );
+    return null;
   }
 
   // Ordena pelo menor preço à vista validado (critério de desempate: menor parcelado na mesma loja)
@@ -1090,7 +1074,7 @@ export async function trackTravelPrices(
   description: string,
   startDate: string,
   rawConfig?: Partial<TravelTrackerConfig> | null
-): Promise<BestOfferMeta> {
+): Promise<BestOfferMeta | null> {
   const destCode = (rawConfig?.destinationAirport || "MCZ").toUpperCase().trim();
   const destMeta = DESTINATION_AIRPORTS.find((d) => d.code === destCode);
   const destLabel = rawConfig?.destinationLabel || destMeta?.label || `${destCode}`;
@@ -1282,81 +1266,27 @@ Aeroportos de saída monitorados: ${originAirports.join(", ")} (Aceita escala: $
     }
   }
 
-  // Fallback determinístico calibrado por temporada caso a chamada externa falhe
-  const monthNum = Number(outboundDate.slice(5, 7)) || 12;
-  const isHighSeason = [1, 2, 7, 12].includes(monthNum);
-  const seasonMult = isHighSeason ? 1.22 : 1.0;
-
-  if (flightQuotes.length === 0) {
-    for (const originCode of originAirports) {
-      const originMeta = ORIGIN_AIRPORTS.find((o) => o.code === originCode);
-      const isRao = originCode === "RAO";
-      const perPersonBase = isRao ? 119000 : 108000;
-      const travelersFactor = adults + children * 0.75;
-      const petFlightCents = pets * 50000; // ~R$ 500 ida+volta por pet na cabine
-      const cashTotalCents = Math.round(perPersonBase * travelersFactor * seasonMult + petFlightCents);
-      flightQuotes.push({
-        originAirport: originCode,
-        destinationAirport: destCode,
-        airline: isRao ? "Azul / Latam (1 conexão)" : "Azul Linhas Aéreas",
-        stopsCount: isRao ? 1 : 0,
-        durationSummary: isRao ? "4h45 (1 parada em VCP/CNF)" : "3h10 (Voo direto)",
-        outboundDate: flightOutboundDate,
-        returnDate: flightReturnDate,
-        outboundDepartureTime: isRao ? "06:00" : "08:15",
-        outboundArrivalTime: isRao ? "10:50" : "11:25",
-        returnDepartureTime: isRao ? "14:20" : "15:40",
-        returnArrivalTime: isRao ? "19:15" : "18:55",
-        cashTotalCents,
-        installmentTotalCents: cashTotalCents,
-        installments: 6,
-        groundTransferCents: originMeta?.estimatedGroundCostCents ?? 20000,
-        bookingUrl: buildGoogleFlightsUrl(originCode, destCode, flightOutboundDate, flightReturnDate),
-        notes: `Ida ${flightOutboundDate} e volta ${flightReturnDate} p/ ${adults} adultos com taxas`,
-      });
-    }
+  // NUNCA fabricar tarifas sintéticas se nenhuma cotação real de hospedagem ou voo foi confirmada
+  if (!stayQuote && flightQuotes.length === 0) {
+    return null;
   }
 
-  if (!stayQuote) {
-    verificationSummary = "";
-    const lowerAcc = accommodationName.toLocaleLowerCase("pt-BR");
-    const isLuxuryAllInclusive =
-      lowerAcc.includes("japaratinga") || lowerAcc.includes("salinas") || lowerAcc.includes("all inclusive");
-    const nightlyRateCents = Math.round((isLuxuryAllInclusive ? 189000 : 75000) * seasonMult * (1 + Math.max(0, adults - 2) * 0.35 + children * 0.25));
-    const petStayCents = pets * 15000 * nights;
-    const stayInstallmentCents = nightlyRateCents * nights + petStayCents;
-    const stayCashCents = Math.round(stayInstallmentCents * 0.93); // ~7% desconto PIX direto
-    stayQuote = {
-      accommodationName,
-      provider: "Site Oficial do Resort (Tarifa Direta)",
-      roomType: "Apartamento Standard",
-      boardBasis: isLuxuryAllInclusive ? "All Inclusive Premium 24h" : "Café da manhã incluído",
-      nights,
-      cashTotalCents: stayCashCents,
-      installmentTotalCents: stayInstallmentCents,
-      installments: 10,
-      bookingUrl: buildAccommodationUrl(accommodationName, destLabel, outboundDate, returnDate, adults, children),
-      isBlackFridayPromo: true,
-      notes: `${nights} diárias (${outboundDate} a ${returnDate}) para ${travelersLabel}`,
-    };
-  }
-
-  // Escolhe o melhor voo considerando tarifa aérea + deslocamento terrestre de Araraquara
+  // Escolhe o melhor voo verificado considerando tarifa aérea + deslocamento terrestre de Araraquara
   flightQuotes.sort(
     (a, b) => a.cashTotalCents + a.groundTransferCents - (b.cashTotalCents + b.groundTransferCents)
   );
-  const bestFlight = flightQuotes[0];
+  const bestFlight = flightQuotes[0] ?? null;
 
-  const activeStayCash = includeStay ? stayQuote.cashTotalCents : 0;
-  const activeStayInst = includeStay ? stayQuote.installmentTotalCents : 0;
-  const activeFlightCash = includeFlight ? bestFlight.cashTotalCents : 0;
-  const activeFlightInst = includeFlight ? bestFlight.installmentTotalCents : 0;
+  const activeStayCash = includeStay && stayQuote ? stayQuote.cashTotalCents : 0;
+  const activeStayInst = includeStay && stayQuote ? stayQuote.installmentTotalCents : 0;
+  const activeFlightCash = includeFlight && bestFlight ? bestFlight.cashTotalCents : 0;
+  const activeFlightInst = includeFlight && bestFlight ? bestFlight.installmentTotalCents : 0;
 
   const totalCashCents = Math.max(100, activeStayCash + activeFlightCash);
   const totalInstallmentCents = Math.max(100, activeStayInst + activeFlightInst);
   const combinedInstallments = Math.max(
-    includeFlight ? bestFlight.installments : 1,
-    includeStay ? stayQuote.installments : 1,
+    includeFlight && bestFlight ? bestFlight.installments : 1,
+    includeStay && stayQuote ? stayQuote.installments : 1,
     10
   );
 
@@ -1366,27 +1296,34 @@ Aeroportos de saída monitorados: ${originAirports.join(", ")} (Aceita escala: $
     const matchingFlight = flightPoints.find((fp) => fp.date === sp.date);
     combinedHistoryMap.set(sp.date, {
       date: sp.date,
-      priceCents: sp.priceCents + (matchingFlight?.priceCents ?? bestFlight.cashTotalCents),
+      priceCents: sp.priceCents + (matchingFlight?.priceCents ?? bestFlight?.cashTotalCents ?? 0),
       source: sp.source,
     });
   }
+
+  const providerLabel = [
+    bestFlight ? `Voo ${bestFlight.originAirport}→${destCode} (${bestFlight.airline})` : null,
+    stayQuote ? stayQuote.accommodationName : null,
+  ]
+    .filter(Boolean)
+    .join(" + ");
 
   return {
     category: "travel",
     checkedAt: new Date().toISOString(),
     sourceMode: snippets.length > 0 ? "live_verified" : "ai_web_verified",
-    storeOrProvider: `Voo ${bestFlight.originAirport}→${destCode} (${bestFlight.airline}) + ${stayQuote.accommodationName}`,
+    storeOrProvider: providerLabel || accommodationName,
     cashPriceCents: totalCashCents,
     installmentTotalCents: totalInstallmentCents,
     installments: combinedInstallments,
-    offerUrl: stayQuote.bookingUrl,
+    offerUrl: stayQuote?.bookingUrl ?? bestFlight?.bookingUrl ?? null,
     verificationSummary:
       verificationSummary ||
-      `Cotação verificada para ${outboundDate} a ${returnDate} (${nights} noites, ${adults} adultos): Melhor voo saindo de ${bestFlight.originAirport} por R$ ${(bestFlight.cashTotalCents / 100).toFixed(2)} + ${stayQuote.accommodationName} (${stayQuote.boardBasis}) por R$ ${(stayQuote.cashTotalCents / 100).toFixed(2)} à vista (ou ${stayQuote.installments}x totalizando R$ ${(stayQuote.installmentTotalCents / 100).toFixed(2)}).`,
+      `Cotação verificada para ${outboundDate} a ${returnDate} (${nights} noites, ${travelersLabel}).`,
     rejectedCount,
     rejectedReasons: rejectedReasons.slice(0, 5),
     flightQuotes,
-    selectedFlightOrigin: bestFlight.originAirport,
+    selectedFlightOrigin: bestFlight?.originAirport,
     stayQuote,
     ...(stayPoints.length > 0 ? { stayHistoricalPrices: stayPoints } : {}),
     ...(flightPoints.length > 0 ? { flightHistoricalPrices: flightPoints } : {}),

@@ -3,6 +3,9 @@
 Atualizado: 24/11/2026.
 
 ## Rastreamento Inteligente de Preços na Simulação — Produtos (4 Camadas) & Viagens (Voos RAO/VCP + Resorts por Data) (23/11/2026)
+- **Remoção definitiva de fallbacks sintéticos & endurecimento Anti-Falso-Positivo (24/11/2026):**
+  - `engine.ts`: removidos todos os fallbacks hardcoded (`KaBuM! R$ 3.349`, `R$ 2.500` e tarifas sintéticas de viagem); `trackProductPrices` e `trackTravelPrices` retornam `null` quando nenhuma oferta real passa nas 4 camadas. Rejeição automática de URLs genéricas de busca (`/busca/`, `/s?k=`, `google.com/search`) e reconhecimento de especialistas oficiais de climatização (`Dufrio`, `CentralAr`, `Leveros`, `Frio Peças`, `WebContinental`, `A.Dias`, `Frigelar`, `STR Ar`) para ar-condicionado.
+  - `price-tracking.ts`: se `meta === null` ou queda anômala `> 45%` sem print verificado, preserva integralmente o último preço válido no banco sem gravar snapshot ou alerta falso. `test-price-tracking.mjs` inclui guarda de regressão contra preços sintéticos.
 - **Histórico de 18 meses (`18m`), Zoom com scroll do mouse e atualização em lote (24/11/2026):**
   - `history-stats.ts`, `engine.ts` e `PriceHistoryVisorCard.tsx`: adicionada janela `18m` (548 dias) na UI e nas buscas paralelas de produtos e viagens, além de zoom interativo com o scroll do mouse (`wheel` listener + botão `Resetar zoom`) no gráfico histórico.
   - `models.ts`: incluído `gpt-image-2.6-flare` na tabela `PRICES` de estimativa de custo.

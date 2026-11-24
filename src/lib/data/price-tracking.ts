@@ -116,6 +116,12 @@ export async function previewTrackedPrices(input: {
             input.description,
             (input.trackerConfig as Partial<ProductTrackerConfig>) ?? null
           );
+    if (!meta) {
+      return {
+        ok: false,
+        error: "Não foi possível confirmar ofertas reais agora. Você pode informar o valor manualmente ou enviar um print da oferta.",
+      };
+    }
     return { ok: true, meta };
   } catch (err) {
     console.error("previewTrackedPrices failed:", err);
@@ -315,6 +321,21 @@ export async function refreshSimulationPriceTracking(
     category === "travel"
       ? await trackTravelPrices(sim.description, sim.start_date, trackerConfig as Partial<TravelTrackerConfig>)
       : await trackProductPrices(sim.description, trackerConfig as Partial<ProductTrackerConfig>);
+
+  if (!meta) {
+    return {
+      ok: false,
+      error: "Nenhuma oferta real confirmada nesta checagem; mantido o último preço válido.",
+    };
+  }
+
+  const prevCashCents = sim.cash_price ? Math.round(Number(sim.cash_price) * 100) : 0;
+  if (prevCashCents > 0 && meta.sourceMode !== "live_verified" && meta.cashPriceCents < Math.round(prevCashCents * 0.55)) {
+    return {
+      ok: false,
+      error: "Queda atípica (>45%) descartada por proteção anti-falso-positivo; mantido o preço anterior.",
+    };
+  }
 
   const mergeHist = (prev?: { date: string; priceCents: number; source?: string }[], next?: { date: string; priceCents: number; source?: string }[]) => {
     const p = prev ?? [];

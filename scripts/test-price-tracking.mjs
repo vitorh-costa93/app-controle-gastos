@@ -65,4 +65,11 @@ const feasibilityCode = fs.readFileSync(path.join(root, "src/lib/utils/best-purc
 assert.match(feasibilityCode, /export function computePurchaseFeasibility/);
 assert.match(feasibilityCode, /Viável à vista agora/);
 
+// 6. Guarda contra regressão de preços sintéticos / falsos-positivos
+assert.doesNotMatch(engineCode, /334900|baseCash = isPs5|Fallback determinístico/, "Motor nunca deve conter preços sintéticos hardcoded");
+assert.match(engineCode, /google\.com\/search/, "Deve rejeitar URLs genéricas de busca");
+
+const trackingServiceCode = fs.readFileSync(path.join(root, "src/lib/data/price-tracking.ts"), "utf8");
+assert.match(trackingServiceCode, /if \(!meta\)/, "Deve preservar o último preço válido quando nenhuma oferta real for confirmada");
+
 console.log("✓ Rastreamento de Preços (4 camadas Anti-Falso-Positivo + Viagens RAO/VCP + Resorts por data + Histórico Visor) validado com sucesso");

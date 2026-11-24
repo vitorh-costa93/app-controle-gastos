@@ -1,8 +1,11 @@
 # Continuidade — MeuDinheiro
 
-Atualizado: 23/11/2026.
+Atualizado: 24/11/2026.
 
 ## Rastreamento Inteligente de Preços na Simulação — Produtos (4 Camadas) & Viagens (Voos RAO/VCP + Resorts por Data) (23/11/2026)
+- **Chat IA com Markdown e upload de imagens (24/11/2026):**
+  - `ChatMarkdown.tsx`: renderização segura de Markdown (`**negrito**`, `*itálico*`, listas com `-` e numeradas, títulos, separadores, código inline e links) nas respostas do assistente sem expor asteriscos crus.
+  - `SimulationAssistantDrawer.tsx` e `simulation-chat.ts`: suporte a envio de até 4 imagens por mensagem (seletor de arquivo, colagem `Ctrl+V` e drag-and-drop com compressão client-side em canvas) encaminhadas via `input_image` na Responses API da OpenAI.
 - **Viagem independente (Hospedagem & Voo separados), Gráfico de Pagamento e Assistente IA (24/11/2026):**
   - `PriceTrackingSection.tsx` e `engine.ts`: viagens agora exibem **Hospedagem** e **Passagem Aérea** em cards independentes (cada um com toggle `Entra na conta`, sem venda casada), além de cartão de embarque com datas, horários de saída/chegada, origem (`VCP` vs `RAO`) e escalas.
   - `SimulationFormFields.tsx`, `engine.ts` e `PriceTrackingSection.tsx`: cadastro de viagem com `Entrada/Saída da hospedagem`, toggle `Usar as mesmas datas para o voo` e composição de viajantes quebrada por `Adultos`, `Crianças` e `Pets`.

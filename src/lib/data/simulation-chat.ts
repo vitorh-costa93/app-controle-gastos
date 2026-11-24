@@ -1,5 +1,6 @@
 "use server";
 
+import type { ResponseInput } from "openai/resources/responses/responses";
 import { resolveModelFor } from "@/lib/ai/models";
 import { getOpenAIClient, isAiConfigured } from "@/lib/ai/openai";
 import { logAiUsage } from "@/lib/ai/usage";
@@ -8,6 +9,7 @@ import { SimulationCategory } from "@/types/db";
 export interface AssistantChatMessage {
   role: "user" | "assistant";
   content: string;
+  images?: string[];
 }
 
 export interface AssistantScenarioSuggestion {
@@ -103,10 +105,46 @@ export async function askSimulationAssistant(
     )
     .join("\n");
 
-  const conversationText = messages
-    .slice(-8)
-    .map((m) => `${m.role === "user" ? "Usuário" : "Assistente"}: ${m.content}`)
-    .join("\n\n");
+  const recentMessages = messages.slice(-8);
+  const userIndices = recentMessages
+    .map((m, idx) => (m.role === "user" ? idx : -1))
+    .filter((idx) => idx >= 0);
+  const imageAllowedIndices = new Set(userIndices.slice(-2));
+
+  const conversationInput: ResponseInput = recentMessages.map((m, idx) => {
+    if (m.role === "assistant") {
+      return {
+        role: "assistant" as const,
+        content: m.content,
+      };
+    }
+
+    const validImages = imageAllowedIndices.has(idx)
+      ? (m.images ?? []).filter((img) => typeof img === "string" && img.startsWith("data:image/")).slice(0, 4)
+      : [];
+
+    if (validImages.length === 0) {
+      return {
+        role: "user" as const,
+        content: m.content,
+      };
+    }
+
+    return {
+      role: "user" as const,
+      content: [
+        {
+          type: "input_text" as const,
+          text: m.content.trim() || "Analise as imagens enviadas.",
+        },
+        ...validImages.map((img) => ({
+          type: "input_image" as const,
+          image_url: img,
+          detail: "auto" as const,
+        })),
+      ],
+    };
+  });
 
   try {
     const response = await openai.responses.create({
@@ -135,11 +173,15 @@ Responda em português do Brasil de forma objetiva, prática e usando OS DADOS R
 - Simulações já cadastradas:
 ${existingSummary || "(nenhuma simulação cadastrada)"}
 
+FORMATO E IMAGENS:
+- Use Markdown limpo (**negrito** bem fechado, listas com "-") sem asteriscos soltos ou quebrados.
+- Quando o usuário enviar imagens (prints de ofertas, resorts, passagens aéreas, produtos ou cotações), leia todos os preços, datas, condições de parcelamento, taxas e detalhes visíveis, compare com o orçamento real do casal e gere itens estruturados em "suggestions" sempre que fizer sentido permitir adicionar como cenário com 1 clique.
+
 REGRAS PARA SUGESTÕES DE CENÁRIOS:
 - Se o usuário pedir opções de viagens, resorts, destinos ou produtos para comprar/comparar, busque na web opções reais com valores estimados atualizados e devolva de 2 a 4 itens estruturados no array "suggestions" para que o usuário possa clicar em "+ Adicionar à Simulação".
 - Para sugestões de viagem ("travel"), preencha sempre destination_airport (código IATA de 3 letras, ex.: "IOS", "REC", "NAT", "BPS", "FOR", "MCZ"), destination_label (ex.: "Ilhéus - BA (IOS)"), accommodation_name (nome exato do resort/hotel), outbound_date e return_date (YYYY-MM-DD compatíveis com a pergunta ou próximo feriado/mês mencionado).
 - Para perguntas puramente analíticas sobre o orçamento (onde não faz sentido criar novo cenário), retorne suggestions: [].`,
-      input: conversationText,
+      input: conversationInput,
       text: {
         format: {
           type: "json_schema",

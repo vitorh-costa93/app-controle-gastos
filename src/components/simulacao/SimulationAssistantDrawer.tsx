@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
-import { Check, Plane, Plus, Send, ShoppingBag, Sparkles, X } from "lucide-react";
+import { ClipboardEvent, DragEvent, useEffect, useRef, useState, useTransition } from "react";
+import { Check, ImagePlus, Plane, Plus, Send, ShoppingBag, Sparkles, X } from "lucide-react";
 import {
   AssistantChatMessage,
   AssistantFinancialContext,
@@ -13,9 +13,53 @@ import { buildDefaultProductTrackerConfig, buildDefaultTravelTrackerConfig } fro
 import { Simulation } from "@/types/domain";
 import { formatCurrencyBRL, toISODate } from "@/lib/utils/format";
 import { Button } from "@/components/ui/Button";
+import { ChatMarkdown } from "@/components/simulacao/ChatMarkdown";
 
 interface UiMessage extends AssistantChatMessage {
   suggestions?: AssistantScenarioSuggestion[];
+}
+
+const MAX_IMAGES_PER_MESSAGE = 4;
+
+async function compressImageFile(file: File): Promise<string> {
+  if (!file.type.startsWith("image/")) {
+    throw new Error("Arquivo inválido: selecione uma imagem.");
+  }
+
+  const readFallback = () =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("Falha ao ler imagem."));
+      reader.readAsDataURL(file);
+    });
+
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error("Não foi possível carregar a imagem."));
+      el.src = objectUrl;
+    });
+
+    const maxDim = 1600;
+    const scale = Math.min(1, maxDim / Math.max(img.width || 1, img.height || 1));
+    const width = Math.max(1, Math.round(img.width * scale));
+    const height = Math.max(1, Math.round(img.height * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return await readFallback();
+    ctx.drawImage(img, 0, 0, width, height);
+    return canvas.toDataURL("image/jpeg", 0.84);
+  } catch {
+    return await readFallback();
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
 }
 
 const QUICK_PROMPTS = [
@@ -37,10 +81,14 @@ export function SimulationAssistantDrawer({
 }) {
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [input, setInput] = useState("");
+  const [pendingImages, setPendingImages] = useState<string[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSending, startSending] = useTransition();
   const [addingKey, setAddingKey] = useState<string | null>(null);
   const [addedKeys, setAddedKeys] = useState<Record<string, boolean>>({});
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -51,18 +99,92 @@ export function SimulationAssistantDrawer({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages.length, isSending]);
+
   if (!open) return null;
 
-  function sendText(rawText: string) {
-    const text = rawText.trim();
-    if (!text || isSending) return;
+  async function handleAddFiles(files: FileList | File[]) {
+    const imageFiles = Array.from(files).filter((f) => f.type.startsWith("image/"));
+    if (imageFiles.length === 0) return;
+
+    const remaining = MAX_IMAGES_PER_MESSAGE - pendingImages.length;
+    if (remaining <= 0) {
+      setError(`Máximo de ${MAX_IMAGES_PER_MESSAGE} imagens por mensagem.`);
+      return;
+    }
+
     setError(null);
-    const nextHistory: UiMessage[] = [...messages, { role: "user", content: text }];
+    try {
+      const compressed = await Promise.all(imageFiles.slice(0, remaining).map(compressImageFile));
+      setPendingImages((prev) => [...prev, ...compressed.filter(Boolean)].slice(0, MAX_IMAGES_PER_MESSAGE));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível anexar a imagem.");
+    }
+  }
+
+  function handlePaste(e: ClipboardEvent<HTMLInputElement>) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const files: File[] = [];
+    for (const item of Array.from(items)) {
+      if (item.kind === "file" && item.type.startsWith("image/")) {
+        const file = item.getAsFile();
+        if (file) files.push(file);
+      }
+    }
+    if (files.length > 0) {
+      e.preventDefault();
+      void handleAddFiles(files);
+    }
+  }
+
+  function handleDragOver(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    if (!isDragging) setIsDragging(true);
+  }
+
+  function handleDragLeave(e: DragEvent<HTMLDivElement>) {
+    if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+    setIsDragging(false);
+  }
+
+  function handleDrop(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer?.files?.length) {
+      void handleAddFiles(e.dataTransfer.files);
+    }
+  }
+
+  function sendText(rawText: string) {
+    const trimmed = rawText.trim();
+    const imagesToSend = pendingImages;
+    if ((!trimmed && imagesToSend.length === 0) || isSending) return;
+
+    const text =
+      trimmed || (imagesToSend.length === 1 ? "Analise esta imagem." : "Analise estas imagens.");
+
+    setError(null);
+    const nextHistory: UiMessage[] = [
+      ...messages,
+      {
+        role: "user",
+        content: text,
+        images: imagesToSend.length > 0 ? imagesToSend : undefined,
+      },
+    ];
     setMessages(nextHistory);
     setInput("");
+    setPendingImages([]);
 
     startSending(async () => {
-      const apiMessages: AssistantChatMessage[] = nextHistory.map(({ role, content }) => ({ role, content }));
+      const apiMessages: AssistantChatMessage[] = nextHistory.map(({ role, content, images }) => ({
+        role,
+        content,
+        ...(images && images.length > 0 ? { images } : {}),
+      }));
       const res = await askSimulationAssistant(apiMessages, context);
       if (!res.ok) {
         setError(res.error);
@@ -121,8 +243,13 @@ export function SimulationAssistantDrawer({
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/35 backdrop-blur-[1px]" onClick={onClose}>
       <div
-        className="flex h-full w-full max-w-[460px] flex-col bg-(--color-surface) shadow-2xl"
+        className={`flex h-full w-full max-w-[460px] flex-col bg-(--color-surface) shadow-2xl transition-colors ${
+          isDragging ? "ring-2 ring-inset ring-(--color-primary)" : ""
+        }`}
         onClick={(e) => e.stopPropagation()}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
       >
         {/* Cabeçalho conectado ao orçamento */}
         <div className="flex items-start justify-between gap-3 border-b border-(--color-border) bg-[#0f172a] px-5 py-4 text-white">
@@ -177,10 +304,29 @@ export function SimulationAssistantDrawer({
                 className={
                   m.role === "user"
                     ? "max-w-[85%] rounded-2xl rounded-br-xs bg-(--color-primary) px-3.5 py-2.5 text-xs leading-relaxed text-white"
-                    : "max-w-[95%] whitespace-pre-line rounded-2xl rounded-bl-xs border border-(--color-border) bg-(--color-surface) px-3.5 py-2.5 text-xs leading-relaxed text-(--color-text-primary)"
+                    : "max-w-[95%] rounded-2xl rounded-bl-xs border border-(--color-border) bg-(--color-surface) px-3.5 py-2.5 text-xs leading-relaxed text-(--color-text-primary)"
                 }
               >
-                {m.content}
+                {m.role === "user" ? (
+                  <div className="space-y-2">
+                    {m.images && m.images.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {m.images.map((src, imgIdx) => (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            key={imgIdx}
+                            src={src}
+                            alt={`Anexo ${imgIdx + 1}`}
+                            className="h-20 w-20 rounded-lg border border-white/25 object-cover"
+                          />
+                        ))}
+                      </div>
+                    )}
+                    <p className="whitespace-pre-wrap">{m.content}</p>
+                  </div>
+                ) : (
+                  <ChatMarkdown content={m.content} />
+                )}
               </div>
 
               {m.suggestions && m.suggestions.length > 0 && (
@@ -242,7 +388,32 @@ export function SimulationAssistantDrawer({
           )}
 
           {error && <p className="text-xs text-(--color-negative)">{error}</p>}
+          <div ref={messagesEndRef} />
         </div>
+
+        {/* Preview de imagens anexadas */}
+        {pendingImages.length > 0 && (
+          <div className="flex flex-wrap gap-2 border-t border-(--color-border) bg-black/[0.02] px-3 py-2">
+            {pendingImages.map((src, idx) => (
+              <div key={idx} className="relative">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={src}
+                  alt={`Prévia ${idx + 1}`}
+                  className="h-14 w-14 rounded-lg border border-(--color-border) object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={() => setPendingImages((prev) => prev.filter((_, i) => i !== idx))}
+                  aria-label="Remover imagem"
+                  className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-white shadow hover:bg-slate-700"
+                >
+                  <X size={11} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Input */}
         <form
@@ -253,14 +424,42 @@ export function SimulationAssistantDrawer({
           className="flex items-center gap-2 border-t border-(--color-border) bg-(--color-surface) p-3"
         >
           <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files?.length) {
+                void handleAddFiles(e.target.files);
+              }
+              e.target.value = "";
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isSending || pendingImages.length >= MAX_IMAGES_PER_MESSAGE}
+            title="Enviar imagem (ou cole com Ctrl+V)"
+            aria-label="Enviar imagem"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) text-(--color-text-secondary) hover:border-(--color-primary) hover:text-(--color-primary) disabled:opacity-50"
+          >
+            <ImagePlus size={16} />
+          </button>
+          <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Pergunte sobre seu orçamento ou peça sugestões..."
+            onPaste={handlePaste}
+            placeholder="Pergunte, cole um print (Ctrl+V) ou peça sugestões..."
             disabled={isSending}
             className="flex-1 rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) px-3 py-2 text-xs outline-none focus:border-(--color-primary)"
           />
-          <Button type="submit" disabled={!input.trim() || isSending} className="gap-1.5 px-3 py-2 text-xs">
+          <Button
+            type="submit"
+            disabled={(!input.trim() && pendingImages.length === 0) || isSending}
+            className="gap-1.5 px-3 py-2 text-xs"
+          >
             <Send size={13} /> Enviar
           </Button>
         </form>

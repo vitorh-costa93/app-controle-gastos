@@ -15,6 +15,7 @@ import {
   DESTINATION_AIRPORTS,
   FORBIDDEN_CONDITION_TERMS,
   ORIGIN_AIRPORTS,
+  formatTravelersSummary,
 } from "./catalog";
 
 /** Proteção SSRF: aceita apenas URLs HTTPS públicas na porta 443, bloqueando IPs locais/privados. */
@@ -776,7 +777,14 @@ function buildGoogleFlightsUrl(origin: string, dest: string, outboundDate: strin
   return `https://www.google.com/travel/flights?hl=pt-BR&curr=BRL&q=${encodeURIComponent(q)}`;
 }
 
-function buildAccommodationUrl(accommodationName: string, destLabel: string, outboundDate: string, returnDate: string, adults: number): string {
+function buildAccommodationUrl(
+  accommodationName: string,
+  destLabel: string,
+  outboundDate: string,
+  returnDate: string,
+  adults: number,
+  children = 0
+): string {
   const lower = accommodationName.toLocaleLowerCase("pt-BR");
   if (lower.includes("japaratinga")) {
     return `https://www.japaratingaresort.com.br/`;
@@ -787,7 +795,7 @@ function buildAccommodationUrl(accommodationName: string, destLabel: string, out
   if (lower.includes("salinas") && lower.includes("macei")) {
     return `https://www.salinas.com.br/pt/maceio/`;
   }
-  return `https://www.booking.com/searchresults.pt-br.html?ss=${encodeURIComponent(`${accommodationName} ${destLabel}`)}&checkin=${outboundDate}&checkout=${returnDate}&group_adults=${adults}&no_rooms=1`;
+  return `https://www.booking.com/searchresults.pt-br.html?ss=${encodeURIComponent(`${accommodationName} ${destLabel}`)}&checkin=${outboundDate}&checkout=${returnDate}&group_adults=${adults}&group_children=${children}&no_rooms=1`;
 }
 
 /**
@@ -819,6 +827,9 @@ export async function trackTravelPrices(
   const includeFlight = rawConfig?.includeFlight !== false;
   const nights = calculateNights(outboundDate, returnDate);
   const adults = Math.max(1, rawConfig?.adults ?? 2);
+  const children = Math.max(0, rawConfig?.children ?? 0);
+  const pets = Math.max(0, rawConfig?.pets ?? 0);
+  const travelersLabel = formatTravelersSummary(adults, children, pets);
   const allowStops = rawConfig?.allowStops ?? true;
 
   const customUrls = rawConfig?.customUrls ?? [];
@@ -852,19 +863,19 @@ export async function trackTravelPrices(
         ],
         instructions: `Você é o Motor de Cotação e Auditoria de Viagens (Voos Multi-Origem + Resorts/Hotéis por Data) do MeuDinheiro.
 Use a busca web em tempo real para pesquisar as tarifas atuais e promoções de Black Friday dos componentes independentes da viagem:
-1) PASSAGENS AÉREAS (Ida em ${flightOutboundDate} e Volta em ${flightReturnDate}, para ${adults} adultos, taxas incluídas):
+1) PASSAGENS AÉREAS (Ida em ${flightOutboundDate} e Volta em ${flightReturnDate}, para ${travelersLabel}, taxas incluídas):
    - Compare os aeroportos de origem solicitados (${originAirports.join(", ")}) rumo ao aeroporto ${destCode} (${destLabel}).
    - Ribeirão Preto (RAO) normalmente opera com 1 escala rápida (via VCP, CGH ou CNF pela Azul/Latam/Gol).
    - Campinas / Viracopos (VCP) é hub da Azul e opera voos diretos ou com 1 conexão curta para o Nordeste/Sul.
-   - Informe horários típicos reais (outbound_departure_time, outbound_arrival_time, return_departure_time, return_arrival_time em HH:MM) e o preço total de IDA E VOLTA em BRL para TODOS os ${adults} passageiros somados (sempre > 0).
-2) HOSPEDAGEM / RESORT ("${accommodationName}" para ${nights} noites, Check-in ${outboundDate} e Check-out ${returnDate}, para ${adults} adultos):
-   - Busque na web as tarifas reais de diárias de "${accommodationName}" (site oficial do resort, Booking, Decolar, Melhores Destinos / promoções Black Friday do resort) e calcule o valor total das ${nights} diárias para o casal (${adults} adultos) nas datas informadas (sempre > 0; NUNCA retorne 0).
+   - Informe horários típicos reais (outbound_departure_time, outbound_arrival_time, return_departure_time, return_arrival_time em HH:MM) e o preço total de IDA E VOLTA em BRL somando todos os viajantes (${travelersLabel}, incluindo taxa de pet na cabine se houver pet) — sempre > 0.
+2) HOSPEDAGEM / RESORT ("${accommodationName}" para ${nights} noites, Check-in ${outboundDate} e Check-out ${returnDate}, para ${travelersLabel}):
+   - Busque na web as tarifas reais de diárias de "${accommodationName}" (site oficial do resort, Booking, Decolar, Melhores Destinos / promoções Black Friday do resort) e calcule o valor total das ${nights} diárias para ${travelersLabel} nas datas informadas (incluindo taxa pet se houver pet; sempre > 0; NUNCA retorne 0).
    - Traga o menor valor total à vista (PIX/transferência no site oficial) e o menor valor total parcelado (em até 10x ou 12x no cartão comum sem exigir clube de férias/timeshare).`,
         input: `Busque na web agora cotações para esta viagem:
 Destino / Aeroporto: ${destCode} (${destLabel})
 Estadia / Resort: "${accommodationName}" (Check-in ${outboundDate} · Check-out ${returnDate}, ${nights} noites)
 Passagens Aéreas: Ida ${flightOutboundDate} · Volta ${flightReturnDate}
-Passageiros / Hóspedes: ${adults} adultos
+Viajantes: ${travelersLabel}
 Aeroportos de saída monitorados: ${originAirports.join(", ")} (Aceita escala: ${allowStops ? "Sim" : "Somente voo direto"})`,
         text: {
           format: {
@@ -964,7 +975,7 @@ Aeroportos de saída monitorados: ${originAirports.join(", ")} (Aceita escala: $
             cashTotalCents: Math.round(sq.cash_total_brl * 100),
             installmentTotalCents: Math.round(Math.max(sq.installment_total_brl, sq.cash_total_brl) * 100),
             installments: Math.max(1, Math.min(12, sq.installments || 10)),
-            bookingUrl: buildAccommodationUrl(accommodationName, destLabel, outboundDate, returnDate, adults),
+            bookingUrl: buildAccommodationUrl(accommodationName, destLabel, outboundDate, returnDate, adults, children),
             isBlackFridayPromo: sq.is_black_friday_promo,
             notes: sq.notes,
           };
@@ -986,7 +997,9 @@ Aeroportos de saída monitorados: ${originAirports.join(", ")} (Aceita escala: $
       const originMeta = ORIGIN_AIRPORTS.find((o) => o.code === originCode);
       const isRao = originCode === "RAO";
       const perPersonBase = isRao ? 119000 : 108000;
-      const cashTotalCents = Math.round(perPersonBase * adults * seasonMult);
+      const travelersFactor = adults + children * 0.75;
+      const petFlightCents = pets * 50000; // ~R$ 500 ida+volta por pet na cabine
+      const cashTotalCents = Math.round(perPersonBase * travelersFactor * seasonMult + petFlightCents);
       flightQuotes.push({
         originAirport: originCode,
         destinationAirport: destCode,
@@ -1014,21 +1027,22 @@ Aeroportos de saída monitorados: ${originAirports.join(", ")} (Aceita escala: $
     const lowerAcc = accommodationName.toLocaleLowerCase("pt-BR");
     const isLuxuryAllInclusive =
       lowerAcc.includes("japaratinga") || lowerAcc.includes("salinas") || lowerAcc.includes("all inclusive");
-    const nightlyRateCents = Math.round((isLuxuryAllInclusive ? 189000 : 75000) * seasonMult);
-    const stayInstallmentCents = nightlyRateCents * nights;
+    const nightlyRateCents = Math.round((isLuxuryAllInclusive ? 189000 : 75000) * seasonMult * (1 + Math.max(0, adults - 2) * 0.35 + children * 0.25));
+    const petStayCents = pets * 15000 * nights;
+    const stayInstallmentCents = nightlyRateCents * nights + petStayCents;
     const stayCashCents = Math.round(stayInstallmentCents * 0.93); // ~7% desconto PIX direto
     stayQuote = {
       accommodationName,
       provider: "Site Oficial do Resort (Tarifa Direta)",
-      roomType: "Apartamento Standard Casal",
+      roomType: "Apartamento Standard",
       boardBasis: isLuxuryAllInclusive ? "All Inclusive Premium 24h" : "Café da manhã incluído",
       nights,
       cashTotalCents: stayCashCents,
       installmentTotalCents: stayInstallmentCents,
       installments: 10,
-      bookingUrl: buildAccommodationUrl(accommodationName, destLabel, outboundDate, returnDate, adults),
+      bookingUrl: buildAccommodationUrl(accommodationName, destLabel, outboundDate, returnDate, adults, children),
       isBlackFridayPromo: true,
-      notes: `${nights} diárias (${outboundDate} a ${returnDate}) para ${adults} adultos`,
+      notes: `${nights} diárias (${outboundDate} a ${returnDate}) para ${travelersLabel}`,
     };
   }
 

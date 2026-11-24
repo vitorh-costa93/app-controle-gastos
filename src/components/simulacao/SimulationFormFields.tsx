@@ -19,6 +19,7 @@ import {
   ORIGIN_AIRPORTS,
   buildDefaultProductTrackerConfig,
   buildDefaultTravelTrackerConfig,
+  formatTravelersSummary,
   inferCategoryFromDescription,
 } from "@/lib/price-tracking/catalog";
 import { impliedInstallmentRate, netMonthlyYieldRate } from "@/lib/domain/cash-vs-installments";
@@ -45,6 +46,8 @@ export interface SimulationFormValue {
   flightReturnDate: string;
   originAirports: string[];
   adults: number;
+  children: number;
+  pets: number;
   allowStops: boolean;
   // Campos opcionais de Produto
   customUrlInput: string;
@@ -77,6 +80,8 @@ export function emptySimulationForm(): SimulationFormValue {
     flightReturnDate: defaultRet,
     originAirports: ["RAO", "VCP"],
     adults: 2,
+    children: 0,
+    pets: 0,
     allowStops: true,
     customUrlInput: "",
     targetCashCents: 0,
@@ -110,6 +115,8 @@ export function formFromSimulation(sim: Simulation): SimulationFormValue {
     originAirports:
       rawCfg.originAirports && rawCfg.originAirports.length > 0 ? rawCfg.originAirports : ["RAO", "VCP"],
     adults: rawCfg.adults ?? 2,
+    children: rawCfg.children ?? 0,
+    pets: rawCfg.pets ?? 0,
     allowStops: rawCfg.allowStops ?? true,
     customUrlInput: (rawCfg.customUrls ?? [])[0] ?? "",
     targetCashCents: rawCfg.targetCashCents ?? rawCfg.targetTotalCents ?? 0,
@@ -158,6 +165,8 @@ export function simulationFormToInput(v: SimulationFormValue): SimulationInput {
           includeStay: true,
           includeFlight: true,
           adults: v.adults,
+          children: v.children,
+          pets: v.pets,
           allowStops: v.allowStops,
           highFrequencyBlackFriday: true,
           targetTotalCents: v.targetCashCents > 0 ? v.targetCashCents : null,
@@ -346,7 +355,8 @@ export function SimulationFormFields({
             </span>
             {nights > 0 && (
               <span className="rounded-full bg-(--color-primary-soft) px-2 py-0.5 text-[11px] font-semibold text-(--color-primary)">
-                {nights} {nights === 1 ? "diária" : "diárias"} · {value.adults} adultos
+                {nights} {nights === 1 ? "diária" : "diárias"} ·{" "}
+                {formatTravelersSummary(value.adults, value.children, value.pets)}
               </span>
             )}
           </div>
@@ -495,6 +505,36 @@ export function SimulationFormFields({
               </FieldGroup>
             </div>
           )}
+
+          <div className="grid grid-cols-3 gap-2.5">
+            <FieldGroup label="Adultos">
+              <Input
+                type="number"
+                min={1}
+                max={10}
+                value={value.adults}
+                onChange={(e) => set({ adults: Math.max(1, Number(e.target.value) || 1) })}
+              />
+            </FieldGroup>
+            <FieldGroup label="Crianças">
+              <Input
+                type="number"
+                min={0}
+                max={10}
+                value={value.children}
+                onChange={(e) => set({ children: Math.max(0, Number(e.target.value) || 0) })}
+              />
+            </FieldGroup>
+            <FieldGroup label="Pets">
+              <Input
+                type="number"
+                min={0}
+                max={5}
+                value={value.pets}
+                onChange={(e) => set({ pets: Math.max(0, Number(e.target.value) || 0) })}
+              />
+            </FieldGroup>
+          </div>
 
           <div>
             <span className="mb-1 block text-xs font-medium text-(--color-text-secondary)">

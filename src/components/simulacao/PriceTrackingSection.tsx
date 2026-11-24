@@ -31,6 +31,7 @@ import {
 } from "@/lib/data/price-tracking";
 import { updateSimulation } from "@/lib/data/simulations";
 import { formatCurrencyBRL, formatDateBR } from "@/lib/utils/format";
+import { formatTravelersSummary } from "@/lib/price-tracking/catalog";
 import { cn } from "@/lib/utils/cn";
 
 export interface TravelPartOverride {
@@ -614,6 +615,8 @@ function TravelTrackingDetailsCard({
         outboundDate,
         returnDate,
         adults: rawCfg.adults ?? 2,
+        children: rawCfg.children ?? 0,
+        pets: rawCfg.pets ?? 0,
         allowStops: rawCfg.allowStops ?? true,
         highFrequencyBlackFriday: true,
         targetTotalCents: rawCfg.targetTotalCents ?? null,
@@ -1016,7 +1019,7 @@ function TravelSplitCards({
               </span>
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-wider text-(--color-text-tertiary)">
-                  Passagem Aérea ({rawCfg.adults ?? 2} adultos c/ taxas)
+                  Passagem Aérea ({formatTravelersSummary(rawCfg.adults ?? 2, rawCfg.children ?? 0, rawCfg.pets ?? 0)} c/ taxas)
                 </p>
                 <p className="text-sm font-bold text-(--color-text-primary)">
                   {activeFlight.originAirport} → {activeFlight.destinationAirport} · {activeFlight.airline}

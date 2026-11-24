@@ -208,9 +208,18 @@ export function buildDefaultTravelTrackerConfig(description: string, startDate: 
     outboundDate: baseDate,
     returnDate,
     adults: 2,
+    children: 0,
+    pets: 0,
     allowStops: true,
     highFrequencyBlackFriday: true,
     targetTotalCents: null,
     customUrls: [],
   };
+}
+
+export function formatTravelersSummary(adults = 2, children = 0, pets = 0): string {
+  const parts = [`${adults} ${adults === 1 ? "adulto" : "adultos"}`];
+  if (children > 0) parts.push(`${children} ${children === 1 ? "criança" : "crianças"}`);
+  if (pets > 0) parts.push(`${pets} ${pets === 1 ? "pet" : "pets"}`);
+  return parts.join(" · ");
 }

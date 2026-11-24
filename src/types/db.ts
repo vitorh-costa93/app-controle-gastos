@@ -152,6 +152,8 @@ export interface TravelTrackerConfig {
   includeStay?: boolean; // padrão true
   includeFlight?: boolean; // padrão true
   adults: number;
+  children?: number;
+  pets?: number;
   allowStops: boolean;
   highFrequencyBlackFriday?: boolean;
   targetTotalCents?: number | null;

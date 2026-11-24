@@ -5,7 +5,7 @@ Atualizado: 23/11/2026.
 ## Rastreamento Inteligente de Preços na Simulação — Produtos (4 Camadas) & Viagens (Voos RAO/VCP + Resorts por Data) (23/11/2026)
 - **Viagem independente (Hospedagem & Voo separados), Gráfico de Pagamento e Assistente IA (24/11/2026):**
   - `PriceTrackingSection.tsx` e `engine.ts`: viagens agora exibem **Hospedagem** e **Passagem Aérea** em cards independentes (cada um com toggle `Entra na conta`, sem venda casada), além de cartão de embarque com datas, horários de saída/chegada, origem (`VCP` vs `RAO`) e escalas.
-  - `SimulationFormFields.tsx`: cadastro de viagem atualizado com `Entrada/Saída da hospedagem` e toggle `Usar as mesmas datas para o voo` (revelando `Ida/Volta do voo` independentes ao desmarcar).
+  - `SimulationFormFields.tsx`, `engine.ts` e `PriceTrackingSection.tsx`: cadastro de viagem com `Entrada/Saída da hospedagem`, toggle `Usar as mesmas datas para o voo` e composição de viajantes quebrada por `Adultos`, `Crianças` e `Pets`.
   - `SimulacaoPageClient.tsx`: gráfico de evolução do orçamento recortado exclusivamente para o período de pagamento (`minPayMonth → maxPayMonth`); `recordSnapshotAndEvaluateAlerts` deduplica alertas não lidos por simulação.
   - `simulation-chat.ts` e `SimulationAssistantDrawer.tsx`: Chatbot IA conectado ao orçamento real + `web_search_preview` usando `resolveModelFor("insight")`, com criação direta de cenários em 1 clique.
 - **UI em aba única com Cenários no topo (23/11/2026):**

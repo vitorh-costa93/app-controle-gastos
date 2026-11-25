@@ -319,7 +319,12 @@ export async function refreshSimulationPriceTracking(
 
   const meta =
     category === "travel"
-      ? await trackTravelPrices(sim.description, sim.start_date, trackerConfig as Partial<TravelTrackerConfig>)
+      ? await trackTravelPrices(
+          sim.description,
+          sim.start_date,
+          trackerConfig as Partial<TravelTrackerConfig>,
+          sim.best_offer_meta ?? null
+        )
       : await trackProductPrices(sim.description, trackerConfig as Partial<ProductTrackerConfig>);
 
   if (!meta) {
@@ -368,21 +373,32 @@ export async function refreshSimulationPriceTracking(
     meta.flightLeadTime = sim.best_offer_meta.flightLeadTime;
   }
 
-  const { snapshot, alert } = await recordSnapshotAndEvaluateAlerts(sim, meta);
+  const isHistoryOnly = meta.sourceMode === "cached";
+  const { snapshot, alert } = isHistoryOnly
+    ? { snapshot: null, alert: null }
+    : await recordSnapshotAndEvaluateAlerts(sim, meta);
+
+  const updatePayload = isHistoryOnly
+    ? {
+        best_offer_meta: meta,
+        last_tracked_at: meta.checkedAt,
+        updated_at: new Date().toISOString(),
+      }
+    : {
+        category,
+        auto_track: true,
+        tracker_config: trackerConfig,
+        best_offer_meta: meta,
+        last_tracked_at: meta.checkedAt,
+        cash_price: centsToReaisString(meta.cashPriceCents),
+        total_amount: centsToReaisString(meta.installmentTotalCents),
+        installments: meta.installments,
+        updated_at: new Date().toISOString(),
+      };
 
   const { data: updatedRow, error: updErr } = await supabase
     .from("simulations")
-    .update({
-      category,
-      auto_track: true,
-      tracker_config: trackerConfig,
-      best_offer_meta: meta,
-      last_tracked_at: meta.checkedAt,
-      cash_price: centsToReaisString(meta.cashPriceCents),
-      total_amount: centsToReaisString(meta.installmentTotalCents),
-      installments: meta.installments,
-      updated_at: new Date().toISOString(),
-    })
+    .update(updatePayload)
     .eq("id", simulationId)
     .select("*")
     .single();

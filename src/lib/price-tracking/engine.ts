@@ -1214,7 +1214,8 @@ E preencha stay_best_window e flight_best_window indicando se a antecedência in
 export async function trackTravelPrices(
   description: string,
   startDate: string,
-  rawConfig?: Partial<TravelTrackerConfig> | null
+  rawConfig?: Partial<TravelTrackerConfig> | null,
+  existingMeta?: BestOfferMeta | null
 ): Promise<BestOfferMeta | null> {
   const destCode = (rawConfig?.destinationAirport || "MCZ").toUpperCase().trim();
   const destMeta = DESTINATION_AIRPORTS.find((d) => d.code === destCode);
@@ -1413,7 +1414,89 @@ Aeroportos de saída monitorados: ${originAirports.join(", ")} (Aceita escala: $
 
   // NUNCA fabricar tarifas sintéticas se nenhuma cotação real de hospedagem ou voo foi confirmada
   if (!stayQuote && flightQuotes.length === 0) {
-    return null;
+    if (!existingMeta) return null;
+
+    const { stayPoints: rawStayPoints, flightPoints: rawFlightPoints, stayBestWindow, flightBestWindow } =
+      await travelHistoryPromise;
+
+    const [ty, tm] = outboundDate.slice(0, 7).split("-").map(Number);
+    const [ny, nm] = todayIso.slice(0, 7).split("-").map(Number);
+    const todayLeadMonths = ty && tm && ny && nm ? Math.max(0, (ty - ny) * 12 + (tm - nm)) : 0;
+
+    const existingStay = existingMeta.stayQuote ?? null;
+    const existingFlight = existingMeta.flightQuotes?.[0] ?? null;
+
+    const stayPointsMap = new Map(rawStayPoints.map((p) => [p.date, p]));
+    if (existingStay && existingStay.cashTotalCents > 0) {
+      stayPointsMap.set(todayIso, {
+        date: todayIso,
+        priceCents: existingStay.cashTotalCents,
+        source: existingStay.provider || "Última cotação",
+        leadMonthsBeforeTrip: todayLeadMonths,
+        targetTripMonth: outboundDate.slice(0, 7),
+        eventLabel: `Hoje (${todayLeadMonths}m antes)`,
+      });
+    }
+    const stayPoints = Array.from(stayPointsMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+
+    const flightPointsMap = new Map(rawFlightPoints.map((p) => [p.date, p]));
+    if (existingFlight && existingFlight.cashTotalCents > 0) {
+      flightPointsMap.set(todayIso, {
+        date: todayIso,
+        priceCents: existingFlight.cashTotalCents,
+        source: `${existingFlight.originAirport}→${destCode} (${existingFlight.airline})`,
+        leadMonthsBeforeTrip: todayLeadMonths,
+        targetTripMonth: flightOutboundDate.slice(0, 7),
+        eventLabel: `Hoje (${todayLeadMonths}m antes)`,
+      });
+    }
+    const flightPoints = Array.from(flightPointsMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+
+    if (stayPoints.length === 0 && flightPoints.length === 0) {
+      return null;
+    }
+
+    const plannedPurchaseDate = startDate || todayIso;
+    const stayLeadTime = buildTravelLeadTimeInsight({
+      kind: "stay",
+      points: stayPoints,
+      targetTripDate: outboundDate,
+      plannedPurchaseDate,
+      aiBestWindow: stayBestWindow,
+    });
+    const flightLeadTime = buildTravelLeadTimeInsight({
+      kind: "flight",
+      points: flightPoints,
+      targetTripDate: flightOutboundDate,
+      plannedPurchaseDate,
+      aiBestWindow: flightBestWindow,
+    });
+
+    const combinedHistoryMap = new Map<string, PriceHistoryPoint>();
+    for (const sp of stayPoints) {
+      const matchingFlight = flightPoints.find((fp) => fp.date === sp.date);
+      combinedHistoryMap.set(sp.date, {
+        date: sp.date,
+        priceCents: sp.priceCents + (matchingFlight?.priceCents ?? existingFlight?.cashTotalCents ?? 0),
+        source: sp.source,
+        ...(sp.leadMonthsBeforeTrip !== undefined ? { leadMonthsBeforeTrip: sp.leadMonthsBeforeTrip } : {}),
+        ...(sp.targetTripMonth ? { targetTripMonth: sp.targetTripMonth } : {}),
+        ...(sp.eventLabel ? { eventLabel: sp.eventLabel } : {}),
+      });
+    }
+
+    return {
+      ...existingMeta,
+      checkedAt: new Date().toISOString(),
+      sourceMode: "cached",
+      ...(stayPoints.length > 0 ? { stayHistoricalPrices: stayPoints } : {}),
+      ...(flightPoints.length > 0 ? { flightHistoricalPrices: flightPoints } : {}),
+      ...(combinedHistoryMap.size > 0
+        ? { historicalPrices: Array.from(combinedHistoryMap.values()).sort((a, b) => a.date.localeCompare(b.date)) }
+        : {}),
+      ...(stayLeadTime ? { stayLeadTime } : {}),
+      ...(flightLeadTime ? { flightLeadTime } : {}),
+    };
   }
 
   // Escolhe o melhor voo verificado considerando tarifa aérea + deslocamento terrestre de Araraquara

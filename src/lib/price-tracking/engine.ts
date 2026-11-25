@@ -3,6 +3,7 @@ import {
   BestOfferMeta,
   PriceHistoryPoint,
   ProductTrackerConfig,
+  TravelLeadTimeInsight,
   TravelTrackerConfig,
   VerifiedFlightQuote,
   VerifiedProductOffer,
@@ -18,6 +19,7 @@ import {
   ORIGIN_AIRPORTS,
   formatTravelersSummary,
 } from "./catalog";
+import { buildTravelLeadTimeInsight } from "./history-stats";
 
 /** Proteção SSRF: aceita apenas URLs HTTPS públicas na porta 443, bloqueando IPs locais/privados. */
 export function isSafePublicHttpsUrl(rawUrl: string): boolean {
@@ -375,85 +377,119 @@ const PRODUCT_HISTORY_SCHEMA = {
   },
 } as const;
 
-async function fetchProductPriceHistoryOneYear(
+async function fetchProductPriceHistory18Months(
   query: string,
   minSanityPriceCents: number
 ): Promise<PriceHistoryPoint[]> {
   if (!isAiConfigured()) return [];
   const openai = getOpenAIClient();
   const model = await resolveModelFor("extraction");
-  const t0 = Date.now();
   const now = new Date();
   const todayIso = now.toISOString().slice(0, 10);
+
+  const twelveMonthsAgo = new Date(now);
+  twelveMonthsAgo.setUTCDate(twelveMonthsAgo.getUTCDate() - 365);
+  const twelveMonthsAgoIso = twelveMonthsAgo.toISOString().slice(0, 10);
+
+  const thirteenMonthsAgo = new Date(now);
+  thirteenMonthsAgo.setUTCDate(thirteenMonthsAgo.getUTCDate() - 395);
+  const thirteenMonthsAgoIso = thirteenMonthsAgo.toISOString().slice(0, 10);
+
   const eighteenMonthsAgo = new Date(now);
   eighteenMonthsAgo.setUTCDate(eighteenMonthsAgo.getUTCDate() - 548);
   const eighteenMonthsAgoIso = eighteenMonthsAgo.toISOString().slice(0, 10);
 
-  try {
-    const response = await openai.responses.create({
-      model,
-      reasoning: { effort: "low" },
-      tools: [
-        {
-          type: "web_search_preview",
-          search_context_size: "medium",
-          user_location: {
-            type: "approximate",
-            country: "BR",
-            region: "SP",
-            city: "Araraquara",
+  const byDate = new Map<string, PriceHistoryPoint>();
+
+  const runHistoryQuery = async (fromIso: string, toIso: string, instructions: string, input: string) => {
+    const t0 = Date.now();
+    try {
+      const response = await openai.responses.create({
+        model,
+        reasoning: { effort: "low" },
+        tools: [
+          {
+            type: "web_search_preview",
+            search_context_size: "high",
+            user_location: {
+              type: "approximate",
+              country: "BR",
+              region: "SP",
+              city: "Araraquara",
+            },
+          },
+        ],
+        instructions,
+        input,
+        text: {
+          format: {
+            type: "json_schema",
+            name: "product_price_history_18m",
+            strict: true,
+            schema: PRODUCT_HISTORY_SCHEMA,
           },
         },
-      ],
-      instructions: `Você é um pesquisador de histórico de preços no varejo brasileiro (Buscapé, Zoom, Keepa Brasil, Promobit, Pelando, Canaltech, TechTudo, TudoCelular).
-Busque o histórico REAL de preços observados no Brasil para "${query}" ao longo dos ÚLTIMOS 18 MESES completos (de ${eighteenMonthsAgoIso} até ${todayIso}).
-Retorne entre 12 e 26 pontos cronológicos cobrindo todos os meses dos últimos 18 meses (pelo menos 1 registro por mês + picos/mínimas sazonais como Black Friday anterior, Natal, Dia do Consumidor, Prime Day e Black Friday atual).
-Use somente preços reais observados (nunca abaixo do piso R$ ${(minSanityPriceCents / 100).toFixed(2)}). Nunca invente dados; se algum mês não tiver registro confiável, pule-o.`,
-      input: `Levante o histórico de preços dos últimos 18 meses (${eighteenMonthsAgoIso} a ${todayIso}) no Brasil para: "${query}".`,
-      text: {
-        format: {
-          type: "json_schema",
-          name: "product_price_history_1y",
-          strict: true,
-          schema: PRODUCT_HISTORY_SCHEMA,
-        },
-      },
-    });
-
-    const u = response.usage;
-    await logAiUsage({
-      task: "extraction",
-      model,
-      ok: true,
-      inputTokens: u?.input_tokens,
-      cachedTokens: u?.input_tokens_details?.cached_tokens,
-      outputTokens: u?.output_tokens,
-      durationMs: Date.now() - t0,
-    });
-
-    const raw = response.output_text;
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as {
-      points?: Array<{ date: string; price_brl: number; source: string }>;
-    };
-    const byDate = new Map<string, PriceHistoryPoint>();
-    for (const pt of parsed.points ?? []) {
-      if (!pt?.date || !/^\d{4}-\d{2}-\d{2}$/.test(pt.date)) continue;
-      if (pt.date < eighteenMonthsAgoIso || pt.date > todayIso) continue;
-      const priceCents = Math.round(Number(pt.price_brl) * 100);
-      if (!Number.isFinite(priceCents) || priceCents < minSanityPriceCents) continue;
-      byDate.set(pt.date, {
-        date: pt.date,
-        priceCents,
-        source: pt.source || "Histórico Web",
       });
+
+      const u = response.usage;
+      await logAiUsage({
+        task: "extraction",
+        model,
+        ok: true,
+        inputTokens: u?.input_tokens,
+        cachedTokens: u?.input_tokens_details?.cached_tokens,
+        outputTokens: u?.output_tokens,
+        durationMs: Date.now() - t0,
+      });
+
+      const raw = response.output_text;
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as {
+        points?: Array<{ date: string; price_brl: number; source: string }>;
+      };
+      for (const pt of parsed.points ?? []) {
+        if (!pt?.date || !/^\d{4}-\d{2}-\d{2}$/.test(pt.date)) continue;
+        if (pt.date < fromIso || pt.date > toIso) continue;
+        const priceCents = Math.round(Number(pt.price_brl) * 100);
+        if (!Number.isFinite(priceCents) || priceCents < minSanityPriceCents) continue;
+        byDate.set(pt.date, {
+          date: pt.date,
+          priceCents,
+          source: pt.source || "Histórico Web",
+        });
+      }
+    } catch (err) {
+      await logAiUsage({ task: "extraction", model, ok: false, durationMs: Date.now() - t0, error: String(err) });
+      console.error("fetchProductPriceHistory18Months error:", err);
     }
-    return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));
-  } catch (err) {
-    await logAiUsage({ task: "extraction", model, ok: false, durationMs: Date.now() - t0, error: String(err) });
-    console.error("fetchProductPriceHistoryOneYear error:", err);
-    return [];
+  };
+
+  await runHistoryQuery(
+    eighteenMonthsAgoIso,
+    todayIso,
+    `Você é um pesquisador de histórico de preços no varejo brasileiro (Buscapé, Zoom, Keepa Brasil, Promobit, Pelando, Canaltech, TechTudo, TudoCelular).
+Busque o histórico REAL de preços observados no Brasil para "${query}" ao longo dos ÚLTIMOS 18 MESES completos (de ${eighteenMonthsAgoIso} até ${todayIso}), cobrindo OBRIGATORIAMENTE os dois períodos:
+- Período 1 (${eighteenMonthsAgoIso} até ${twelveMonthsAgoIso}): pelo menos 6 pontos mensais cobrindo todos os meses desse semestre mais antigo (incluindo Prime Day anterior, Dia das Mães, Dia dos Pais, Dia das Crianças).
+- Período 2 (${twelveMonthsAgoIso} até ${todayIso}): pelo menos 12 pontos mensais + picos/mínimas sazonais (Black Friday anterior, Natal, Dia do Consumidor, Prime Day e Black Friday atual).
+Use somente preços reais observados (nunca abaixo do piso R$ ${(minSanityPriceCents / 100).toFixed(2)}). Nunca invente dados.`,
+    `Levante o histórico de preços dos últimos 18 meses (${eighteenMonthsAgoIso} a ${todayIso}) no Brasil para: "${query}", incluindo obrigatoriamente os meses de ${eighteenMonthsAgoIso} a ${twelveMonthsAgoIso}.`
+  );
+
+  // Backfill direcionado caso a primeira consulta não tenha alcançado o semestre 18m-12m
+  const dates = Array.from(byDate.keys()).sort();
+  const oldestDate = dates[0];
+  if (!oldestDate || oldestDate > thirteenMonthsAgoIso) {
+    await runHistoryQuery(
+      eighteenMonthsAgoIso,
+      twelveMonthsAgoIso,
+      `Você é um pesquisador de histórico de preços no varejo brasileiro (Buscapé, Zoom, Keepa Brasil, Promobit, Pelando, TechTudo, Canaltech).
+Pesquise EXCLUSIVAMENTE o período histórico mais antigo de ${eighteenMonthsAgoIso} até ${twelveMonthsAgoIso} para "${query}" no Brasil.
+Retorne de 6 a 10 pontos mensais reais (incluindo Prime Day, Dia dos Pais, Dia das Crianças e promoções daquele semestre). Nunca abaixo de R$ ${(minSanityPriceCents / 100).toFixed(2)}.`,
+      `Histórico de preços no Brasil para "${query}" especificamente entre ${eighteenMonthsAgoIso} e ${twelveMonthsAgoIso}.`
+    );
   }
+
+  return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));
 }
 
 /**
@@ -490,7 +526,7 @@ export async function trackProductPrices(
   let aiRejectedReasons: string[] = [];
   let verificationSummary = "";
 
-  const yearHistoryPromise = fetchProductPriceHistoryOneYear(
+  const yearHistoryPromise = fetchProductPriceHistory18Months(
     query,
     config.minSanityPriceCents ?? 1000
   );
@@ -939,48 +975,76 @@ function buildAccommodationUrl(
   return `https://www.booking.com/searchresults.pt-br.html?ss=${encodeURIComponent(`${accommodationName} ${destLabel}`)}&checkin=${outboundDate}&checkout=${returnDate}&group_adults=${adults}&group_children=${children}&no_rooms=1`;
 }
 
-const TRAVEL_HISTORY_SCHEMA = {
+const TRAVEL_WINDOW_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["stay_points", "flight_points"],
+  required: ["best_lead_months_min", "best_lead_months_max", "best_window_label", "recommendation"],
   properties: {
-    stay_points: {
-      type: "array",
-      items: {
-        type: "object",
-        additionalProperties: false,
-        required: ["date", "price_brl", "source"],
-        properties: {
-          date: { type: "string" },
-          price_brl: { type: "number" },
-          source: { type: "string" },
-        },
-      },
-    },
-    flight_points: {
-      type: "array",
-      items: {
-        type: "object",
-        additionalProperties: false,
-        required: ["date", "price_brl", "source"],
-        properties: {
-          date: { type: "string" },
-          price_brl: { type: "number" },
-          source: { type: "string" },
-        },
-      },
-    },
+    best_lead_months_min: { type: "number" },
+    best_lead_months_max: { type: "number" },
+    best_window_label: { type: "string" },
+    recommendation: { type: "string" },
   },
 } as const;
 
-async function fetchTravelPriceHistoryOneYear(params: {
+const TRAVEL_HISTORY_POINT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["date", "price_brl", "source", "lead_months_before_trip", "target_trip_month", "event_label"],
+  properties: {
+    date: { type: "string" },
+    price_brl: { type: "number" },
+    source: { type: "string" },
+    lead_months_before_trip: { type: "number" },
+    target_trip_month: { type: "string" },
+    event_label: { type: "string" },
+  },
+} as const;
+
+const TRAVEL_HISTORY_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["stay_points", "flight_points", "stay_best_window", "flight_best_window"],
+  properties: {
+    stay_points: {
+      type: "array",
+      items: TRAVEL_HISTORY_POINT_SCHEMA,
+    },
+    flight_points: {
+      type: "array",
+      items: TRAVEL_HISTORY_POINT_SCHEMA,
+    },
+    stay_best_window: TRAVEL_WINDOW_SCHEMA,
+    flight_best_window: TRAVEL_WINDOW_SCHEMA,
+  },
+} as const;
+
+interface TravelAiWindowMeta {
+  bestLeadMonthsMin: number;
+  bestLeadMonthsMax: number;
+  bestWindowLabel: string;
+  recommendation: string;
+}
+
+async function fetchTravelLeadTimeHistory(params: {
   accommodationName: string;
   destinationAirport: string;
+  destinationLabel: string;
   originAirports: string[];
   nights: number;
   travelersLabel: string;
-}): Promise<{ stayPoints: PriceHistoryPoint[]; flightPoints: PriceHistoryPoint[] }> {
-  if (!isAiConfigured()) return { stayPoints: [], flightPoints: [] };
+  outboundDate: string;
+  returnDate: string;
+  plannedPurchaseDate: string;
+}): Promise<{
+  stayPoints: PriceHistoryPoint[];
+  flightPoints: PriceHistoryPoint[];
+  stayBestWindow: TravelAiWindowMeta | null;
+  flightBestWindow: TravelAiWindowMeta | null;
+}> {
+  if (!isAiConfigured()) {
+    return { stayPoints: [], flightPoints: [], stayBestWindow: null, flightBestWindow: null };
+  }
   const openai = getOpenAIClient();
   const model = await resolveModelFor("extraction");
   const t0 = Date.now();
@@ -990,6 +1054,11 @@ async function fetchTravelPriceHistoryOneYear(params: {
   eighteenMonthsAgo.setUTCDate(eighteenMonthsAgo.getUTCDate() - 548);
   const eighteenMonthsAgoIso = eighteenMonthsAgo.toISOString().slice(0, 10);
 
+  const targetMonth = params.outboundDate.slice(5, 7);
+  const targetYear = Number(params.outboundDate.slice(0, 4));
+  const priorCycleTargetYm = `${targetYear - 1}-${targetMonth}`;
+  const currentCycleTargetYm = `${targetYear}-${targetMonth}`;
+
   try {
     const response = await openai.responses.create({
       model,
@@ -997,7 +1066,7 @@ async function fetchTravelPriceHistoryOneYear(params: {
       tools: [
         {
           type: "web_search_preview",
-          search_context_size: "medium",
+          search_context_size: "high",
           user_location: {
             type: "approximate",
             country: "BR",
@@ -1006,16 +1075,25 @@ async function fetchTravelPriceHistoryOneYear(params: {
           },
         },
       ],
-      instructions: `Você é um pesquisador de histórico de preços de turismo no Brasil (Melhores Destinos, Google Flights, Kayak, Booking, Zarpo, sites oficiais dos resorts).
-Levante preços reais observados nos ÚLTIMOS 18 MESES (${eighteenMonthsAgoIso} a ${todayIso}) para:
-1) stay_points: pacote de ${params.nights} diárias no "${params.accommodationName}" para ${params.travelersLabel} (incluindo Black Friday anterior, baixa temporada, férias escolares e Black Friday atual).
-2) flight_points: passagens aéreas ida+volta para ${params.travelersLabel} saindo de ${params.originAirports.join("/")} para ${params.destinationAirport}.
-Retorne de 10 a 22 pontos cronológicos por série (date YYYY-MM-DD, price_brl total em reais, source). Nunca invente dados abaixo do piso plausível.`,
-      input: `Histórico de preços dos últimos 18 meses (${eighteenMonthsAgoIso} a ${todayIso}) para hospedagem "${params.accommodationName}" (${params.nights} noites) e voos ${params.originAirports.join("/")}->${params.destinationAirport} (${params.travelersLabel}).`,
+      instructions: `Você é um analista especialista em precificação sazonal e antecedência de compra no turismo brasileiro (Melhores Destinos, Google Flights, Kayak, Booking, Zarpo, Passagens Imperdíveis e sites oficiais dos resorts).
+O usuário planeja comprar em ${params.plannedPurchaseDate} para viajar de ${params.outboundDate} a ${params.returnDate} (${params.nights} noites, ${params.travelersLabel}) — hospedagem "${params.accommodationName}" e voos ${params.originAirports.join("/")}->${params.destinationAirport} (${params.destinationLabel}).
+Você DEVE responder à pergunta de antecedência ("delta compra -> viagem"):
+Para quem viaja na mesma temporada-alvo (mês ${targetMonth}, ex.: ${priorCycleTargetYm} e abertura de ${currentCycleTargetYm}), como evoluiu o preço conforme o mês da compra / antecedência?
+- Ciclo anterior (para viajar em ${priorCycleTargetYm}): inclua pontos mensais desde ~11 meses antes (ex.: Out/Nov Black Friday do ano passado, Dez, Jan, Fev, Mar, Abr, Mai, Jun, Jul, Ago até 1 mês antes do embarque).
+- Ciclo atual (para viajar em ${currentCycleTargetYm}): inclua pontos da abertura recente (ex.: Outubro e Novembro atuais / Black Friday atual).
+Retorne de 10 a 14 pontos em stay_points e de 10 a 14 pontos em flight_points com:
+- date: YYYY-MM-DD (data da compra/observação dentro de ${eighteenMonthsAgoIso} a ${todayIso})
+- price_brl: valor total realista em reais para ${params.nights} noites / ${params.travelersLabel} (baseado em tarifas e promoções reais publicadas)
+- source: fonte consultada (ex.: "Site Oficial", "Zarpo", "Melhores Destinos", "Google Flights", "Kayak")
+- lead_months_before_trip: número inteiro de meses entre a data da compra e o embarque daquele ciclo (0 a 12)
+- target_trip_month: "${priorCycleTargetYm}" ou "${currentCycleTargetYm}"
+- event_label: rótulo curto da janela (ex.: "Black Friday 25 · 10m antes", "Compra 6m antes", "Abertura Black Friday 26")
+E preencha stay_best_window e flight_best_window indicando se a antecedência influencia o preço, quantos meses antes garantem a melhor tarifa (best_lead_months_min, best_lead_months_max, best_window_label) e uma recomendação direta em português.`,
+      input: `Levantamento por antecedência de compra (Black Friday anterior até abertura atual) para viajar no mês ${targetMonth}: hospedagem "${params.accommodationName}" (${params.nights} noites) e voos ${params.originAirports.join("/")}->${params.destinationAirport} (${params.travelersLabel}). Compra planejada: ${params.plannedPurchaseDate}, viagem: ${params.outboundDate} a ${params.returnDate}.`,
       text: {
         format: {
           type: "json_schema",
-          name: "travel_price_history_1y",
+          name: "travel_lead_time_history_18m",
           strict: true,
           schema: TRAVEL_HISTORY_SCHEMA,
         },
@@ -1034,14 +1112,51 @@ Retorne de 10 a 22 pontos cronológicos por série (date YYYY-MM-DD, price_brl t
     });
 
     const raw = response.output_text;
-    if (!raw) return { stayPoints: [], flightPoints: [] };
+    if (!raw) {
+      return { stayPoints: [], flightPoints: [], stayBestWindow: null, flightBestWindow: null };
+    }
     const parsed = JSON.parse(raw) as {
-      stay_points?: Array<{ date: string; price_brl: number; source: string }>;
-      flight_points?: Array<{ date: string; price_brl: number; source: string }>;
+      stay_points?: Array<{
+        date: string;
+        price_brl: number;
+        source: string;
+        lead_months_before_trip: number;
+        target_trip_month: string;
+        event_label: string;
+      }>;
+      flight_points?: Array<{
+        date: string;
+        price_brl: number;
+        source: string;
+        lead_months_before_trip: number;
+        target_trip_month: string;
+        event_label: string;
+      }>;
+      stay_best_window?: {
+        best_lead_months_min: number;
+        best_lead_months_max: number;
+        best_window_label: string;
+        recommendation: string;
+      };
+      flight_best_window?: {
+        best_lead_months_min: number;
+        best_lead_months_max: number;
+        best_window_label: string;
+        recommendation: string;
+      };
     };
 
     const sanitize = (
-      items: Array<{ date: string; price_brl: number; source: string }> | undefined,
+      items:
+        | Array<{
+            date: string;
+            price_brl: number;
+            source: string;
+            lead_months_before_trip: number;
+            target_trip_month: string;
+            event_label: string;
+          }>
+        | undefined,
       minCents: number
     ) => {
       const byDate = new Map<string, PriceHistoryPoint>();
@@ -1050,19 +1165,45 @@ Retorne de 10 a 22 pontos cronológicos por série (date YYYY-MM-DD, price_brl t
         if (pt.date < eighteenMonthsAgoIso || pt.date > todayIso) continue;
         const priceCents = Math.round(Number(pt.price_brl) * 100);
         if (!Number.isFinite(priceCents) || priceCents < minCents) continue;
-        byDate.set(pt.date, { date: pt.date, priceCents, source: pt.source || "Histórico Web" });
+        byDate.set(pt.date, {
+          date: pt.date,
+          priceCents,
+          source: pt.source || "Histórico Web",
+          ...(Number.isFinite(pt.lead_months_before_trip)
+            ? { leadMonthsBeforeTrip: Math.max(0, Math.round(pt.lead_months_before_trip)) }
+            : {}),
+          ...(pt.target_trip_month ? { targetTripMonth: pt.target_trip_month } : {}),
+          ...(pt.event_label ? { eventLabel: pt.event_label } : {}),
+        });
       }
       return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));
     };
 
+    const mapWindow = (w?: {
+      best_lead_months_min: number;
+      best_lead_months_max: number;
+      best_window_label: string;
+      recommendation: string;
+    }): TravelAiWindowMeta | null =>
+      w
+        ? {
+            bestLeadMonthsMin: Math.max(0, Math.round(w.best_lead_months_min)),
+            bestLeadMonthsMax: Math.max(0, Math.round(w.best_lead_months_max)),
+            bestWindowLabel: w.best_window_label,
+            recommendation: w.recommendation,
+          }
+        : null;
+
     return {
       stayPoints: sanitize(parsed.stay_points, 50000),
       flightPoints: sanitize(parsed.flight_points, 30000),
+      stayBestWindow: mapWindow(parsed.stay_best_window),
+      flightBestWindow: mapWindow(parsed.flight_best_window),
     };
   } catch (err) {
     await logAiUsage({ task: "extraction", model, ok: false, durationMs: Date.now() - t0, error: String(err) });
-    console.error("fetchTravelPriceHistoryOneYear error:", err);
-    return { stayPoints: [], flightPoints: [] };
+    console.error("fetchTravelLeadTimeHistory error:", err);
+    return { stayPoints: [], flightPoints: [], stayBestWindow: null, flightBestWindow: null };
   }
 }
 
@@ -1109,12 +1250,16 @@ export async function trackTravelPrices(
   let rejectedCount = 0;
   let rejectedReasons: string[] = [];
 
-  const travelHistoryPromise = fetchTravelPriceHistoryOneYear({
+  const travelHistoryPromise = fetchTravelLeadTimeHistory({
     accommodationName,
     destinationAirport: destCode,
+    destinationLabel: destLabel,
     originAirports,
     nights,
     travelersLabel,
+    outboundDate,
+    returnDate,
+    plannedPurchaseDate: startDate || new Date().toISOString().slice(0, 10),
   });
 
   const todayIso = new Date().toISOString().slice(0, 10);
@@ -1290,7 +1435,55 @@ Aeroportos de saída monitorados: ${originAirports.join(", ")} (Aceita escala: $
     10
   );
 
-  const { stayPoints, flightPoints } = await travelHistoryPromise;
+  const { stayPoints: rawStayPoints, flightPoints: rawFlightPoints, stayBestWindow, flightBestWindow } =
+    await travelHistoryPromise;
+
+  const [ty, tm] = outboundDate.slice(0, 7).split("-").map(Number);
+  const [ny, nm] = todayIso.slice(0, 7).split("-").map(Number);
+  const todayLeadMonths = ty && tm && ny && nm ? Math.max(0, (ty - ny) * 12 + (tm - nm)) : 0;
+
+  const stayPointsMap = new Map(rawStayPoints.map((p) => [p.date, p]));
+  if (stayQuote && stayQuote.cashTotalCents > 0) {
+    stayPointsMap.set(todayIso, {
+      date: todayIso,
+      priceCents: stayQuote.cashTotalCents,
+      source: stayQuote.provider || "Hoje",
+      leadMonthsBeforeTrip: todayLeadMonths,
+      targetTripMonth: outboundDate.slice(0, 7),
+      eventLabel: `Hoje (${todayLeadMonths}m antes)`,
+    });
+  }
+  const stayPoints = Array.from(stayPointsMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+
+  const flightPointsMap = new Map(rawFlightPoints.map((p) => [p.date, p]));
+  if (bestFlight && bestFlight.cashTotalCents > 0) {
+    flightPointsMap.set(todayIso, {
+      date: todayIso,
+      priceCents: bestFlight.cashTotalCents,
+      source: `${bestFlight.originAirport}→${destCode} (${bestFlight.airline})`,
+      leadMonthsBeforeTrip: todayLeadMonths,
+      targetTripMonth: flightOutboundDate.slice(0, 7),
+      eventLabel: `Hoje (${todayLeadMonths}m antes)`,
+    });
+  }
+  const flightPoints = Array.from(flightPointsMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+
+  const plannedPurchaseDate = startDate || todayIso;
+  const stayLeadTime: TravelLeadTimeInsight | null = buildTravelLeadTimeInsight({
+    kind: "stay",
+    points: stayPoints,
+    targetTripDate: outboundDate,
+    plannedPurchaseDate,
+    aiBestWindow: stayBestWindow,
+  });
+  const flightLeadTime: TravelLeadTimeInsight | null = buildTravelLeadTimeInsight({
+    kind: "flight",
+    points: flightPoints,
+    targetTripDate: flightOutboundDate,
+    plannedPurchaseDate,
+    aiBestWindow: flightBestWindow,
+  });
+
   const combinedHistoryMap = new Map<string, PriceHistoryPoint>();
   for (const sp of stayPoints) {
     const matchingFlight = flightPoints.find((fp) => fp.date === sp.date);
@@ -1298,6 +1491,9 @@ Aeroportos de saída monitorados: ${originAirports.join(", ")} (Aceita escala: $
       date: sp.date,
       priceCents: sp.priceCents + (matchingFlight?.priceCents ?? bestFlight?.cashTotalCents ?? 0),
       source: sp.source,
+      ...(sp.leadMonthsBeforeTrip !== undefined ? { leadMonthsBeforeTrip: sp.leadMonthsBeforeTrip } : {}),
+      ...(sp.targetTripMonth ? { targetTripMonth: sp.targetTripMonth } : {}),
+      ...(sp.eventLabel ? { eventLabel: sp.eventLabel } : {}),
     });
   }
 
@@ -1330,5 +1526,7 @@ Aeroportos de saída monitorados: ${originAirports.join(", ")} (Aceita escala: $
     ...(combinedHistoryMap.size > 0
       ? { historicalPrices: Array.from(combinedHistoryMap.values()).sort((a, b) => a.date.localeCompare(b.date)) }
       : {}),
+    ...(stayLeadTime ? { stayLeadTime } : {}),
+    ...(flightLeadTime ? { flightLeadTime } : {}),
   };
 }

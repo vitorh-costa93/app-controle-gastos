@@ -72,4 +72,11 @@ assert.match(engineCode, /google\.com\/search/, "Deve rejeitar URLs genéricas d
 const trackingServiceCode = fs.readFileSync(path.join(root, "src/lib/data/price-tracking.ts"), "utf8");
 assert.match(trackingServiceCode, /if \(!meta\)/, "Deve preservar o último preço válido quando nenhuma oferta real for confirmada");
 
-console.log("✓ Rastreamento de Preços (4 camadas Anti-Falso-Positivo + Viagens RAO/VCP + Resorts por data + Histórico Visor) validado com sucesso");
+// 7. Verifica histórico de 18 meses real + análise de antecedência em viagens
+assert.match(engineCode, /product_price_history_18m/, "Produto deve buscar histórico real de 18 meses");
+assert.match(engineCode, /fetchTravelLeadTimeHistory/, "Viagem deve usar histórico por janela de antecedência");
+assert.match(historyStatsCode, /export function buildTravelLeadTimeInsight/);
+assert.match(historyStatsCode, /leadMonthsBeforeTrip/);
+assert.match(visorCode, /Quando comprar\?/);
+
+console.log("✓ Rastreamento de Preços (4 camadas Anti-Falso-Positivo + Viagens RAO/VCP + Antecedência 18m + Histórico Visor) validado com sucesso");

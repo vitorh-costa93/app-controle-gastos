@@ -337,12 +337,21 @@ export async function refreshSimulationPriceTracking(
     };
   }
 
-  const mergeHist = (prev?: { date: string; priceCents: number; source?: string }[], next?: { date: string; priceCents: number; source?: string }[]) => {
+  const mergeHist = (
+    prev?: { date: string; priceCents: number; source?: string; leadMonthsBeforeTrip?: number; targetTripMonth?: string; eventLabel?: string }[],
+    next?: { date: string; priceCents: number; source?: string; leadMonthsBeforeTrip?: number; targetTripMonth?: string; eventLabel?: string }[]
+  ) => {
     const p = prev ?? [];
     const n = next ?? [];
     if (p.length === 0 && n.length === 0) return undefined;
     const map = new Map(p.map((pt) => [pt.date, pt]));
-    for (const pt of n) map.set(pt.date, pt);
+    for (const pt of n) {
+      const old = map.get(pt.date);
+      map.set(pt.date, {
+        ...old,
+        ...pt,
+      });
+    }
     return Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
   };
 
@@ -352,6 +361,12 @@ export async function refreshSimulationPriceTracking(
   if (mergedAll) meta.historicalPrices = mergedAll;
   if (mergedStay) meta.stayHistoricalPrices = mergedStay;
   if (mergedFlight) meta.flightHistoricalPrices = mergedFlight;
+  if (!meta.stayLeadTime && sim.best_offer_meta?.stayLeadTime) {
+    meta.stayLeadTime = sim.best_offer_meta.stayLeadTime;
+  }
+  if (!meta.flightLeadTime && sim.best_offer_meta?.flightLeadTime) {
+    meta.flightLeadTime = sim.best_offer_meta.flightLeadTime;
+  }
 
   const { snapshot, alert } = await recordSnapshotAndEvaluateAlerts(sim, meta);
 

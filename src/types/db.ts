@@ -216,6 +216,37 @@ export interface PriceHistoryPoint {
   date: string; // YYYY-MM-DD
   priceCents: number;
   source?: string;
+  leadMonthsBeforeTrip?: number;
+  targetTripMonth?: string; // ex.: "2026-09", "2027-09"
+  eventLabel?: string;
+}
+
+export interface TravelLeadTimeBucket {
+  leadMonths: number;
+  purchaseMonthLabel: string;
+  referenceTripMonth: string;
+  date: string;
+  priceCents: number;
+  source: string;
+  eventLabel?: string;
+}
+
+export interface TravelLeadTimeInsight {
+  kind: "stay" | "flight";
+  targetTripMonthLabel: string;
+  plannedPurchaseLabel: string;
+  plannedLeadMonths: number;
+  todayLeadMonths: number;
+  bestLeadMonthsMin: number;
+  bestLeadMonthsMax: number;
+  bestWindowLabel: string;
+  bestPriceCents: number;
+  plannedWindowPriceCents: number | null;
+  deltaLeadTimeAffectsPrice: boolean;
+  variationPct: number;
+  recommendation: string;
+  methodologyNote: string;
+  buckets: TravelLeadTimeBucket[];
 }
 
 export interface BestOfferMeta {
@@ -236,6 +267,9 @@ export interface BestOfferMeta {
   historicalPrices?: PriceHistoryPoint[];
   stayHistoricalPrices?: PriceHistoryPoint[];
   flightHistoricalPrices?: PriceHistoryPoint[];
+  // Análise de antecedência de compra para viagens (delta compra -> embarque)
+  stayLeadTime?: TravelLeadTimeInsight | null;
+  flightLeadTime?: TravelLeadTimeInsight | null;
   // Para viagem: cotações de voo (RAO vs VCP) + cotação do resort nas datas
   flightQuotes?: VerifiedFlightQuote[];
   selectedFlightOrigin?: string;

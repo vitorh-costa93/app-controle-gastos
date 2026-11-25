@@ -3,7 +3,7 @@
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { RotateCcw } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import type { PriceHistoryPoint } from "@/types/db";
+import type { PriceHistoryPoint, TravelLeadTimeInsight } from "@/types/db";
 import {
   computePriceHistoryStats,
   HISTORY_WINDOW_DAYS,
@@ -60,20 +60,27 @@ export function PriceHistoryVisorCard({
   currentPriceCents,
   title = "Histórico de preço",
   headerExtra,
+  leadTimeInsight,
+  defaultWindowKey,
 }: {
   idPrefix: string;
   points: PriceHistoryPoint[];
   currentPriceCents: number;
   title?: string;
   headerExtra?: ReactNode;
+  leadTimeInsight?: TravelLeadTimeInsight | null;
+  defaultWindowKey?: HistoryWindowKey;
 }) {
-  const [windowKey, setWindowKey] = useState<HistoryWindowKey>("1a");
+  const [windowKey, setWindowKey] = useState<HistoryWindowKey>(
+    defaultWindowKey ?? (leadTimeInsight ? "18m" : "1a")
+  );
   const [zoomDomain, setZoomDomain] = useState<[number, number] | null>(null);
   const chartWrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setZoomDomain(null);
-  }, [idPrefix]);
+    if (defaultWindowKey) setWindowKey(defaultWindowKey);
+  }, [idPrefix, defaultWindowKey]);
 
   const stats = useMemo(
     () => computePriceHistoryStats(points, windowKey, currentPriceCents),
@@ -102,6 +109,9 @@ export function PriceHistoryVisorCard({
         date: pt.date,
         price: pt.priceCents / 100,
         source: pt.source,
+        leadMonthsBeforeTrip: pt.leadMonthsBeforeTrip,
+        targetTripMonth: pt.targetTripMonth,
+        eventLabel: pt.eventLabel,
       })),
     [stats.points]
   );
@@ -181,6 +191,15 @@ export function PriceHistoryVisorCard({
         </div>
       </div>
 
+      {leadTimeInsight && (
+        <div className="flex flex-wrap items-center gap-2 text-[11px] text-(--color-text-secondary)">
+          <span className="rounded-full bg-(--color-primary-soft) px-2 py-0.5 font-medium text-(--color-primary)">
+            Viagem em {leadTimeInsight.targetTripMonthLabel} · Compra planejada: {leadTimeInsight.plannedPurchaseLabel} (
+            {leadTimeInsight.plannedLeadMonths}m antes)
+          </span>
+        </div>
+      )}
+
       <div className="grid gap-3 lg:grid-cols-[1.65fr_1fr]">
         {/* Gráfico de Área (Estilo Visor com Zoom via scroll) */}
         <div className="min-w-0 rounded-(--radius-lg) border border-(--color-border) bg-(--color-surface) p-3.5">
@@ -217,9 +236,42 @@ export function PriceHistoryVisorCard({
                     tickFormatter={(v) => `R$ ${Number(v).toLocaleString("pt-BR")}`}
                   />
                   <Tooltip
-                    formatter={(v) => [formatCurrencyBRL(Math.round(Number(v) * 100)), "Preço"]}
-                    labelFormatter={(v) => `Data: ${formatTooltipDate(Number(v))}`}
-                    contentStyle={{ borderRadius: 10, border: "1px solid var(--color-border)", fontSize: 11 }}
+                    content={({ active, payload }) => {
+                      if (!active || !payload || payload.length === 0) return null;
+                      const item = payload[0]?.payload as {
+                        ts: number;
+                        price: number;
+                        source?: string;
+                        leadMonthsBeforeTrip?: number;
+                        targetTripMonth?: string;
+                        eventLabel?: string;
+                      };
+                      return (
+                        <div className="rounded-[10px] border border-(--color-border) bg-(--color-surface) px-2.5 py-2 text-[11px] shadow-sm">
+                          <div className="font-semibold text-(--color-text-primary)">
+                            Data: {formatTooltipDate(item.ts)}
+                          </div>
+                          <div className="font-bold text-(--color-positive)">
+                            Preço: {formatCurrencyBRL(Math.round(Number(item.price) * 100))}
+                          </div>
+                          {(item.targetTripMonth || item.leadMonthsBeforeTrip !== undefined) && (
+                            <div className="text-(--color-text-secondary)">
+                              {item.targetTripMonth ? `Viagem-alvo: ${item.targetTripMonth}` : ""}
+                              {item.targetTripMonth && item.leadMonthsBeforeTrip !== undefined ? " · " : ""}
+                              {item.leadMonthsBeforeTrip !== undefined
+                                ? `${item.leadMonthsBeforeTrip}m antes da viagem`
+                                : ""}
+                            </div>
+                          )}
+                          {item.eventLabel && (
+                            <div className="text-(--color-primary) font-medium">{item.eventLabel}</div>
+                          )}
+                          {item.source && (
+                            <div className="text-[10px] text-(--color-text-tertiary)">Fonte: {item.source}</div>
+                          )}
+                        </div>
+                      );
+                    }}
                   />
                   <Area
                     type="monotone"
@@ -256,37 +308,84 @@ export function PriceHistoryVisorCard({
           </div>
         </div>
 
-        {/* Card "Como está o preço hoje" (Anti-Black-Fraude) */}
+        {/* Card "Quando comprar?" (para Viagens com Antecedência) ou "Como está o preço hoje" (Anti-Black-Fraude) */}
         <div className="flex flex-col justify-between rounded-(--radius-lg) border border-(--color-border) bg-(--color-surface) p-3.5">
-          <div className="space-y-1.5">
-            <h6 className="text-xs font-bold text-(--color-text-primary)">Como está o preço hoje</h6>
-            <p className="text-xs leading-relaxed text-(--color-text-secondary)">
-              {stats.observedDays === 0 ? (
-                "Sem histórico suficiente para comparar com a mediana."
-              ) : stats.status === "below" ? (
-                <>
-                  O preço está{" "}
+          {leadTimeInsight ? (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <h6 className="text-xs font-bold text-(--color-text-primary)">Quando comprar?</h6>
+                <span
+                  className={cn(
+                    "rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                    leadTimeInsight.deltaLeadTimeAffectsPrice
+                      ? "bg-amber-500/15 text-amber-700"
+                      : "bg-emerald-500/15 text-emerald-700"
+                  )}
+                >
+                  Antecedência:{" "}
+                  {leadTimeInsight.deltaLeadTimeAffectsPrice ? "Sim, influencia" : "Baixa variação"} ·{" "}
+                  {leadTimeInsight.variationPct}%
+                </span>
+              </div>
+
+              <div className="rounded-(--radius-md) bg-black/[0.025] p-2 text-[11px] space-y-1 tabular-nums">
+                <div className="flex items-center justify-between">
+                  <span className="text-(--color-text-secondary)">Melhor antecedência:</span>
                   <b className="text-(--color-positive)">
-                    {absDeltaPct}% abaixo da mediana
-                  </b>{" "}
-                  de {stats.windowDays} dias: <b>{formatCurrencyBRL(stats.medianCents)}</b>.
-                </>
-              ) : stats.status === "above" ? (
-                <>
-                  O preço está pelo menos{" "}
-                  <b className="text-(--color-warning)">
-                    {absDeltaPct}% acima da mediana
-                  </b>{" "}
-                  de {stats.windowDays} dias: <b>{formatCurrencyBRL(stats.medianCents)}</b>.
-                </>
-              ) : (
-                <>
-                  O preço está na mediana de {stats.windowDays} dias:{" "}
-                  <b>{formatCurrencyBRL(stats.medianCents)}</b>.
-                </>
-              )}
-            </p>
-          </div>
+                    {leadTimeInsight.bestWindowLabel} ({formatCurrencyBRL(leadTimeInsight.bestPriceCents)})
+                  </b>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-(--color-text-secondary)">
+                    Seu plano ({leadTimeInsight.plannedPurchaseLabel} · {leadTimeInsight.plannedLeadMonths}m):
+                  </span>
+                  <b className="text-(--color-text-primary)">
+                    {leadTimeInsight.plannedWindowPriceCents
+                      ? formatCurrencyBRL(leadTimeInsight.plannedWindowPriceCents)
+                      : "Sem coleta na janela"}
+                  </b>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-(--color-text-secondary)">Hoje ({leadTimeInsight.todayLeadMonths}m antes):</span>
+                  <b className="text-(--color-text-primary)">{formatCurrencyBRL(currentPriceCents)}</b>
+                </div>
+              </div>
+
+              <p className="text-[11px] leading-relaxed text-(--color-text-secondary)">
+                {leadTimeInsight.recommendation}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <h6 className="text-xs font-bold text-(--color-text-primary)">Como está o preço hoje</h6>
+              <p className="text-xs leading-relaxed text-(--color-text-secondary)">
+                {stats.observedDays === 0 ? (
+                  "Sem histórico suficiente para comparar com a mediana."
+                ) : stats.status === "below" ? (
+                  <>
+                    O preço está{" "}
+                    <b className="text-(--color-positive)">
+                      {absDeltaPct}% abaixo da mediana
+                    </b>{" "}
+                    de {stats.windowDays} dias: <b>{formatCurrencyBRL(stats.medianCents)}</b>.
+                  </>
+                ) : stats.status === "above" ? (
+                  <>
+                    O preço está pelo menos{" "}
+                    <b className="text-(--color-warning)">
+                      {absDeltaPct}% acima da mediana
+                    </b>{" "}
+                    de {stats.windowDays} dias: <b>{formatCurrencyBRL(stats.medianCents)}</b>.
+                  </>
+                ) : (
+                  <>
+                    O preço está na mediana de {stats.windowDays} dias:{" "}
+                    <b>{formatCurrencyBRL(stats.medianCents)}</b>.
+                  </>
+                )}
+              </p>
+            </div>
+          )}
 
           <div className="mt-4 space-y-2">
             <div className="relative h-2 w-full rounded-full bg-gradient-to-r from-emerald-500 via-sky-500 to-amber-500">
@@ -300,6 +399,11 @@ export function PriceHistoryVisorCard({
               <span>{formatCurrencyBRL(stats.minCents)}</span>
               <span>{formatCurrencyBRL(stats.maxCents)}</span>
             </div>
+            {leadTimeInsight?.methodologyNote && (
+              <p className="text-[10px] leading-snug text-(--color-text-tertiary)">
+                {leadTimeInsight.methodologyNote}
+              </p>
+            )}
           </div>
         </div>
       </div>

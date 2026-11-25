@@ -1201,12 +1201,17 @@ function TravelPriceHistorySection({
   const activeCurrent =
     series === "stay" ? currentStayCents : series === "flight" ? currentFlightCents : currentTotalCents;
 
+  const activeLeadTime =
+    series === "stay" ? meta?.stayLeadTime : series === "flight" ? meta?.flightLeadTime : null;
+
   return (
     <PriceHistoryVisorCard
       idPrefix={`${sim.id}-${series}`}
       points={activePoints}
       currentPriceCents={activeCurrent}
       title="Histórico de preço (Hospedagem & Voo)"
+      leadTimeInsight={activeLeadTime}
+      defaultWindowKey="18m"
       headerExtra={
         <div className="flex items-center gap-0.5 rounded-(--radius-md) border border-(--color-border) bg-black/[0.02] p-0.5">
           {(

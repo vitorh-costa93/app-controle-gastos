@@ -1,8 +1,12 @@
 # Continuidade — MeuDinheiro
 
-Atualizado: 24/11/2026.
+Atualizado: 25/11/2026.
 
 ## Rastreamento Inteligente de Preços na Simulação — Produtos (4 Camadas) & Viagens (Voos RAO/VCP + Resorts por Data) (23/11/2026)
+- **Histórico de 18 meses real (`18m`) para Produtos + Análise de Antecedência para Viagens (25/11/2026):**
+  - `engine.ts` (`fetchProductPriceHistory18Months`): busca ampliada para `search_context_size: "high"` cobrindo obrigatoriamente os dois semestres (18m–12m e 12m–hoje), com segunda chamada automática direcionada ao semestre mais antigo (`18m–12m`) caso a primeira coleta não alcance 13+ meses atrás.
+  - `engine.ts` (`fetchTravelLeadTimeHistory`), `history-stats.ts` (`buildTravelLeadTimeInsight`), `db.ts` (`TravelLeadTimeInsight`), `price-tracking.ts`: rastreamento de hospedagem e voos por **janela de antecedência** (delta entre mês da compra e mês-alvo da viagem, ex.: Black Friday anterior até embarque de setembro + abertura atual para o próximo ano).
+  - `PriceHistoryVisorCard.tsx` e `PriceTrackingSection.tsx`: tooltip enriquecido com `targetTripMonth`, `leadMonthsBeforeTrip` e `eventLabel`, janela padrão `18m` em viagens e card **`Quando comprar?`** respondendo se a antecedência influencia o preço, qual a melhor janela histórica e comparando o plano do usuário vs. hoje.
 - **Remoção definitiva de fallbacks sintéticos & endurecimento Anti-Falso-Positivo (24/11/2026):**
   - `engine.ts`: removidos todos os fallbacks hardcoded (`KaBuM! R$ 3.349`, `R$ 2.500` e tarifas sintéticas de viagem); `trackProductPrices` e `trackTravelPrices` retornam `null` quando nenhuma oferta real passa nas 4 camadas. Rejeição automática de URLs genéricas de busca (`/busca/`, `/s?k=`, `google.com/search`) e reconhecimento de especialistas oficiais de climatização (`Dufrio`, `CentralAr`, `Leveros`, `Frio Peças`, `WebContinental`, `A.Dias`, `Frigelar`, `STR Ar`) para ar-condicionado.
   - `price-tracking.ts`: se `meta === null` ou queda anômala `> 45%` sem print verificado, preserva integralmente o último preço válido no banco sem gravar snapshot ou alerta falso. `test-price-tracking.mjs` inclui guarda de regressão contra preços sintéticos.

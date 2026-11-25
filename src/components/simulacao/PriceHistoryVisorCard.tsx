@@ -347,7 +347,13 @@ export function PriceHistoryVisorCard({
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-(--color-text-secondary)">Hoje ({leadTimeInsight.todayLeadMonths}m antes):</span>
-                  <b className="text-(--color-text-primary)">{formatCurrencyBRL(currentPriceCents)}</b>
+                  <b className="text-(--color-text-primary)">
+                    {currentPriceCents > 0
+                      ? formatCurrencyBRL(currentPriceCents)
+                      : stats.points.length > 0
+                        ? formatCurrencyBRL(stats.points[stats.points.length - 1].priceCents)
+                        : "Sem cotação hoje"}
+                  </b>
                 </div>
               </div>
 

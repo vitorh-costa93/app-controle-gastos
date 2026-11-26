@@ -343,8 +343,24 @@ export async function refreshSimulationPriceTracking(
   }
 
   const mergeHist = (
-    prev?: { date: string; priceCents: number; source?: string; leadMonthsBeforeTrip?: number; targetTripMonth?: string; eventLabel?: string }[],
-    next?: { date: string; priceCents: number; source?: string; leadMonthsBeforeTrip?: number; targetTripMonth?: string; eventLabel?: string }[]
+    prev?: {
+      date: string;
+      priceCents: number;
+      source?: string;
+      leadMonthsBeforeTrip?: number;
+      targetTripMonth?: string;
+      eventLabel?: string;
+      evidenceType?: "verified_direct" | "official_campaign" | "guest_report";
+    }[],
+    next?: {
+      date: string;
+      priceCents: number;
+      source?: string;
+      leadMonthsBeforeTrip?: number;
+      targetTripMonth?: string;
+      eventLabel?: string;
+      evidenceType?: "verified_direct" | "official_campaign" | "guest_report";
+    }[]
   ) => {
     const p = prev ?? [];
     const n = next ?? [];

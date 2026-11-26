@@ -219,6 +219,7 @@ export interface PriceHistoryPoint {
   leadMonthsBeforeTrip?: number;
   targetTripMonth?: string; // ex.: "2026-09", "2027-09"
   eventLabel?: string;
+  evidenceType?: "verified_direct" | "official_campaign" | "guest_report";
 }
 
 export interface TravelLeadTimeBucket {

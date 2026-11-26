@@ -112,6 +112,7 @@ export function PriceHistoryVisorCard({
         leadMonthsBeforeTrip: pt.leadMonthsBeforeTrip,
         targetTripMonth: pt.targetTripMonth,
         eventLabel: pt.eventLabel,
+        evidenceType: pt.evidenceType,
       })),
     [stats.points]
   );
@@ -245,7 +246,16 @@ export function PriceHistoryVisorCard({
                         leadMonthsBeforeTrip?: number;
                         targetTripMonth?: string;
                         eventLabel?: string;
+                        evidenceType?: "verified_direct" | "official_campaign" | "guest_report";
                       };
+                      const evidenceLabel =
+                        item.evidenceType === "verified_direct"
+                          ? "Verificado (direto)"
+                          : item.evidenceType === "official_campaign"
+                            ? "Campanha oficial"
+                            : item.evidenceType === "guest_report"
+                              ? "Relato público"
+                              : null;
                       return (
                         <div className="rounded-[10px] border border-(--color-border) bg-(--color-surface) px-2.5 py-2 text-[11px] shadow-sm">
                           <div className="font-semibold text-(--color-text-primary)">
@@ -254,6 +264,11 @@ export function PriceHistoryVisorCard({
                           <div className="font-bold text-(--color-positive)">
                             Preço: {formatCurrencyBRL(Math.round(Number(item.price) * 100))}
                           </div>
+                          {evidenceLabel && (
+                            <div className="mt-0.5 inline-block rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+                              {evidenceLabel}
+                            </div>
+                          )}
                           {(item.targetTripMonth || item.leadMonthsBeforeTrip !== undefined) && (
                             <div className="text-(--color-text-secondary)">
                               {item.targetTripMonth ? `Viagem-alvo: ${item.targetTripMonth}` : ""}

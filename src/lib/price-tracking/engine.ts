@@ -998,7 +998,15 @@ const TRAVEL_WINDOW_SCHEMA = {
 const TRAVEL_HISTORY_POINT_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["date", "price_brl", "source", "lead_months_before_trip", "target_trip_month", "event_label"],
+  required: [
+    "date",
+    "price_brl",
+    "source",
+    "lead_months_before_trip",
+    "target_trip_month",
+    "event_label",
+    "evidence_type",
+  ],
   properties: {
     date: { type: "string" },
     price_brl: { type: "number" },
@@ -1006,6 +1014,7 @@ const TRAVEL_HISTORY_POINT_SCHEMA = {
     lead_months_before_trip: { type: "number" },
     target_trip_month: { type: "string" },
     event_label: { type: "string" },
+    evidence_type: { type: "string", enum: ["verified_direct", "official_campaign", "guest_report"] },
   },
 } as const;
 
@@ -1085,21 +1094,21 @@ async function fetchTravelLeadTimeHistory(params: {
         },
       ],
       instructions: `Você é um analista especialista em precificação sazonal e antecedência de compra no turismo brasileiro.
-AMPLIE A BUSCA PARA TODAS AS FONTES VERIFICÁVEIS: além de Melhores Destinos, Google Flights, Kayak, Booking, Zarpo, Passagens Imperdíveis e sites oficiais dos resorts, pesquise **relatos verificáveis de hóspedes e viajantes em comunidades e avaliações** (TripAdvisor avaliações/fóruns, Reddit r/viagens, Reclame Aqui, Viaje na Viagem, comentários/posts de promoções da **Semana do Consumidor** em março, Black Friday, Dia das Mães e Aniversário do resort).
+REGRA INEGOCIÁVEL — ZERO VENDA CASADA E ZERO ESTIMATIVA MODELADA:
+1. PROIBIDO pacotes combinados (venda casada aéreo + hotel de CVC, Decolar, Hurb ou agências). Hospedagem DEVE vir do canal direto do resort ("${params.accommodationName}", site oficial/motor próprio, posts oficiais de campanha como Semana do Consumidor em março, Black Friday, pré-venda) ou relatos públicos verificáveis de hóspedes (TripAdvisor, Reclame Aqui, Reddit r/viagens, Viaje na Viagem, fóruns). Passagem aérea DEVE vir apenas de tarifa avulsa (companhias aéreas, Google Flights, Kayak, Passagens Imperdíveis).
+2. PROIBIDO preencher lacunas com "estimativa modelada", "estimativa retrospectiva" ou chutes. Se um mês não tiver campanha oficial, tarifa direta nem relato público verificável, NÃO invente ponto — retorne apenas os pontos realmente embasados.
 O usuário planeja comprar em ${params.plannedPurchaseDate} para viajar de ${params.outboundDate} a ${params.returnDate} (${params.nights} noites, ${params.travelersLabel}) — hospedagem "${params.accommodationName}" e voos ${params.originAirports.join("/")}->${params.destinationAirport} (${params.destinationLabel}).
-Você DEVE responder à pergunta de antecedência ("delta compra -> viagem"):
-Para quem viaja na mesma temporada-alvo (mês ${targetMonth}, ex.: ${priorCycleTargetYm} e abertura de ${currentCycleTargetYm}), como evoluiu o preço conforme o mês da compra / antecedência?
-- Ciclo anterior (para viajar em ${priorCycleTargetYm}): inclua pontos mensais desde ~11 meses antes (ex.: Out/Nov Black Friday do ano passado, Dez, Jan, Fev, Mar/Semana do Consumidor, Abr, Mai, Jun, Jul, Ago até 1 mês antes do embarque).
-- Ciclo atual (para viajar em ${currentCycleTargetYm}): inclua pontos da abertura recente (ex.: Outubro e Novembro atuais / Black Friday atual).
-Retorne de 10 a 14 pontos em stay_points e de 10 a 14 pontos em flight_points com:
-- date: YYYY-MM-DD (data da compra/observação dentro de ${eighteenMonthsAgoIso} a ${todayIso})
-- price_brl: valor TOTAL para ${params.nights} noites / ${params.travelersLabel} (se um relato mencionar diária avulsa, multiplique por ${params.nights} noites para manter a mesma base comparável; nunca misture valor de 1 diária ou 1 passageiro como total)
-- source: fonte consultada (ex.: "TripAdvisor relato", "Semana do Consumidor", "Site Oficial", "Zarpo", "Melhores Destinos", "Google Flights", "Kayak")
+Você DEVE responder à pergunta de antecedência ("delta compra -> viagem") para quem viaja na mesma temporada-alvo (mês ${targetMonth}, ex.: ${priorCycleTargetYm} e abertura de ${currentCycleTargetYm}):
+Para cada ponto encontrado em stay_points e flight_points informe:
+- date: YYYY-MM-DD (data da compra/campanha/relato dentro de ${eighteenMonthsAgoIso} a ${todayIso})
+- price_brl: valor TOTAL para ${params.nights} noites / ${params.travelersLabel} (se um relato mencionar diária avulsa, multiplique por ${params.nights} noites para manter a mesma base comparável; nunca misture pacote com aéreo)
+- source: fonte consultada (ex.: "Site Oficial La Torre", "Semana do Consumidor · post oficial", "TripAdvisor relato", "Google Flights", "Kayak")
 - lead_months_before_trip: número inteiro de meses entre a data da compra e o embarque daquele ciclo (0 a 12)
 - target_trip_month: "${priorCycleTargetYm}" ou "${currentCycleTargetYm}"
 - event_label: rótulo curto da janela (ex.: "Black Friday 25 · 10m antes", "Semana do Consumidor · 6m antes", "Abertura Black Friday 26")
-E preencha stay_best_window e flight_best_window indicando se a antecedência influencia o preço, quantos meses antes garantem a melhor tarifa (best_lead_months_min, best_lead_months_max, best_window_label) e uma recomendação direta em português.`,
-      input: `Levantamento por antecedência de compra (Black Friday anterior, Semana do Consumidor em março, relatos de hóspedes no TripAdvisor/fóruns até abertura atual) para viajar no mês ${targetMonth}: hospedagem "${params.accommodationName}" (${params.nights} noites) e voos ${params.originAirports.join("/")}->${params.destinationAirport} (${params.travelersLabel}). Compra planejada: ${params.plannedPurchaseDate}, viagem: ${params.outboundDate} a ${params.returnDate}.`,
+- evidence_type: "verified_direct" (cotação direta do site oficial/companhia), "official_campaign" (promoção/post oficial do resort ou companhia), ou "guest_report" (relato público de hóspede/viajante).
+E preencha stay_best_window e flight_best_window indicando se a antecedência influencia o preço, quantos meses antes garantem a melhor tarifa e uma recomendação direta em português.`,
+      input: `Levantamento SEM VENDA CASADA e SEM CHUTES (apenas canal oficial do resort, campanhas como Semana do Consumidor/Black Friday e relatos públicos no TripAdvisor/fóruns + voos avulsos) para viajar no mês ${targetMonth}: hospedagem "${params.accommodationName}" (${params.nights} noites) e voos ${params.originAirports.join("/")}->${params.destinationAirport} (${params.travelersLabel}). Compra planejada: ${params.plannedPurchaseDate}, viagem: ${params.outboundDate} a ${params.returnDate}.`,
       text: {
         format: {
           type: "json_schema",
@@ -1133,6 +1142,7 @@ E preencha stay_best_window e flight_best_window indicando se a antecedência in
         lead_months_before_trip: number;
         target_trip_month: string;
         event_label: string;
+        evidence_type: "verified_direct" | "official_campaign" | "guest_report";
       }>;
       flight_points?: Array<{
         date: string;
@@ -1141,6 +1151,7 @@ E preencha stay_best_window e flight_best_window indicando se a antecedência in
         lead_months_before_trip: number;
         target_trip_month: string;
         event_label: string;
+        evidence_type: "verified_direct" | "official_campaign" | "guest_report";
       }>;
       stay_best_window?: {
         best_lead_months_min: number;
@@ -1155,6 +1166,9 @@ E preencha stay_best_window e flight_best_window indicando se a antecedência in
         recommendation: string;
       };
     };
+
+    const rejectedHistoryPattern =
+      /estimativa modelada|estimativa retrospectiva|sem tarifa hist[oó]rica|pacote a[eé]reo|venda casada|cvc\b|hurb\b/i;
 
     const validateTravelPoint = (priceCents: number, kind: "stay" | "flight"): boolean => {
       if (!Number.isFinite(priceCents)) return false;
@@ -1178,6 +1192,7 @@ E preencha stay_best_window e flight_best_window indicando se a antecedência in
             lead_months_before_trip: number;
             target_trip_month: string;
             event_label: string;
+            evidence_type: "verified_direct" | "official_campaign" | "guest_report";
           }>
         | undefined,
       kind: "stay" | "flight"
@@ -1186,6 +1201,9 @@ E preencha stay_best_window e flight_best_window indicando se a antecedência in
       for (const pt of items ?? []) {
         if (!pt?.date || !/^\d{4}-\d{2}-\d{2}$/.test(pt.date)) continue;
         if (pt.date < eighteenMonthsAgoIso || pt.date > todayIso) continue;
+        if (rejectedHistoryPattern.test(pt.source || "") || rejectedHistoryPattern.test(pt.event_label || "")) {
+          continue;
+        }
         const priceCents = Math.round(Number(pt.price_brl) * 100);
         if (!validateTravelPoint(priceCents, kind)) continue;
         byDate.set(pt.date, {
@@ -1197,6 +1215,7 @@ E preencha stay_best_window e flight_best_window indicando se a antecedência in
             : {}),
           ...(pt.target_trip_month ? { targetTripMonth: pt.target_trip_month } : {}),
           ...(pt.event_label ? { eventLabel: pt.event_label } : {}),
+          ...(pt.evidence_type ? { evidenceType: pt.evidence_type } : {}),
         });
       }
       return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));
@@ -1317,7 +1336,8 @@ Data de referência de HOJE: ${todayIso}. Use a busca web em tempo real para pes
    - Campinas / Viracopos (VCP) é hub da Azul e opera voos diretos ou com 1 conexão curta para o Nordeste/Sul.
    - Informe horários típicos reais (outbound_departure_time, outbound_arrival_time, return_departure_time, return_arrival_time em HH:MM) e o preço total de IDA E VOLTA em BRL somando todos os viajantes (${travelersLabel}, incluindo taxa de pet na cabine se houver pet) — sempre > 0.
 2) HOSPEDAGEM / RESORT ("${accommodationName}" para ${nights} noites, Check-in ${outboundDate} e Check-out ${returnDate}, para ${travelersLabel}):
-   - PESQUISE EXPLICITAMENTE promoções de Black Friday / Blue Week ATIVAS HOJE (${todayIso}) no site oficial e motor de reservas do resort (ex.: Omnibees, HSystem, resortlatorre.com.br, salinas.com.br, japaratingaresort.com.br, Zarpo, Booking, Melhores Destinos).
+   - PROIBIDO venda casada / pacotes combinados (CVC, Decolar, Hurb com aéreo+hotel). Busque exclusivamente a tarifa da HOSPEDAGEM diretamente de quem vende (${accommodationName}, site oficial/motor de reservas próprio como Omnibees/HSystem, resortlatorre.com.br, salinas.com.br, japaratingaresort.com.br).
+   - PESQUISE EXPLICITAMENTE promoções de Black Friday / Blue Week / Semana do Consumidor ATIVAS HOJE (${todayIso}) no site oficial do resort.
    - Priorize a tarifa promocional real vigente HOJE com desconto à vista/PIX ou Black Friday sobre tarifas cheias antigas, calculando o total das ${nights} diárias para ${travelersLabel} (incluindo taxa pet se houver pet; sempre > 0).
    - Informe o menor valor total à vista (PIX/transferência no site oficial) e o menor valor total parcelado (em até 10x ou 12x no cartão comum sem exigir clube de férias/timeshare), marcando is_black_friday_promo=true se houver campanha ativa.`,
         input: `Busque na web agora (data ${todayIso}) cotações e promoções ativas de Black Friday para esta viagem:
@@ -1459,6 +1479,7 @@ Aeroportos de saída monitorados: ${originAirports.join(", ")} (Aceita escala: $
         leadMonthsBeforeTrip: todayLeadMonths,
         targetTripMonth: outboundDate.slice(0, 7),
         eventLabel: `Hoje (${todayLeadMonths}m antes)`,
+        evidenceType: "verified_direct",
       });
     }
     const stayPoints = Array.from(stayPointsMap.values()).sort((a, b) => a.date.localeCompare(b.date));
@@ -1472,6 +1493,7 @@ Aeroportos de saída monitorados: ${originAirports.join(", ")} (Aceita escala: $
         leadMonthsBeforeTrip: todayLeadMonths,
         targetTripMonth: flightOutboundDate.slice(0, 7),
         eventLabel: `Hoje (${todayLeadMonths}m antes)`,
+        evidenceType: "verified_direct",
       });
     }
     const flightPoints = Array.from(flightPointsMap.values()).sort((a, b) => a.date.localeCompare(b.date));
@@ -1558,6 +1580,7 @@ Aeroportos de saída monitorados: ${originAirports.join(", ")} (Aceita escala: $
       leadMonthsBeforeTrip: todayLeadMonths,
       targetTripMonth: outboundDate.slice(0, 7),
       eventLabel: `Hoje (${todayLeadMonths}m antes)`,
+      evidenceType: "verified_direct",
     });
   }
   const stayPoints = Array.from(stayPointsMap.values()).sort((a, b) => a.date.localeCompare(b.date));
@@ -1571,6 +1594,7 @@ Aeroportos de saída monitorados: ${originAirports.join(", ")} (Aceita escala: $
       leadMonthsBeforeTrip: todayLeadMonths,
       targetTripMonth: flightOutboundDate.slice(0, 7),
       eventLabel: `Hoje (${todayLeadMonths}m antes)`,
+      evidenceType: "verified_direct",
     });
   }
   const flightPoints = Array.from(flightPointsMap.values()).sort((a, b) => a.date.localeCompare(b.date));

@@ -2,6 +2,9 @@
 
 Atualizado: 26/11/2026.
 
+## Viagens Sem Venda Casada, Zero Estimativas Modeladas & Selo de Origem (26/11/2026)
+- `engine.ts`, `db.ts`, `history-stats.ts`, `price-tracking.ts`, `PriceHistoryVisorCard.tsx`: proibição explícita de pacotes com venda casada (CVC/Decolar/Hurb) e de `"estimativa modelada"`/`"estimativa retrospectiva"` (rejeição determinística no `sanitize`), priorizando canal direto do resort + campanhas oficiais (Semana do Consumidor/Black Friday) + relatos públicos (TripAdvisor/Reclame Aqui/fóruns) com selo `evidenceType` (`Verificado (direto)`, `Campanha oficial`, `Relato público`) no tooltip.
+
 ## Assistente IA Global + Fontes Ampliadas em Viagens e Backfill 18m (26/11/2026)
 - **Assistente IA na Visão do Mês (`/analise`) e Lançamentos (`/cadastro`) (`financial-chat.ts`, `GlobalAssistantDrawer.tsx`, `ModernHeader.tsx`, `estimates.ts`):**
   - Botão **`Assistente IA`** no `ModernHeader` fora de `/simulacao`, abrindo o drawer `GlobalAssistantDrawer` conectado aos lançamentos reais dos últimos 12 meses (`meudinheiro.transactions`), com detalhamento mês a mês/média dos últimos 3 meses e ação em 1 clique **`+ Incluir como gasto estimado`** (`upsertEstimatedExpenseFromAssistant` + suporte a `customAmountCents` em `EstimatedExpense`).

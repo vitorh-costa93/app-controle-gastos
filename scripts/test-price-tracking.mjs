@@ -93,4 +93,8 @@ assert.match(estimatesCode, /export async function upsertEstimatedExpenseFromAss
 const globalDrawerCode = fs.readFileSync(path.join(root, "src/components/layout/GlobalAssistantDrawer.tsx"), "utf8");
 assert.match(globalDrawerCode, /Incluir como gasto estimado/);
 
-console.log("✓ Rastreamento de Preços (4 camadas + Viagens fontes ampliadas + Antecedência 18m + Assistente IA Global) validado com sucesso");
+assert.match(engineCode, /evidence_type/, "Viagem deve classificar evidência de origem");
+assert.match(engineCode, /estimativa modelada/, "Viagem deve rejeitar estimativas modeladas no sanitize");
+assert.match(engineCode, /venda casada/, "Viagem deve proibir pacotes com venda casada");
+
+console.log("✓ Rastreamento de Preços (4 camadas + Viagens sem venda casada + evidenceType + Assistente IA Global) validado com sucesso");

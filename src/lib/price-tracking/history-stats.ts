@@ -48,6 +48,7 @@ export function mergePriceHistoryPoints(
       ...(pt.leadMonthsBeforeTrip !== undefined ? { leadMonthsBeforeTrip: pt.leadMonthsBeforeTrip } : {}),
       ...(pt.targetTripMonth ? { targetTripMonth: pt.targetTripMonth } : {}),
       ...(pt.eventLabel ? { eventLabel: pt.eventLabel } : {}),
+      ...(pt.evidenceType ? { evidenceType: pt.evidenceType } : {}),
     });
   }
 

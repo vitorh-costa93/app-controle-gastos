@@ -205,7 +205,7 @@ export function PriceHistoryVisorCard({
         <div className="min-w-0 rounded-(--radius-lg) border border-(--color-border) bg-(--color-surface) p-3.5">
           {chartData.length >= 2 ? (
             <div ref={chartWrapRef} className="h-44 w-full cursor-zoom-in select-none">
-              <ResponsiveContainer width="100%" height={176}>
+              <ResponsiveContainer key={`${idPrefix}-${windowKey}`} width="100%" height={176} minWidth={0}>
                 <AreaChart data={chartData} margin={{ top: 8, right: 20, left: 4, bottom: 0 }}>
                   <defs>
                     <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
@@ -281,6 +281,7 @@ export function PriceHistoryVisorCard({
                     fill={`url(#${gradientId})`}
                     dot={{ r: 2.5, fill: "#22c55e" }}
                     activeDot={{ r: 4 }}
+                    isAnimationActive={false}
                   />
                 </AreaChart>
               </ResponsiveContainer>

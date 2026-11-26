@@ -1018,21 +1018,16 @@ const TRAVEL_HISTORY_POINT_SCHEMA = {
   },
 } as const;
 
-const TRAVEL_HISTORY_SCHEMA = {
+const SINGLE_SERIES_HISTORY_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["stay_points", "flight_points", "stay_best_window", "flight_best_window"],
+  required: ["points", "best_window"],
   properties: {
-    stay_points: {
+    points: {
       type: "array",
       items: TRAVEL_HISTORY_POINT_SCHEMA,
     },
-    flight_points: {
-      type: "array",
-      items: TRAVEL_HISTORY_POINT_SCHEMA,
-    },
-    stay_best_window: TRAVEL_WINDOW_SCHEMA,
-    flight_best_window: TRAVEL_WINDOW_SCHEMA,
+    best_window: TRAVEL_WINDOW_SCHEMA,
   },
 } as const;
 
@@ -1042,6 +1037,23 @@ interface TravelAiWindowMeta {
   bestWindowLabel: string;
   recommendation: string;
 }
+
+type RawTravelPoint = {
+  date: string;
+  price_brl: number;
+  source: string;
+  lead_months_before_trip: number;
+  target_trip_month: string;
+  event_label: string;
+  evidence_type: "verified_direct" | "official_campaign" | "guest_report";
+};
+
+type RawTravelWindow = {
+  best_lead_months_min: number;
+  best_lead_months_max: number;
+  best_window_label: string;
+  recommendation: string;
+};
 
 async function fetchTravelLeadTimeHistory(params: {
   accommodationName: string;
@@ -1065,7 +1077,6 @@ async function fetchTravelLeadTimeHistory(params: {
   }
   const openai = getOpenAIClient();
   const model = await resolveModelFor("extraction");
-  const t0 = Date.now();
   const now = new Date();
   const todayIso = now.toISOString().slice(0, 10);
   const eighteenMonthsAgo = new Date(now);
@@ -1077,176 +1088,157 @@ async function fetchTravelLeadTimeHistory(params: {
   const priorCycleTargetYm = `${targetYear - 1}-${targetMonth}`;
   const currentCycleTargetYm = `${targetYear}-${targetMonth}`;
 
-  try {
-    const response = await openai.responses.create({
-      model,
-      reasoning: { effort: "low" },
-      tools: [
-        {
-          type: "web_search_preview",
-          search_context_size: "high",
-          user_location: {
-            type: "approximate",
-            country: "BR",
-            region: "SP",
-            city: "Araraquara",
+  const rejectedHistoryPattern =
+    /estimativa modelada|estimativa retrospectiva|sem tarifa hist[oó]rica|pacote a[eé]reo|venda casada|cvc\b|hurb\b/i;
+
+  const validateTravelPoint = (priceCents: number, kind: "stay" | "flight"): boolean => {
+    if (!Number.isFinite(priceCents)) return false;
+    if (kind === "stay") {
+      const minStay = Math.max(50000, params.nights * 35000);
+      const maxStay = params.nights * 900000;
+      return priceCents >= minStay && priceCents <= maxStay;
+    }
+    const adultCount = Math.max(1, params.adults);
+    const minFlight = Math.max(30000, adultCount * 35000);
+    const maxFlight = adultCount * 600000;
+    return priceCents >= minFlight && priceCents <= maxFlight;
+  };
+
+  const sanitize = (items: RawTravelPoint[] | undefined, kind: "stay" | "flight") => {
+    const byDate = new Map<string, PriceHistoryPoint>();
+    for (const pt of items ?? []) {
+      if (!pt?.date || !/^\d{4}-\d{2}-\d{2}$/.test(pt.date)) continue;
+      if (pt.date < eighteenMonthsAgoIso || pt.date > todayIso) continue;
+      if (rejectedHistoryPattern.test(pt.source || "") || rejectedHistoryPattern.test(pt.event_label || "")) {
+        continue;
+      }
+      const priceCents = Math.round(Number(pt.price_brl) * 100);
+      if (!validateTravelPoint(priceCents, kind)) continue;
+      byDate.set(pt.date, {
+        date: pt.date,
+        priceCents,
+        source: pt.source || "Histórico Web",
+        ...(Number.isFinite(pt.lead_months_before_trip)
+          ? { leadMonthsBeforeTrip: Math.max(0, Math.round(pt.lead_months_before_trip)) }
+          : {}),
+        ...(pt.target_trip_month ? { targetTripMonth: pt.target_trip_month } : {}),
+        ...(pt.event_label ? { eventLabel: pt.event_label } : {}),
+        ...(pt.evidence_type ? { evidenceType: pt.evidence_type } : {}),
+      });
+    }
+    return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));
+  };
+
+  const mapWindow = (w?: RawTravelWindow): TravelAiWindowMeta | null =>
+    w
+      ? {
+          bestLeadMonthsMin: Math.max(0, Math.round(w.best_lead_months_min)),
+          bestLeadMonthsMax: Math.max(0, Math.round(w.best_lead_months_max)),
+          bestWindowLabel: w.best_window_label,
+          recommendation: w.recommendation,
+        }
+      : null;
+
+  const runSeriesQuery = async (
+    schemaName: string,
+    kind: "stay" | "flight",
+    instructions: string,
+    input: string
+  ): Promise<{ points: PriceHistoryPoint[]; bestWindow: TravelAiWindowMeta | null }> => {
+    const t0 = Date.now();
+    try {
+      const response = await openai.responses.create({
+        model,
+        reasoning: { effort: "medium" },
+        tools: [
+          {
+            type: "web_search_preview",
+            search_context_size: "high",
+            user_location: {
+              type: "approximate",
+              country: "BR",
+              region: "SP",
+              city: "Araraquara",
+            },
+          },
+        ],
+        instructions,
+        input,
+        text: {
+          format: {
+            type: "json_schema",
+            name: schemaName,
+            strict: true,
+            schema: SINGLE_SERIES_HISTORY_SCHEMA,
           },
         },
-      ],
-      instructions: `Você é um analista especialista em precificação sazonal e antecedência de compra no turismo brasileiro.
-REGRA INEGOCIÁVEL — ZERO VENDA CASADA E ZERO ESTIMATIVA MODELADA:
-1. PROIBIDO pacotes combinados (venda casada aéreo + hotel de CVC, Decolar, Hurb ou agências). Hospedagem DEVE vir do canal direto do resort ("${params.accommodationName}", site oficial/motor próprio, posts oficiais de campanha como Semana do Consumidor em março, Black Friday, pré-venda) ou relatos públicos verificáveis de hóspedes (TripAdvisor, Reclame Aqui, Reddit r/viagens, Viaje na Viagem, fóruns). Passagem aérea DEVE vir apenas de tarifa avulsa (companhias aéreas, Google Flights, Kayak, Passagens Imperdíveis).
-2. PROIBIDO preencher lacunas com "estimativa modelada", "estimativa retrospectiva" ou chutes. Se um mês não tiver campanha oficial, tarifa direta nem relato público verificável, NÃO invente ponto — retorne apenas os pontos realmente embasados.
-O usuário planeja comprar em ${params.plannedPurchaseDate} para viajar de ${params.outboundDate} a ${params.returnDate} (${params.nights} noites, ${params.travelersLabel}) — hospedagem "${params.accommodationName}" e voos ${params.originAirports.join("/")}->${params.destinationAirport} (${params.destinationLabel}).
-Você DEVE responder à pergunta de antecedência ("delta compra -> viagem") para quem viaja na mesma temporada-alvo (mês ${targetMonth}, ex.: ${priorCycleTargetYm} e abertura de ${currentCycleTargetYm}):
-Para cada ponto encontrado em stay_points e flight_points informe:
-- date: YYYY-MM-DD (data da compra/campanha/relato dentro de ${eighteenMonthsAgoIso} a ${todayIso})
-- price_brl: valor TOTAL para ${params.nights} noites / ${params.travelersLabel} (se um relato mencionar diária avulsa, multiplique por ${params.nights} noites para manter a mesma base comparável; nunca misture pacote com aéreo)
-- source: fonte consultada (ex.: "Site Oficial La Torre", "Semana do Consumidor · post oficial", "TripAdvisor relato", "Google Flights", "Kayak")
-- lead_months_before_trip: número inteiro de meses entre a data da compra e o embarque daquele ciclo (0 a 12)
-- target_trip_month: "${priorCycleTargetYm}" ou "${currentCycleTargetYm}"
-- event_label: rótulo curto da janela (ex.: "Black Friday 25 · 10m antes", "Semana do Consumidor · 6m antes", "Abertura Black Friday 26")
-- evidence_type: "verified_direct" (cotação direta do site oficial/companhia), "official_campaign" (promoção/post oficial do resort ou companhia), ou "guest_report" (relato público de hóspede/viajante).
-E preencha stay_best_window e flight_best_window indicando se a antecedência influencia o preço, quantos meses antes garantem a melhor tarifa e uma recomendação direta em português.`,
-      input: `Levantamento SEM VENDA CASADA e SEM CHUTES (apenas canal oficial do resort, campanhas como Semana do Consumidor/Black Friday e relatos públicos no TripAdvisor/fóruns + voos avulsos) para viajar no mês ${targetMonth}: hospedagem "${params.accommodationName}" (${params.nights} noites) e voos ${params.originAirports.join("/")}->${params.destinationAirport} (${params.travelersLabel}). Compra planejada: ${params.plannedPurchaseDate}, viagem: ${params.outboundDate} a ${params.returnDate}.`,
-      text: {
-        format: {
-          type: "json_schema",
-          name: "travel_lead_time_history_18m",
-          strict: true,
-          schema: TRAVEL_HISTORY_SCHEMA,
-        },
-      },
-    });
+      });
 
-    const u = response.usage;
-    await logAiUsage({
-      task: "extraction",
-      model,
-      ok: true,
-      inputTokens: u?.input_tokens,
-      cachedTokens: u?.input_tokens_details?.cached_tokens,
-      outputTokens: u?.output_tokens,
-      durationMs: Date.now() - t0,
-    });
+      const u = response.usage;
+      await logAiUsage({
+        task: "extraction",
+        model,
+        ok: true,
+        inputTokens: u?.input_tokens,
+        cachedTokens: u?.input_tokens_details?.cached_tokens,
+        outputTokens: u?.output_tokens,
+        durationMs: Date.now() - t0,
+      });
 
-    const raw = response.output_text;
-    if (!raw) {
-      return { stayPoints: [], flightPoints: [], stayBestWindow: null, flightBestWindow: null };
+      const raw = response.output_text;
+      if (!raw) return { points: [], bestWindow: null };
+      const parsed = JSON.parse(raw) as { points?: RawTravelPoint[]; best_window?: RawTravelWindow };
+      return {
+        points: sanitize(parsed.points, kind),
+        bestWindow: mapWindow(parsed.best_window),
+      };
+    } catch (err) {
+      await logAiUsage({ task: "extraction", model, ok: false, durationMs: Date.now() - t0, error: String(err) });
+      console.error(`fetchTravelLeadTimeHistory (${kind}) error:`, err);
+      return { points: [], bestWindow: null };
     }
-    const parsed = JSON.parse(raw) as {
-      stay_points?: Array<{
-        date: string;
-        price_brl: number;
-        source: string;
-        lead_months_before_trip: number;
-        target_trip_month: string;
-        event_label: string;
-        evidence_type: "verified_direct" | "official_campaign" | "guest_report";
-      }>;
-      flight_points?: Array<{
-        date: string;
-        price_brl: number;
-        source: string;
-        lead_months_before_trip: number;
-        target_trip_month: string;
-        event_label: string;
-        evidence_type: "verified_direct" | "official_campaign" | "guest_report";
-      }>;
-      stay_best_window?: {
-        best_lead_months_min: number;
-        best_lead_months_max: number;
-        best_window_label: string;
-        recommendation: string;
-      };
-      flight_best_window?: {
-        best_lead_months_min: number;
-        best_lead_months_max: number;
-        best_window_label: string;
-        recommendation: string;
-      };
-    };
+  };
 
-    const rejectedHistoryPattern =
-      /estimativa modelada|estimativa retrospectiva|sem tarifa hist[oó]rica|pacote a[eé]reo|venda casada|cvc\b|hurb\b/i;
+  const stayPromise = runSeriesQuery(
+    "travel_stay_history_18m",
+    "stay",
+    `Você é um pesquisador investigativo de preços históricos de HOSPEDAGEM no Brasil.
+BUSQUE ATIVAMENTE EM FONTES PÚBLICAS REAIS:
+- Site oficial do "${params.accommodationName}", motor de reservas, posts/releases oficiais de campanhas (Semana do Consumidor em março, Black Friday em novembro, Dia das Mães, pré-venda de temporada).
+- Relatos de clientes no **Reclame Aqui** citando valores reais de diária/pacote de hospedagem (ex.: relatos de março na Semana do Consumidor ou Black Friday).
+- Comparadores e avaliações públicas (**Mundi**, **TripAdvisor**, **Booking**, **Zarpo**, **Melhores Destinos**, **Viaje na Viagem**).
 
-    const validateTravelPoint = (priceCents: number, kind: "stay" | "flight"): boolean => {
-      if (!Number.isFinite(priceCents)) return false;
-      if (kind === "stay") {
-        const minStay = Math.max(50000, params.nights * 35000);
-        const maxStay = params.nights * 900000;
-        return priceCents >= minStay && priceCents <= maxStay;
-      }
-      const adultCount = Math.max(1, params.adults);
-      const minFlight = Math.max(30000, adultCount * 35000);
-      const maxFlight = adultCount * 600000;
-      return priceCents >= minFlight && priceCents <= maxFlight;
-    };
+REGRA DE NORMALIZAÇÃO (MUITO IMPORTANTE):
+- NUNCA descarte uma diária real publicada para casal apenas porque não cita taxa de pet ou porque se refere a outro mês/semana próxima.
+- Sempre que encontrar uma diária real publicada para casal (ex.: Reclame Aqui 16/03/2026 R$ 1.674/diária, Mundi 08/09/2026 R$ 1.392 ou R$ 1.679/diária, Site oficial set/2026 R$ 2.164/diária, Black Friday R$ 1.103/diária), INCLUA como ponto válido multiplicando \`diária × ${params.nights}\` no campo \`price_brl\` e registrando no \`source\` a base exata (ex.: "Reclame Aqui · Semana do Consumidor (diária R$ 1.674 × ${params.nights}n, sem pet)").
+- PROIBIDO venda casada (pacotes aéreo+hotel CVC/Decolar/Hurb) e PROIBIDO inventar números sem fonte real.
 
-    const sanitize = (
-      items:
-        | Array<{
-            date: string;
-            price_brl: number;
-            source: string;
-            lead_months_before_trip: number;
-            target_trip_month: string;
-            event_label: string;
-            evidence_type: "verified_direct" | "official_campaign" | "guest_report";
-          }>
-        | undefined,
-      kind: "stay" | "flight"
-    ) => {
-      const byDate = new Map<string, PriceHistoryPoint>();
-      for (const pt of items ?? []) {
-        if (!pt?.date || !/^\d{4}-\d{2}-\d{2}$/.test(pt.date)) continue;
-        if (pt.date < eighteenMonthsAgoIso || pt.date > todayIso) continue;
-        if (rejectedHistoryPattern.test(pt.source || "") || rejectedHistoryPattern.test(pt.event_label || "")) {
-          continue;
-        }
-        const priceCents = Math.round(Number(pt.price_brl) * 100);
-        if (!validateTravelPoint(priceCents, kind)) continue;
-        byDate.set(pt.date, {
-          date: pt.date,
-          priceCents,
-          source: pt.source || "Histórico Web",
-          ...(Number.isFinite(pt.lead_months_before_trip)
-            ? { leadMonthsBeforeTrip: Math.max(0, Math.round(pt.lead_months_before_trip)) }
-            : {}),
-          ...(pt.target_trip_month ? { targetTripMonth: pt.target_trip_month } : {}),
-          ...(pt.event_label ? { eventLabel: pt.event_label } : {}),
-          ...(pt.evidence_type ? { evidenceType: pt.evidence_type } : {}),
-        });
-      }
-      return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));
-    };
+Retorne todos os pontos reais encontrados entre ${eighteenMonthsAgoIso} e ${todayIso} com \`date\` (YYYY-MM-DD), \`price_brl\` (total de ${params.nights} noites), \`source\`, \`lead_months_before_trip\` (0–12 até ${priorCycleTargetYm} ou ${currentCycleTargetYm}), \`target_trip_month\`, \`event_label\` e \`evidence_type\` ("verified_direct", "official_campaign" ou "guest_report"), além do resumo em \`best_window\`.`,
+    `Pesquise preços históricos publicados e relatos reais (Site Oficial, Reclame Aqui Semana do Consumidor março/2026, Mundi, TripAdvisor, Black Friday) para hospedagem "${params.accommodationName}" (${params.nights} noites, casal). Compra planejada: ${params.plannedPurchaseDate}, viagem-alvo: ${params.outboundDate} a ${params.returnDate}.`
+  );
 
-    const mapWindow = (w?: {
-      best_lead_months_min: number;
-      best_lead_months_max: number;
-      best_window_label: string;
-      recommendation: string;
-    }): TravelAiWindowMeta | null =>
-      w
-        ? {
-            bestLeadMonthsMin: Math.max(0, Math.round(w.best_lead_months_min)),
-            bestLeadMonthsMax: Math.max(0, Math.round(w.best_lead_months_max)),
-            bestWindowLabel: w.best_window_label,
-            recommendation: w.recommendation,
-          }
-        : null;
+  const flightPromise = runSeriesQuery(
+    "travel_flight_history_18m",
+    "flight",
+    `Você é um pesquisador investigativo de preços históricos de PASSAGENS AÉREAS AVULSAS no Brasil (ZERO pacotes com hotel).
+BUSQUE ATIVAMENTE EM FONTES PÚBLICAS REAIS:
+- **Melhores Destinos**, **Passagens Imperdíveis**, **Kayak**, **Google Flights**, **Mundi**, **Skyscanner** e comunicados de companhias aéreas (Azul, Latam, Gol) para a rota ${params.originAirports.join("/")} -> ${params.destinationAirport} (${params.destinationLabel}) ou aeroportos próximos de SP quando aplicável (indicando o aeroporto exato em \`source\`).
 
-    return {
-      stayPoints: sanitize(parsed.stay_points, "stay"),
-      flightPoints: sanitize(parsed.flight_points, "flight"),
-      stayBestWindow: mapWindow(parsed.stay_best_window),
-      flightBestWindow: mapWindow(parsed.flight_best_window),
-    };
-  } catch (err) {
-    await logAiUsage({ task: "extraction", model, ok: false, durationMs: Date.now() - t0, error: String(err) });
-    console.error("fetchTravelLeadTimeHistory error:", err);
-    return { stayPoints: [], flightPoints: [], stayBestWindow: null, flightBestWindow: null };
-  }
+REGRA DE NORMALIZAÇÃO:
+- Se encontrar tarifa real de ida+volta por adulto, multiplique por ${params.adults} para preencher \`price_brl\` (sem descartar por falta de taxa pet; informe a base no \`source\`).
+- PROIBIDO venda casada (pacotes aéreo+hotel) e PROIBIDO inventar números sem fonte real.
+
+Retorne os pontos reais encontrados entre ${eighteenMonthsAgoIso} e ${todayIso} com \`date\` (YYYY-MM-DD), \`price_brl\` (total ida+volta para ${params.adults} adultos), \`source\`, \`lead_months_before_trip\`, \`target_trip_month\` ("${priorCycleTargetYm}" ou "${currentCycleTargetYm}"), \`event_label\` e \`evidence_type\`, além de \`best_window\`.`,
+    `Pesquise tarifas históricas avulsas publicadas (Melhores Destinos, Passagens Imperdíveis, Kayak, Google Flights, Mundi) para voos ida+volta ${params.originAirports.join("/")} -> ${params.destinationAirport} (${params.adults} adultos) para viajar no mês ${targetMonth} (${priorCycleTargetYm} / ${currentCycleTargetYm}).`
+  );
+
+  const [stayRes, flightRes] = await Promise.all([stayPromise, flightPromise]);
+  return {
+    stayPoints: stayRes.points,
+    flightPoints: flightRes.points,
+    stayBestWindow: stayRes.bestWindow,
+    flightBestWindow: flightRes.bestWindow,
+  };
 }
 
 /**

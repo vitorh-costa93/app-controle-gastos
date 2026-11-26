@@ -96,5 +96,8 @@ assert.match(globalDrawerCode, /Incluir como gasto estimado/);
 assert.match(engineCode, /evidence_type/, "Viagem deve classificar evidência de origem");
 assert.match(engineCode, /estimativa modelada/, "Viagem deve rejeitar estimativas modeladas no sanitize");
 assert.match(engineCode, /venda casada/, "Viagem deve proibir pacotes com venda casada");
+assert.match(engineCode, /Reclame Aqui/, "Viagem deve pesquisar relatos de preço no Reclame Aqui");
+assert.match(engineCode, /Mundi/, "Viagem deve pesquisar comparadores como Mundi");
+assert.match(engineCode, /effort:\s*"medium"/, "Histórico investigativo de viagem deve usar reasoning medium");
 
-console.log("✓ Rastreamento de Preços (4 camadas + Viagens sem venda casada + evidenceType + Assistente IA Global) validado com sucesso");
+console.log("✓ Rastreamento de Preços (4 camadas + Viagens sem venda casada + busca investigativa medium + Assistente IA Global) validado com sucesso");

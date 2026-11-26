@@ -28,6 +28,8 @@ export interface EstimatedExpense {
    * meses fechados; este campo só serve para limpar os lançamentos antigos.
    */
   amountCents: number;
+  /** Valor mensal customizado (ex.: definido via Assistente IA); quando > 0, prevalece sobre a média automática. */
+  customAmountCents?: number | null;
 }
 
 /** Média usada na estimativa de um item e de onde ela veio. */
@@ -166,7 +168,10 @@ export async function getEstimatedExpenseOccurrences(
   for (const month of visibleMonths) {
     const occurrences: MonthlyOccurrence[] = [];
     for (const item of items) {
-      const average = averages.get(item.id) ?? 0;
+      const average =
+        item.customAmountCents && item.customAmountCents > 0
+          ? item.customAmountCents
+          : (averages.get(item.id) ?? 0);
       if (average <= 0) continue;
       const real = transactions
         .filter(
@@ -237,4 +242,68 @@ export async function syncEstimatedExpenses(): Promise<
 
   if (removed > 0) revalidateAll();
   return { ok: true, created: 0, removed };
+}
+
+/**
+ * Cria ou atualiza um gasto estimado a partir de uma sugestão do Assistente IA
+ * (usado na Visão Geral e em Lançamentos).
+ */
+export async function upsertEstimatedExpenseFromAssistant(params: {
+  label: string;
+  categoryId: string;
+  personId?: string | null;
+  customAmountCents?: number | null;
+}): Promise<{ ok: true; item: EstimatedExpense } | { ok: false; error: string }> {
+  const people = await listPeople();
+  const resolvedPersonId =
+    params.personId || findFixedSalaryPerson(people)?.id || people[0]?.id || "";
+  if (!resolvedPersonId) {
+    return { ok: false, error: "Nenhuma pessoa ativa encontrada para vincular o gasto estimado." };
+  }
+  if (!params.categoryId) {
+    return { ok: false, error: "Categoria inválida para o gasto estimado." };
+  }
+
+  const current = await getEstimatedExpenses();
+  const customAmountCents =
+    params.customAmountCents && params.customAmountCents > 0
+      ? Math.round(params.customAmountCents)
+      : null;
+
+  const existingIdx = current.findIndex(
+    (i) => i.categoryId === params.categoryId && i.personId === resolvedPersonId
+  );
+
+  let savedItem: EstimatedExpense;
+  let next: EstimatedExpense[];
+  if (existingIdx >= 0) {
+    savedItem = {
+      ...current[existingIdx],
+      label: params.label.trim() || current[existingIdx].label,
+      ...(customAmountCents ? { customAmountCents } : {}),
+    };
+    next = current.map((item, idx) => (idx === existingIdx ? savedItem : item));
+  } else {
+    const slug = params.label
+      .toLocaleLowerCase("pt-BR")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 24);
+    savedItem = {
+      id: `${slug || "estimado"}-${Date.now()}`,
+      label: params.label.trim() || "Gasto estimado",
+      personId: resolvedPersonId,
+      categoryId: params.categoryId,
+      typeId: null,
+      amountCents: 0,
+      ...(customAmountCents ? { customAmountCents } : {}),
+    };
+    next = [...current, savedItem];
+  }
+
+  const saveRes = await setEstimatedExpenses(next);
+  if (!saveRes.ok) return saveRes;
+  return { ok: true, item: savedItem };
 }

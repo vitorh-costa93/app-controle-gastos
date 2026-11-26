@@ -1,6 +1,13 @@
 # Continuidade — MeuDinheiro
 
-Atualizado: 25/11/2026.
+Atualizado: 26/11/2026.
+
+## Assistente IA Global + Fontes Ampliadas em Viagens e Backfill 18m (26/11/2026)
+- **Assistente IA na Visão do Mês (`/analise`) e Lançamentos (`/cadastro`) (`financial-chat.ts`, `GlobalAssistantDrawer.tsx`, `ModernHeader.tsx`, `estimates.ts`):**
+  - Botão **`Assistente IA`** no `ModernHeader` fora de `/simulacao`, abrindo o drawer `GlobalAssistantDrawer` conectado aos lançamentos reais dos últimos 12 meses (`meudinheiro.transactions`), com detalhamento mês a mês/média dos últimos 3 meses e ação em 1 clique **`+ Incluir como gasto estimado`** (`upsertEstimatedExpenseFromAssistant` + suporte a `customAmountCents` em `EstimatedExpense`).
+- **Fontes ampliadas em viagens & backfill 18m para eletros (`engine.ts`):**
+  - `fetchTravelLeadTimeHistory` ampliado para buscar relatos verificáveis de hóspedes/comunidades (`TripAdvisor`, `Reddit r/viagens`, `Reclame Aqui`, `Viaje na Viagem`, `Semana do Consumidor`) com trava determinística `validateTravelPoint` (piso/teto por diária e passageiro).
+  - `fetchProductPriceHistory18Months` ampliado para comparadores/arquivos (`Bondfaro`, `JáCotei`, `Hardmob`, `PromoTrem`) e equivalentes 12000 BTUs Inverter em 2025 com teto anti-outlier (`minSanityPriceCents * 5`).
 
 ## Rastreamento Inteligente de Preços na Simulação — Produtos (4 Camadas) & Viagens (Voos RAO/VCP + Resorts por Data) (23/11/2026)
 - **Histórico de 18 meses real (`18m`) para Produtos + Análise de Antecedência para Viagens (25/11/2026):**

@@ -79,4 +79,18 @@ assert.match(historyStatsCode, /export function buildTravelLeadTimeInsight/);
 assert.match(historyStatsCode, /leadMonthsBeforeTrip/);
 assert.match(visorCode, /Quando comprar\?/);
 
-console.log("✓ Rastreamento de Preços (4 camadas Anti-Falso-Positivo + Viagens RAO/VCP + Antecedência 18m + Histórico Visor) validado com sucesso");
+// 8. Verifica fontes ampliadas em viagens + Assistente IA Global (Visão do mês / Lançamentos)
+assert.match(engineCode, /TripAdvisor/, "Viagem deve pesquisar relatos no TripAdvisor");
+assert.match(engineCode, /Semana do Consumidor/, "Viagem deve pesquisar promoções da Semana do Consumidor");
+assert.match(engineCode, /validateTravelPoint/, "Viagem deve validar piso e teto anti-falso-positivo");
+
+const financialChatCode = fs.readFileSync(path.join(root, "src/lib/data/financial-chat.ts"), "utf8");
+assert.match(financialChatCode, /export async function askFinancialAssistant/);
+
+const estimatesCode = fs.readFileSync(path.join(root, "src/lib/data/estimates.ts"), "utf8");
+assert.match(estimatesCode, /export async function upsertEstimatedExpenseFromAssistant/);
+
+const globalDrawerCode = fs.readFileSync(path.join(root, "src/components/layout/GlobalAssistantDrawer.tsx"), "utf8");
+assert.match(globalDrawerCode, /Incluir como gasto estimado/);
+
+console.log("✓ Rastreamento de Preços (4 camadas + Viagens fontes ampliadas + Antecedência 18m + Assistente IA Global) validado com sucesso");

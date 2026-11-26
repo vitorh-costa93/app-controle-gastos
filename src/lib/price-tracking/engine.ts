@@ -401,6 +401,12 @@ async function fetchProductPriceHistory18Months(
 
   const byDate = new Map<string, PriceHistoryPoint>();
 
+  const maxSanityPriceCents = minSanityPriceCents * 5;
+  const isAppliance = /ar.?condicionado|split|inverter/i.test(query);
+  const applianceHint = isAppliance
+    ? `\nPara aparelhos de ar-condicionado Split Inverter 12000 BTUs, caso o anúncio atual não tenha histórico antigo isolado, utilize ofertas arquivadas reais no Brasil (2025) de modelos equivalentes 12000 BTUs Inverter (LG Dual Inverter, Midea Xtreme Save / AirVolution, Samsung WindFree, Gree G-Top, Elgin Eco II).`
+    : "";
+
   const runHistoryQuery = async (fromIso: string, toIso: string, instructions: string, input: string) => {
     const t0 = Date.now();
     try {
@@ -451,7 +457,9 @@ async function fetchProductPriceHistory18Months(
         if (!pt?.date || !/^\d{4}-\d{2}-\d{2}$/.test(pt.date)) continue;
         if (pt.date < fromIso || pt.date > toIso) continue;
         const priceCents = Math.round(Number(pt.price_brl) * 100);
-        if (!Number.isFinite(priceCents) || priceCents < minSanityPriceCents) continue;
+        if (!Number.isFinite(priceCents) || priceCents < minSanityPriceCents || priceCents > maxSanityPriceCents) {
+          continue;
+        }
         byDate.set(pt.date, {
           date: pt.date,
           priceCents,
@@ -467,11 +475,11 @@ async function fetchProductPriceHistory18Months(
   await runHistoryQuery(
     eighteenMonthsAgoIso,
     todayIso,
-    `Você é um pesquisador de histórico de preços no varejo brasileiro (Buscapé, Zoom, Keepa Brasil, Promobit, Pelando, Canaltech, TechTudo, TudoCelular).
+    `Você é um pesquisador de histórico de preços no varejo brasileiro (Buscapé, Zoom, Keepa Brasil, Bondfaro, JáCotei, Promobit, Pelando, Hardmob, PromoTrem, Canaltech, TechTudo, TudoCelular).
 Busque o histórico REAL de preços observados no Brasil para "${query}" ao longo dos ÚLTIMOS 18 MESES completos (de ${eighteenMonthsAgoIso} até ${todayIso}), cobrindo OBRIGATORIAMENTE os dois períodos:
 - Período 1 (${eighteenMonthsAgoIso} até ${twelveMonthsAgoIso}): pelo menos 6 pontos mensais cobrindo todos os meses desse semestre mais antigo (incluindo Prime Day anterior, Dia das Mães, Dia dos Pais, Dia das Crianças).
-- Período 2 (${twelveMonthsAgoIso} até ${todayIso}): pelo menos 12 pontos mensais + picos/mínimas sazonais (Black Friday anterior, Natal, Dia do Consumidor, Prime Day e Black Friday atual).
-Use somente preços reais observados (nunca abaixo do piso R$ ${(minSanityPriceCents / 100).toFixed(2)}). Nunca invente dados.`,
+- Período 2 (${twelveMonthsAgoIso} até ${todayIso}): pelo menos 12 pontos mensais + picos/mínimas sazonais (Black Friday anterior, Natal, Dia do Consumidor, Prime Day e Black Friday atual).${applianceHint}
+Use somente preços reais observados entre R$ ${(minSanityPriceCents / 100).toFixed(2)} e R$ ${(maxSanityPriceCents / 100).toFixed(2)}. Nunca invente dados.`,
     `Levante o histórico de preços dos últimos 18 meses (${eighteenMonthsAgoIso} a ${todayIso}) no Brasil para: "${query}", incluindo obrigatoriamente os meses de ${eighteenMonthsAgoIso} a ${twelveMonthsAgoIso}.`
   );
 
@@ -482,9 +490,9 @@ Use somente preços reais observados (nunca abaixo do piso R$ ${(minSanityPriceC
     await runHistoryQuery(
       eighteenMonthsAgoIso,
       twelveMonthsAgoIso,
-      `Você é um pesquisador de histórico de preços no varejo brasileiro (Buscapé, Zoom, Keepa Brasil, Promobit, Pelando, TechTudo, Canaltech).
-Pesquise EXCLUSIVAMENTE o período histórico mais antigo de ${eighteenMonthsAgoIso} até ${twelveMonthsAgoIso} para "${query}" no Brasil.
-Retorne de 6 a 10 pontos mensais reais (incluindo Prime Day, Dia dos Pais, Dia das Crianças e promoções daquele semestre). Nunca abaixo de R$ ${(minSanityPriceCents / 100).toFixed(2)}.`,
+      `Você é um pesquisador de histórico de preços no varejo brasileiro (Buscapé, Zoom, Keepa Brasil, Bondfaro, JáCotei, Promobit, Pelando, Hardmob, PromoTrem, TechTudo, Canaltech).
+Pesquise EXCLUSIVAMENTE o período histórico mais antigo de ${eighteenMonthsAgoIso} até ${twelveMonthsAgoIso} para "${query}" no Brasil.${applianceHint}
+Retorne de 6 a 10 pontos mensais reais (incluindo Prime Day, Dia dos Pais, Dia das Crianças e promoções daquele semestre). Use apenas valores entre R$ ${(minSanityPriceCents / 100).toFixed(2)} e R$ ${(maxSanityPriceCents / 100).toFixed(2)}.`,
       `Histórico de preços no Brasil para "${query}" especificamente entre ${eighteenMonthsAgoIso} e ${twelveMonthsAgoIso}.`
     );
   }
@@ -1032,6 +1040,7 @@ async function fetchTravelLeadTimeHistory(params: {
   destinationLabel: string;
   originAirports: string[];
   nights: number;
+  adults: number;
   travelersLabel: string;
   outboundDate: string;
   returnDate: string;
@@ -1075,21 +1084,22 @@ async function fetchTravelLeadTimeHistory(params: {
           },
         },
       ],
-      instructions: `Você é um analista especialista em precificação sazonal e antecedência de compra no turismo brasileiro (Melhores Destinos, Google Flights, Kayak, Booking, Zarpo, Passagens Imperdíveis e sites oficiais dos resorts).
+      instructions: `Você é um analista especialista em precificação sazonal e antecedência de compra no turismo brasileiro.
+AMPLIE A BUSCA PARA TODAS AS FONTES VERIFICÁVEIS: além de Melhores Destinos, Google Flights, Kayak, Booking, Zarpo, Passagens Imperdíveis e sites oficiais dos resorts, pesquise **relatos verificáveis de hóspedes e viajantes em comunidades e avaliações** (TripAdvisor avaliações/fóruns, Reddit r/viagens, Reclame Aqui, Viaje na Viagem, comentários/posts de promoções da **Semana do Consumidor** em março, Black Friday, Dia das Mães e Aniversário do resort).
 O usuário planeja comprar em ${params.plannedPurchaseDate} para viajar de ${params.outboundDate} a ${params.returnDate} (${params.nights} noites, ${params.travelersLabel}) — hospedagem "${params.accommodationName}" e voos ${params.originAirports.join("/")}->${params.destinationAirport} (${params.destinationLabel}).
 Você DEVE responder à pergunta de antecedência ("delta compra -> viagem"):
 Para quem viaja na mesma temporada-alvo (mês ${targetMonth}, ex.: ${priorCycleTargetYm} e abertura de ${currentCycleTargetYm}), como evoluiu o preço conforme o mês da compra / antecedência?
-- Ciclo anterior (para viajar em ${priorCycleTargetYm}): inclua pontos mensais desde ~11 meses antes (ex.: Out/Nov Black Friday do ano passado, Dez, Jan, Fev, Mar, Abr, Mai, Jun, Jul, Ago até 1 mês antes do embarque).
+- Ciclo anterior (para viajar em ${priorCycleTargetYm}): inclua pontos mensais desde ~11 meses antes (ex.: Out/Nov Black Friday do ano passado, Dez, Jan, Fev, Mar/Semana do Consumidor, Abr, Mai, Jun, Jul, Ago até 1 mês antes do embarque).
 - Ciclo atual (para viajar em ${currentCycleTargetYm}): inclua pontos da abertura recente (ex.: Outubro e Novembro atuais / Black Friday atual).
 Retorne de 10 a 14 pontos em stay_points e de 10 a 14 pontos em flight_points com:
 - date: YYYY-MM-DD (data da compra/observação dentro de ${eighteenMonthsAgoIso} a ${todayIso})
-- price_brl: valor total realista em reais para ${params.nights} noites / ${params.travelersLabel} (baseado em tarifas e promoções reais publicadas)
-- source: fonte consultada (ex.: "Site Oficial", "Zarpo", "Melhores Destinos", "Google Flights", "Kayak")
+- price_brl: valor TOTAL para ${params.nights} noites / ${params.travelersLabel} (se um relato mencionar diária avulsa, multiplique por ${params.nights} noites para manter a mesma base comparável; nunca misture valor de 1 diária ou 1 passageiro como total)
+- source: fonte consultada (ex.: "TripAdvisor relato", "Semana do Consumidor", "Site Oficial", "Zarpo", "Melhores Destinos", "Google Flights", "Kayak")
 - lead_months_before_trip: número inteiro de meses entre a data da compra e o embarque daquele ciclo (0 a 12)
 - target_trip_month: "${priorCycleTargetYm}" ou "${currentCycleTargetYm}"
-- event_label: rótulo curto da janela (ex.: "Black Friday 25 · 10m antes", "Compra 6m antes", "Abertura Black Friday 26")
+- event_label: rótulo curto da janela (ex.: "Black Friday 25 · 10m antes", "Semana do Consumidor · 6m antes", "Abertura Black Friday 26")
 E preencha stay_best_window e flight_best_window indicando se a antecedência influencia o preço, quantos meses antes garantem a melhor tarifa (best_lead_months_min, best_lead_months_max, best_window_label) e uma recomendação direta em português.`,
-      input: `Levantamento por antecedência de compra (Black Friday anterior até abertura atual) para viajar no mês ${targetMonth}: hospedagem "${params.accommodationName}" (${params.nights} noites) e voos ${params.originAirports.join("/")}->${params.destinationAirport} (${params.travelersLabel}). Compra planejada: ${params.plannedPurchaseDate}, viagem: ${params.outboundDate} a ${params.returnDate}.`,
+      input: `Levantamento por antecedência de compra (Black Friday anterior, Semana do Consumidor em março, relatos de hóspedes no TripAdvisor/fóruns até abertura atual) para viajar no mês ${targetMonth}: hospedagem "${params.accommodationName}" (${params.nights} noites) e voos ${params.originAirports.join("/")}->${params.destinationAirport} (${params.travelersLabel}). Compra planejada: ${params.plannedPurchaseDate}, viagem: ${params.outboundDate} a ${params.returnDate}.`,
       text: {
         format: {
           type: "json_schema",
@@ -1146,6 +1156,19 @@ E preencha stay_best_window e flight_best_window indicando se a antecedência in
       };
     };
 
+    const validateTravelPoint = (priceCents: number, kind: "stay" | "flight"): boolean => {
+      if (!Number.isFinite(priceCents)) return false;
+      if (kind === "stay") {
+        const minStay = Math.max(50000, params.nights * 35000);
+        const maxStay = params.nights * 900000;
+        return priceCents >= minStay && priceCents <= maxStay;
+      }
+      const adultCount = Math.max(1, params.adults);
+      const minFlight = Math.max(30000, adultCount * 35000);
+      const maxFlight = adultCount * 600000;
+      return priceCents >= minFlight && priceCents <= maxFlight;
+    };
+
     const sanitize = (
       items:
         | Array<{
@@ -1157,14 +1180,14 @@ E preencha stay_best_window e flight_best_window indicando se a antecedência in
             event_label: string;
           }>
         | undefined,
-      minCents: number
+      kind: "stay" | "flight"
     ) => {
       const byDate = new Map<string, PriceHistoryPoint>();
       for (const pt of items ?? []) {
         if (!pt?.date || !/^\d{4}-\d{2}-\d{2}$/.test(pt.date)) continue;
         if (pt.date < eighteenMonthsAgoIso || pt.date > todayIso) continue;
         const priceCents = Math.round(Number(pt.price_brl) * 100);
-        if (!Number.isFinite(priceCents) || priceCents < minCents) continue;
+        if (!validateTravelPoint(priceCents, kind)) continue;
         byDate.set(pt.date, {
           date: pt.date,
           priceCents,
@@ -1195,8 +1218,8 @@ E preencha stay_best_window e flight_best_window indicando se a antecedência in
         : null;
 
     return {
-      stayPoints: sanitize(parsed.stay_points, 50000),
-      flightPoints: sanitize(parsed.flight_points, 30000),
+      stayPoints: sanitize(parsed.stay_points, "stay"),
+      flightPoints: sanitize(parsed.flight_points, "flight"),
       stayBestWindow: mapWindow(parsed.stay_best_window),
       flightBestWindow: mapWindow(parsed.flight_best_window),
     };
@@ -1257,6 +1280,7 @@ export async function trackTravelPrices(
     destinationLabel: destLabel,
     originAirports,
     nights,
+    adults,
     travelersLabel,
     outboundDate,
     returnDate,

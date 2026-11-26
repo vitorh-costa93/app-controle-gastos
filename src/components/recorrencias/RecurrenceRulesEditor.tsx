@@ -2,13 +2,14 @@
 
 import { DescriptionIcon } from "@/components/ui/DescriptionIcon";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { RecurrenceFrequency } from "@/types/domain";
 import { RECURRENCE_FREQUENCIES, frequencyLabel } from "@/lib/domain/recurrence";
 import { useRouter } from "next/navigation";
-import { X, Pencil } from "lucide-react";
+import { ChevronDown, ChevronRight, X, Pencil } from "lucide-react";
 import { RecurrenceRule } from "@/types/domain";
 import { Person, Category, TransactionType } from "@/types/db";
+import { CategoryIcon } from "@/components/ui/CategoryIcon";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { FieldGroup, Input, Select } from "@/components/ui/Field";
@@ -38,7 +39,34 @@ export function RecurrenceRulesEditor({
     setList(rules);
   }, [rules]);
 
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const peopleById = new Map(people.map((p) => [p.id, p.name]));
+
+  const groupedRules = useMemo(() => {
+    const categoriesById = new Map(categories.map((c) => [c.id, c.name]));
+    const groups = new Map<string, { key: string; name: string; totalCents: number; items: RecurrenceRule[] }>();
+    for (const rule of list) {
+      const catName =
+        (rule.categoryId ? categoriesById.get(rule.categoryId) : null) ??
+        (rule.direction === "income" ? "Entradas" : "Sem categoria");
+      const key = rule.categoryId ?? (rule.direction === "income" ? "__income__" : "__none__");
+      const existing = groups.get(key) ?? { key, name: catName, totalCents: 0, items: [] };
+      existing.totalCents += rule.amountCents;
+      existing.items.push(rule);
+      groups.set(key, existing);
+    }
+    const sorted = Array.from(groups.values()).sort((a, b) => {
+      if (a.key === "__income__" && b.key !== "__income__") return -1;
+      if (b.key === "__income__" && a.key !== "__income__") return 1;
+      if (a.key === "__none__" && b.key !== "__none__") return 1;
+      if (b.key === "__none__" && a.key !== "__none__") return -1;
+      return a.name.localeCompare(b.name, "pt-BR");
+    });
+    for (const g of sorted) {
+      g.items.sort((a, b) => b.amountCents - a.amountCents);
+    }
+    return sorted;
+  }, [list, categories]);
 
   return (
     <Card className="p-5">
@@ -49,50 +77,85 @@ export function RecurrenceRulesEditor({
         </Button>
       </div>
 
-      <ul className="mb-3 space-y-2">
-        {list.map((rule) => (
-          <li
-            key={rule.id}
-            className="flex items-center justify-between rounded-(--radius-md) border border-(--color-border) px-3 py-2"
-          >
-            <div className="flex items-center gap-2">
-              <DescriptionIcon description={rule.description} categoryName={categories.find((c) => c.id === rule.categoryId)?.name} />
-              <div>
-                <p className="text-sm font-medium">{rule.description}</p>
-                <p className="text-xs text-(--color-text-tertiary)">
-                  {peopleById.get(rule.personId) ?? "—"} · {formatCurrencyBRL(rule.amountCents)} · {frequencyLabel(rule.frequency)} · desde{" "}
-                  {formatDateBR(rule.startDate)}
-                  {rule.endDate && <> · até {formatDateBR(rule.endDate)}</>}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-1">
+      <div className="mb-3 space-y-3">
+        {groupedRules.map((group) => {
+          const isCollapsed = collapsedGroups.has(group.key);
+          return (
+            <div key={group.key} className="rounded-(--radius-md) border border-(--color-border)">
               <button
-                className="rounded-full p-1.5 text-(--color-text-tertiary) hover:bg-black/5"
-                onClick={() => setEditingRule(rule)}
-                aria-label="Editar recorrência"
-              >
-                <Pencil size={14} />
-              </button>
-              <button
-                className="rounded-full p-1.5 text-(--color-text-tertiary) hover:bg-black/5"
+                type="button"
                 onClick={() =>
-                  startTransition(async () => {
-                    const result = await deactivateRecurrenceRule(rule.id);
-                    if (result.ok) setList((prev) => prev.filter((r) => r.id !== rule.id));
+                  setCollapsedGroups((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(group.key)) next.delete(group.key);
+                    else next.add(group.key);
+                    return next;
                   })
                 }
-                aria-label="Desativar recorrência"
+                className="flex w-full items-center justify-between gap-2 bg-black/[0.02] px-3 py-2 text-left transition-colors hover:bg-black/[0.04]"
               >
-                <X size={14} />
+                <div className="flex items-center gap-2">
+                  <CategoryIcon name={group.name} size={15} />
+                  <span className="text-xs font-semibold text-(--color-text-primary)">{group.name}</span>
+                  <span className="rounded-full bg-black/[0.06] px-2 py-0.5 text-[11px] font-medium text-(--color-text-secondary)">
+                    {group.items.length}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold tabular-nums text-(--color-text-secondary)">
+                    {formatCurrencyBRL(group.totalCents)}
+                  </span>
+                  {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                </div>
               </button>
+
+              {!isCollapsed && (
+                <ul className="divide-y divide-(--color-border)">
+                  {group.items.map((rule) => (
+                    <li key={rule.id} className="flex items-center justify-between px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <DescriptionIcon description={rule.description} categoryName={group.name} />
+                        <div>
+                          <p className="text-sm font-medium">{rule.description}</p>
+                          <p className="text-xs text-(--color-text-tertiary)">
+                            {peopleById.get(rule.personId) ?? "—"} · {formatCurrencyBRL(rule.amountCents)} ·{" "}
+                            {frequencyLabel(rule.frequency)} · desde {formatDateBR(rule.startDate)}
+                            {rule.endDate && <> · até {formatDateBR(rule.endDate)}</>}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          className="rounded-full p-1.5 text-(--color-text-tertiary) hover:bg-black/5"
+                          onClick={() => setEditingRule(rule)}
+                          aria-label="Editar recorrência"
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        <button
+                          className="rounded-full p-1.5 text-(--color-text-tertiary) hover:bg-black/5"
+                          onClick={() =>
+                            startTransition(async () => {
+                              const result = await deactivateRecurrenceRule(rule.id);
+                              if (result.ok) setList((prev) => prev.filter((r) => r.id !== rule.id));
+                            })
+                          }
+                          aria-label="Desativar recorrência"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
-          </li>
-        ))}
+          );
+        })}
         {list.length === 0 && (
           <p className="text-sm text-(--color-text-tertiary)">Nenhuma recorrência fixa cadastrada.</p>
         )}
-      </ul>
+      </div>
 
       {showForm && (
         <NewRecurrenceForm

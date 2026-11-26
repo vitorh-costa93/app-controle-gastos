@@ -31,7 +31,15 @@ export function InspectionDrawer({ data, transactions, month, personId, filters,
   const personName = data.people.find((p) => p.id === personId)?.name ?? "Casal";
   const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const rows = scope.rows.filter((row) => normalize(row.description ?? "").includes(normalize(query)));
-  const groups = scope.categories.filter((c) => filters.category === "all" || c.id === filters.category).map((c) => ({ ...c, rows: rows.filter((r) => (r.categoryId ?? "none") === c.id) })).filter((c) => c.rows.length > 0);
+  const groups = scope.categories
+    .filter((c) => filters.category === "all" || c.id === filters.category)
+    .map((c) => ({
+      ...c,
+      rows: rows
+        .filter((r) => (r.categoryId ?? "none") === c.id)
+        .sort((a, b) => b.amountCents - a.amountCents),
+    }))
+    .filter((c) => c.rows.length > 0);
 
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;

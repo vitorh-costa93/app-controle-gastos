@@ -39,7 +39,7 @@ export function RecurrenceRulesEditor({
     setList(rules);
   }, [rules]);
 
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const peopleById = new Map(people.map((p) => [p.id, p.name]));
 
   const groupedRules = useMemo(() => {
@@ -79,13 +79,13 @@ export function RecurrenceRulesEditor({
 
       <div className="mb-3 space-y-3">
         {groupedRules.map((group) => {
-          const isCollapsed = collapsedGroups.has(group.key);
+          const isExpanded = expandedGroups.has(group.key);
           return (
             <div key={group.key} className="rounded-(--radius-md) border border-(--color-border)">
               <button
                 type="button"
                 onClick={() =>
-                  setCollapsedGroups((prev) => {
+                  setExpandedGroups((prev) => {
                     const next = new Set(prev);
                     if (next.has(group.key)) next.delete(group.key);
                     else next.add(group.key);
@@ -105,11 +105,11 @@ export function RecurrenceRulesEditor({
                   <span className="text-xs font-semibold tabular-nums text-(--color-text-secondary)">
                     {formatCurrencyBRL(group.totalCents)}
                   </span>
-                  {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                  {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                 </div>
               </button>
 
-              {!isCollapsed && (
+              {isExpanded && (
                 <ul className="divide-y divide-(--color-border)">
                   {group.items.map((rule) => (
                     <li key={rule.id} className="flex items-center justify-between px-3 py-2">

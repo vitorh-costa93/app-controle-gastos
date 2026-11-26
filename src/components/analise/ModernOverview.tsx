@@ -32,8 +32,6 @@ export function ModernOverview({ data, transactions, month, personId, onInspect,
   const totalForRing = breakdown.reduce((sum, category) => sum + Math.max(0, category.amountCents), 0);
   const expenses = transactions.filter((item) => item.considered && item.direction === "expense");
   const balance = useBalanceProjection("", data);
-  const personBalance = useBalanceProjection(personId, data, Boolean(personId));
-  const plannedBalance = personId ? personBalance : balance;
   const essential = data.householdCategoryBreakdown.filter((item) => item.categoryId && planning.reserveConfig.essentialCategoryIds.includes(item.categoryId)).reduce((sum, item) => sum + item.amountCents, 0);
   let offset = 0;
 
@@ -64,7 +62,7 @@ export function ModernOverview({ data, transactions, month, personId, onInspect,
       <p className="nm-footnote">Totais já incluídos nos gastos.</p>
     </section>
 
-    <PlannedCostsChart month={month} personName={personName} projection={plannedBalance} />
+    <PlannedCostsChart month={month} personId={personId} personName={personName} refreshKey={data} />
     <MonthlyPaymentsPanel key={`${month}|${personId}`} month={month} personId={personId} personName={personName} />
   </div>;
 }

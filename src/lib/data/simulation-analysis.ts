@@ -60,6 +60,87 @@ export async function getBaseMonthSummaries(
   return map;
 }
 
+export interface PlannedCostMonth {
+  referenceMonth: string;
+  fixedCents: number;
+  installmentCents: number;
+  variableCents: number;
+  totalCents: number;
+}
+
+function addMonthsPure(ym: string, delta: number): string {
+  const [y, m] = ym.split("-").map(Number);
+  if (!y || !m) return ym;
+  const total = y * 12 + (m - 1) + delta;
+  const ny = Math.floor(total / 12);
+  const nm = (total % 12) + 1;
+  return `${ny}-${String(nm).padStart(2, "0")}`;
+}
+
+export async function getPlannedCostsBreakdown(
+  startMonth: string,
+  personId?: string
+): Promise<PlannedCostMonth[]> {
+  const endMonth = addMonthsPure(startMonth, 11);
+  const { month: currentMonth, day: dayOfMonth } = getBrazilTodayParts();
+  const [rules, transactions, people, types] = await Promise.all([
+    listActiveRecurrenceRules(),
+    listConsideredTransactionsInRange(startMonth, endMonth),
+    listPeople(),
+    listTransactionTypes(),
+  ]);
+
+  const months = monthRange(startMonth, endMonth);
+  const currentOrPast = months.filter((m) => !isOpenMonth(m, currentMonth, dayOfMonth));
+  const [estimatedSalary, analysisSalaryByMonth] = await Promise.all([
+    getEstimatedSalaryOccurrences(months, people, types),
+    currentOrPast.length > 0
+      ? getSalaryProjectionOccurrences(currentOrPast, people, types, transactions)
+      : Promise.resolve(new Map<string, MonthlyOccurrence[]>()),
+  ]);
+  const salaryByMonth = new Map([...analysisSalaryByMonth, ...estimatedSalary.byMonth]);
+  const estimatesByMonth = await getEstimatedExpenseOccurrences(months, dayOfMonth > 15 ? "analysis" : "simulation", transactions);
+
+  return months.map((month) => {
+    const allOccurrences = buildSimulationMonthOccurrences({
+      month,
+      currentMonth,
+      dayOfMonth,
+      transactions,
+      rules,
+      salaryOccurrences: salaryByMonth.get(month) ?? [],
+      estimatedSalaryPersonId: estimatedSalary.personId,
+      estimateOccurrences: estimatesByMonth.get(month),
+    });
+    const scoped = (personId ? allOccurrences.filter((o) => o.personId === personId) : allOccurrences).filter(
+      (o) => o.considered && o.direction === "expense"
+    );
+
+    let fixedCents = 0;
+    let installmentCents = 0;
+    let variableCents = 0;
+
+    for (const o of scoped) {
+      if (o.installmentTotal > 1) {
+        installmentCents += o.amountCents;
+        variableCents += o.amountCents;
+      } else if (Boolean(o.recurrenceRuleId) || o.id.startsWith("estimate:") || o.fixedVariable === "fixed") {
+        fixedCents += o.amountCents;
+      } else {
+        variableCents += o.amountCents;
+      }
+    }
+
+    return {
+      referenceMonth: month,
+      fixedCents,
+      installmentCents,
+      variableCents,
+      totalCents: fixedCents + variableCents,
+    };
+  });
+}
+
 export async function generateScenarioAiSummary(
   simulation: Simulation | Simulation[],
   comparison: ScenarioComparisonMonth[]

@@ -21,6 +21,7 @@ export function InspectionDrawer({ data, transactions, month, personId, filters,
   const [query, setQuery] = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [transaction, setTransaction] = useState<Transaction | null>(null);
+  const [projectedRecurring, setProjectedRecurring] = useState<MonthlyOccurrence | null>(null);
   const [projected, setProjected] = useState<MonthlyOccurrence | null>(null);
   const [opening, setOpening] = useState(false);
   const [error, setError] = useState("");
@@ -50,6 +51,7 @@ export function InspectionDrawer({ data, transactions, month, personId, filters,
   }, []);
 
   async function edit(row: MonthlyOccurrence) {
+    if (row.origin === "projected" && row.recurrenceRuleId) { setProjectedRecurring(row); return; }
     if (row.origin === "projected") { setProjected(row); return; }
     setError(""); setOpening(true);
     try { setTransaction(await getTransactionForEditing(row.id)); }
@@ -57,18 +59,18 @@ export function InspectionDrawer({ data, transactions, month, personId, filters,
     finally { setOpening(false); }
   }
   async function changed() {
-    setTransaction(null); setProjected(null);
+    setTransaction(null); setProjectedRecurring(null); setProjected(null);
     try { await onChanged(); } catch { setError("Alteração salva. Não foi possível atualizar os totais; atualize a página."); }
   }
   return <div className="ni-overlay" ref={root} onKeyDown={(event) => {
-    if (event.key === "Escape" && !transaction && !projected && !opening) { event.stopPropagation(); onClose(); }
-    if (event.key !== "Tab" || transaction || projected) return;
+    if (event.key === "Escape" && !transaction && !projectedRecurring && !projected && !opening) { event.stopPropagation(); onClose(); }
+    if (event.key !== "Tab" || transaction || projectedRecurring || projected) return;
     const candidates = Array.from(root.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]') ?? []).filter((el) => el.getClientRects().length);
     const first = candidates[0], last = candidates[candidates.length - 1];
     if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
     else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
   }}>
-    <button type="button" className="ni-backdrop" tabIndex={-1} aria-label="Fechar conferência" onClick={() => { if (!transaction && !projected && !opening) onClose(); }} />
+    <button type="button" className="ni-backdrop" tabIndex={-1} aria-label="Fechar conferência" onClick={() => { if (!transaction && !projectedRecurring && !projected && !opening) onClose(); }} />
     <aside className="ni-drawer" role="dialog" aria-modal="true" aria-labelledby="ni-title" aria-busy={opening}>
       <header><div className="ni-title"><CategoryIcon name={filters.bank === "all" ? title : bankName} size={23} /><div><h2 id="ni-title">Conferir {title}</h2><p>{formatMonthLabel(month)} · {personName}</p></div></div><button type="button" aria-label="Fechar conferência" onClick={onClose} disabled={opening}><X size={20} /></button></header>
       <div className="ni-total"><strong>{formatCurrencyBRL(scope.totalCents)}</strong><p>Mês de referência · {filters.includeProjected ? "reais e projetados" : "somente reais"}</p><small>Não corresponde automaticamente ao fechamento da fatura.</small></div>
@@ -81,7 +83,7 @@ export function InspectionDrawer({ data, transactions, month, personId, filters,
       {!groups.length && <p className="ni-empty">Nenhum lançamento encontrado neste escopo.</p>}
       <footer><span>Total do escopo<strong>{formatCurrencyBRL(scope.totalCents)}</strong></span><button type="button" onClick={onOpenPivot}>Abrir na tabela dinâmica</button></footer>
     </aside>
-    {transaction && <TransactionEditor open transaction={transaction} people={data.people} categories={data.categories} types={data.types} recurrenceRules={data.recurrenceRules} onClose={() => setTransaction(null)} onSaved={() => void changed()} />}
+    {(transaction || projectedRecurring) && <TransactionEditor open transaction={transaction} projectedOccurrence={projectedRecurring} people={data.people} categories={data.categories} types={data.types} recurrenceRules={data.recurrenceRules} onClose={() => { setTransaction(null); setProjectedRecurring(null); }} onSaved={() => void changed()} />}
     {projected && <MovementDetailsDialog occurrence={projected} rule={data.recurrenceRules.find((r) => r.id === projected.recurrenceRuleId)} people={data.people} categories={data.categories} types={data.types} onClose={() => setProjected(null)} onChanged={() => void changed()} />}
   </div>;
 }

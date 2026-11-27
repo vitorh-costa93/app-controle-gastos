@@ -771,6 +771,219 @@ export async function updateTransactionWithScope(
   return { ok: true, data: mapTransactionRow(row) };
 }
 
+export async function updateProjectedRecurrenceWithScope(
+  ruleId: string,
+  referenceMonth: string,
+  input: TransactionInput,
+  scope: EditScope
+): Promise<{ ok: true; data: Transaction } | { ok: false; error: string }> {
+  const supabase = createAdminClient();
+  const { data: rule, error: ruleError } = await supabase
+    .from("recurrence_rules")
+    .select("*")
+    .eq("id", ruleId)
+    .single();
+
+  if (ruleError || !rule) {
+    return { ok: false, error: "Recorrência não encontrada." };
+  }
+
+  const amountStr = centsToReaisString(input.amountCents);
+  const patch = {
+    bank: input.bank ?? null,
+    registration_date: input.registrationDate,
+    reference_month: input.referenceMonth,
+    person_id: input.personId,
+    direction: input.direction,
+    fixed_variable: input.fixedVariable,
+    type_id: input.typeId,
+    category_id: input.categoryId,
+    installment_current: input.installmentCurrent,
+    installment_total: input.installmentTotal,
+    amount: amountStr,
+    description: input.description,
+    considered: input.considered,
+  };
+
+  const nowIso = new Date().toISOString();
+  const syntheticTransaction: Transaction = {
+    id: ruleId,
+    bank: input.bank ?? null,
+    registrationDate: input.registrationDate,
+    referenceMonth: input.referenceMonth,
+    personId: input.personId,
+    direction: input.direction,
+    fixedVariable: input.fixedVariable,
+    typeId: input.typeId,
+    categoryId: input.categoryId,
+    installmentCurrent: input.installmentCurrent,
+    installmentTotal: input.installmentTotal,
+    amountCents: input.amountCents,
+    description: input.description,
+    considered: input.considered,
+    validated: true,
+    source: "manual",
+    aiConfidence: null,
+    recurrenceRuleId: input.fixedVariable === "fixed" ? ruleId : null,
+    installmentGroupId: null,
+    unplannedExcluded: false,
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  };
+
+  if (scope === "month") {
+    const { data: existing } = await supabase
+      .from("transactions")
+      .select("id")
+      .eq("recurrence_rule_id", ruleId)
+      .eq("reference_month", referenceMonth)
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    const { data: savedRow, error: saveError } = existing
+      ? await supabase.from("transactions").update(patch).eq("id", existing.id).select("*").single()
+      : await supabase
+          .from("transactions")
+          .insert({
+            ...patch,
+            recurrence_rule_id: input.fixedVariable === "fixed" ? ruleId : null,
+            source: "manual",
+            validated: true,
+          })
+          .select("*")
+          .single();
+
+    if (saveError || !savedRow) {
+      return { ok: false, error: "Não foi possível salvar as alterações deste mês." };
+    }
+
+    revalidatePath("/cadastro");
+    revalidatePath("/simulacao");
+    revalidateTag("recurrence-rules");
+    revalidateTag("analysis");
+    revalidatePath("/analise");
+    return { ok: true, data: mapTransactionRow(savedRow as TransactionRow) };
+  }
+
+  const multiPatch = {
+    bank: patch.bank,
+    person_id: patch.person_id,
+    direction: patch.direction,
+    fixed_variable: patch.fixed_variable,
+    type_id: patch.type_id,
+    category_id: patch.category_id,
+    installment_total: patch.installment_total,
+    amount: patch.amount,
+    description: patch.description,
+    considered: patch.considered,
+  };
+
+  let txQuery = supabase
+    .from("transactions")
+    .update(multiPatch)
+    .eq("recurrence_rule_id", ruleId)
+    .is("deleted_at", null);
+  if (scope === "following") {
+    txQuery = txQuery.gte("reference_month", referenceMonth);
+  }
+  const { error: txError } = await txQuery;
+  if (txError) {
+    return { ok: false, error: "Não foi possível atualizar os lançamentos vinculados." };
+  }
+
+  if (scope === "following") {
+    if (input.fixedVariable === "fixed") {
+      const { data: versions, error: versionsError } = await supabase
+        .from("recurrence_rule_amount_versions")
+        .select("effective_from, amount")
+        .eq("recurrence_rule_id", ruleId)
+        .order("effective_from");
+      if (versionsError) {
+        return { ok: false, error: "Não foi possível carregar o histórico de valores da recorrência." };
+      }
+
+      const startMonth = String(rule.start_date).slice(0, 7);
+      if (referenceMonth > startMonth && !versions?.some((v) => v.effective_from <= startMonth)) {
+        const { error } = await supabase.from("recurrence_rule_amount_versions").upsert(
+          { recurrence_rule_id: ruleId, effective_from: startMonth, amount: rule.amount },
+          { onConflict: "recurrence_rule_id,effective_from" }
+        );
+        if (error) return { ok: false, error: "Não foi possível preservar o valor dos meses anteriores." };
+      }
+
+      const { error: versionError } = await supabase.from("recurrence_rule_amount_versions").upsert(
+        { recurrence_rule_id: ruleId, effective_from: referenceMonth, amount: amountStr },
+        { onConflict: "recurrence_rule_id,effective_from" }
+      );
+      if (versionError) return { ok: false, error: "Não foi possível salvar a nova versão de valor." };
+
+      await supabase
+        .from("recurrence_rule_amount_versions")
+        .update({ amount: amountStr })
+        .eq("recurrence_rule_id", ruleId)
+        .gt("effective_from", referenceMonth);
+
+      await syncFixedRecurrence(supabase, ruleId, {
+        bank: input.bank ?? null,
+        personId: input.personId,
+        direction: input.direction,
+        typeId: input.typeId,
+        categoryId: input.categoryId,
+        amountCents: input.amountCents,
+        registrationDate: input.registrationDate,
+        description: input.description,
+        endDate: input.fixedEndDate !== undefined ? input.fixedEndDate : rule.end_date ?? null,
+        frequency: input.fixedFrequency,
+      });
+    } else {
+      const startMonth = String(rule.start_date).slice(0, 7);
+      if (referenceMonth <= startMonth) {
+        await deactivateFixedRecurrence(supabase, ruleId);
+      } else {
+        const [py, pm] = referenceMonth.split("-").map(Number);
+        const prevTotal = py * 12 + (pm - 1) - 1;
+        const prevMonth = `${Math.floor(prevTotal / 12)}-${String((prevTotal % 12) + 1).padStart(2, "0")}`;
+        await supabase.from("recurrence_rules").update({ end_date: `${prevMonth}-01` }).eq("id", ruleId);
+      }
+      await supabase.from("transactions").insert({
+        ...patch,
+        recurrence_rule_id: null,
+        source: "manual",
+        validated: true,
+      });
+    }
+  } else {
+    if (input.fixedVariable === "fixed") {
+      await syncFixedRecurrence(supabase, ruleId, {
+        bank: input.bank ?? null,
+        personId: input.personId,
+        direction: input.direction,
+        typeId: input.typeId,
+        categoryId: input.categoryId,
+        amountCents: input.amountCents,
+        registrationDate: input.registrationDate,
+        description: input.description,
+        endDate: input.fixedEndDate !== undefined ? input.fixedEndDate : rule.end_date ?? null,
+        frequency: input.fixedFrequency,
+      });
+      await supabase
+        .from("recurrence_rule_amount_versions")
+        .update({ amount: amountStr })
+        .eq("recurrence_rule_id", ruleId);
+    } else {
+      await deactivateFixedRecurrence(supabase, ruleId);
+    }
+  }
+
+  revalidatePath("/cadastro");
+  revalidatePath("/simulacao");
+  revalidatePath("/configuracoes");
+  revalidateTag("recurrence-rules");
+  revalidateTag("analysis");
+  revalidatePath("/analise");
+  return { ok: true, data: syntheticTransaction };
+}
+
 export async function deleteTransactionWithScope(
   id: string,
   scope: EditScope

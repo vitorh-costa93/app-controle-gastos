@@ -6,8 +6,9 @@ import { useInterface } from "@/components/layout/InterfaceProvider";
 import { RecurrenceFrequency } from "@/types/domain";
 import { RECURRENCE_FREQUENCIES } from "@/lib/domain/recurrence";
 import { Bank, Person, Category, TransactionType } from "@/types/db";
-import { Transaction, RecurrenceRule } from "@/types/domain";
-import { createTransaction, updateTransactionWithScope, deleteTransactionWithScope, checkManualTransactionDuplicates, type ManualDuplicateResult, type EditScope, TransactionInput } from "@/lib/data/transactions";
+import { Transaction, RecurrenceRule, MonthlyOccurrence } from "@/types/domain";
+import { createTransaction, updateTransactionWithScope, updateProjectedRecurrenceWithScope, deleteTransactionWithScope, checkManualTransactionDuplicates, type ManualDuplicateResult, type EditScope, TransactionInput } from "@/lib/data/transactions";
+import { deleteRecurringOccurrence } from "@/lib/data/recurrence";
 import { defaultOrganization, type PaymentOrganization } from "@/lib/domain/payments";
 import { getPaymentOrganization, savePaymentOrganization } from "@/lib/data/payments";
 import { PaymentOrganizationFields } from "@/components/payments/PaymentOrganizationFields";
@@ -29,6 +30,7 @@ type TransactionEditorProps = {
   categories: Category[];
   types: TransactionType[];
   transaction?: Transaction | null;
+  projectedOccurrence?: MonthlyOccurrence | null;
   initialMonth?: string;
   recurrenceRules: RecurrenceRule[];
   onSaved?: (t: Transaction) => void;
@@ -36,38 +38,48 @@ type TransactionEditorProps = {
 
 export function TransactionEditor(props: TransactionEditorProps) {
   // Cada abertura tem sua própria sessão, inclusive após sucesso ou gravação parcial.
-  return props.open ? <TransactionEditorSession key={props.transaction?.id ?? "new"} {...props} /> : null;
+  return props.open ? <TransactionEditorSession key={props.transaction?.id ?? props.projectedOccurrence?.id ?? "new"} {...props} /> : null;
 }
 
-function TransactionEditorSession({ open, onClose, people, categories, types, transaction, recurrenceRules, onSaved, initialMonth }: TransactionEditorProps) {
+function TransactionEditorSession({ open, onClose, people, categories, types, transaction, projectedOccurrence, recurrenceRules, onSaved, initialMonth }: TransactionEditorProps) {
   const { isModern } = useInterface();
   const router = useRouter();
   const today = new Date();
-  const [form, setForm] = useState(() => ({ ...buildInitialForm(transaction, today, people, recurrenceRules), ...(!transaction && initialMonth && /^\d{4}-(0[1-9]|1[0-2])$/.test(initialMonth) ? { referenceMonth: initialMonth } : {}) }));
+  const projectedRuleId = !transaction && projectedOccurrence?.recurrenceRuleId ? projectedOccurrence.recurrenceRuleId : null;
+  const isProjectedRecurring = Boolean(projectedRuleId);
+  const isEditing = Boolean(transaction || isProjectedRecurring);
+  const [form, setForm] = useState(() => ({ ...buildInitialForm(transaction, projectedOccurrence, today, people, recurrenceRules), ...(!isEditing && initialMonth && /^\d{4}-(0[1-9]|1[0-2])$/.test(initialMonth) ? { referenceMonth: initialMonth } : {}) }));
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [confirmModal, setConfirmModal] = useState<{ mode: "save"; confirmed?: "matches" | "error" } | { mode: "delete" } | null>(null);
   const [isDeleting, startDeleteTransition] = useTransition();
-  const [payment, setPayment] = useState<PaymentOrganization>(() => defaultOrganization({ bank: transaction?.bank ?? null, description: transaction?.description ?? null, categoryName: categories.find((category) => category.id === transaction?.categoryId)?.name }));
+  const sourceItem = transaction ?? (isProjectedRecurring ? projectedOccurrence : null);
+  const [payment, setPayment] = useState<PaymentOrganization>(() => defaultOrganization({ bank: sourceItem?.bank ?? null, description: sourceItem?.description ?? null, categoryName: categories.find((category) => category.id === sourceItem?.categoryId)?.name }));
   const [paymentDirty, setPaymentDirty] = useState(false);
   const paymentScope: EditScope = "following";
   const [paymentLoad, setPaymentLoad] = useState<{ month: string; error: string | null } | null>(null);
   const [paymentRetry, setPaymentRetry] = useState(0);
-  const [committed, setCommitted] = useState<{ transaction: Transaction; settings: PaymentOrganization; month: string; scope: EditScope } | null>(null);
+  const [committed, setCommitted] = useState<{ transaction: Transaction; targetKind: "transaction" | "recurrence"; targetId: string; settings: PaymentOrganization; month: string; scope: EditScope } | null>(null);
   const paymentRequest = useRef(0);
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const paymentMonth = form.referenceMonth;
   const isExpense = form.direction === "expense";
-  const hasSavedExpense = transaction?.direction === "expense";
+  const hasSavedExpense = transaction?.direction === "expense" || (isProjectedRecurring && projectedOccurrence?.direction === "expense");
   const effectivePayment = !hasSavedExpense && !paymentDirty ? defaultOrganization({ bank: form.bank || null, description: form.description || null, categoryName: categories.find((category) => category.id === form.categoryId)?.name }) : payment;
   const paymentLoading = Boolean(isExpense && hasSavedExpense && !paymentDirty && paymentLoad?.month !== paymentMonth);
   useEffect(() => {
     const request = paymentRequest;
     const id = ++request.current;
-    if (!isExpense || !transaction || !hasSavedExpense || paymentDirty) return;
-    void getPaymentOrganization({ kind: "transaction", id: transaction.id, month: paymentMonth })
+    if (!isExpense || !hasSavedExpense || paymentDirty) return;
+    const target = transaction
+      ? ({ kind: "transaction", id: transaction.id, month: paymentMonth } as const)
+      : projectedRuleId
+        ? ({ kind: "recurrence", id: projectedRuleId, month: paymentMonth } as const)
+        : null;
+    if (!target) return;
+    void getPaymentOrganization(target)
       .then((result) => {
         if (id !== request.current) return;
         if (result.ok) setPayment(result.settings);
@@ -75,7 +87,7 @@ function TransactionEditorSession({ open, onClose, people, categories, types, tr
       })
       .catch(() => { if (id === request.current) setPaymentLoad({ month: paymentMonth, error: "Não foi possível carregar a organização." }); });
     return () => { ++request.current; };
-  }, [transaction, isExpense, hasSavedExpense, paymentMonth, paymentDirty, paymentRetry]);
+  }, [transaction, projectedRuleId, isExpense, hasSavedExpense, paymentMonth, paymentDirty, paymentRetry]);
   const [duplicateState, setDuplicateState] = useState<ManualDuplicateResult | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [retry, setRetry] = useState(0);
@@ -161,7 +173,13 @@ function TransactionEditorSession({ open, onClose, people, categories, types, tr
       }
       let result: Awaited<ReturnType<typeof createTransaction>>;
       try {
-        result = transaction ? await updateTransactionWithScope(transaction.id, input, chosenScope) : await createTransaction(input);
+        if (transaction) {
+          result = await updateTransactionWithScope(transaction.id, input, chosenScope);
+        } else if (isProjectedRecurring && projectedRuleId && projectedOccurrence) {
+          result = await updateProjectedRecurrenceWithScope(projectedRuleId, projectedOccurrence.referenceMonth, input, chosenScope);
+        } else {
+          result = await createTransaction(input);
+        }
       } catch {
         if (!mounted.current) return;
         saveLock.current = false;
@@ -179,8 +197,10 @@ function TransactionEditorSession({ open, onClose, people, categories, types, tr
         return;
       }
       if (isExpense && paymentDirty) {
-        const effectiveScope: EditScope = transaction ? chosenScope : paymentScope;
-        const pending = { transaction: result.data, settings: effectivePayment, month: form.referenceMonth, scope: effectiveScope };
+        const effectiveScope: EditScope = isEditing ? chosenScope : paymentScope;
+        const targetKind: "transaction" | "recurrence" = isProjectedRecurring && chosenScope !== "month" ? "recurrence" : "transaction";
+        const targetId = targetKind === "recurrence" && projectedRuleId ? projectedRuleId : result.data.id;
+        const pending = { transaction: result.data, targetKind, targetId, settings: effectivePayment, month: form.referenceMonth, scope: effectiveScope };
         setCommitted(pending);
         const saved = await persistPayment(pending);
         if (!saved) {
@@ -195,7 +215,7 @@ function TransactionEditorSession({ open, onClose, people, categories, types, tr
 
   async function persistPayment(pending: NonNullable<typeof committed>): Promise<boolean> {
     try {
-      const result = await savePaymentOrganization({ targets: [{ kind: "transaction", id: pending.transaction.id, month: pending.month }], settings: pending.settings, scope: pending.scope });
+      const result = await savePaymentOrganization({ targets: [{ kind: pending.targetKind, id: pending.targetId, month: pending.month }], settings: pending.settings, scope: pending.scope });
       if (!mounted.current) return false;
       if (result.ok) return true;
       setErrorMessage(result.error);
@@ -227,9 +247,13 @@ function TransactionEditorSession({ open, onClose, people, categories, types, tr
   }
 
   function handleDelete(chosenScope: EditScope) {
-    if (!transaction) return;
+    if (!isEditing) return;
     startDeleteTransition(async () => {
-      const result = await deleteTransactionWithScope(transaction.id, chosenScope);
+      const result = transaction
+        ? await deleteTransactionWithScope(transaction.id, chosenScope)
+        : projectedRuleId && projectedOccurrence
+          ? await deleteRecurringOccurrence(projectedRuleId, projectedOccurrence.referenceMonth, chosenScope)
+          : { ok: false as const, error: "Lançamento não encontrado." };
       if (!mounted.current) return;
       setConfirmModal(null);
       if (!result.ok) {
@@ -237,7 +261,34 @@ function TransactionEditorSession({ open, onClose, people, categories, types, tr
         setSaveState("error");
         return;
       }
-      onSaved?.(transaction);
+      if (transaction) {
+        onSaved?.(transaction);
+      } else if (projectedOccurrence) {
+        onSaved?.({
+          id: projectedOccurrence.id,
+          bank: projectedOccurrence.bank,
+          registrationDate: projectedOccurrence.registrationDate,
+          referenceMonth: projectedOccurrence.referenceMonth,
+          personId: projectedOccurrence.personId,
+          direction: projectedOccurrence.direction,
+          fixedVariable: projectedOccurrence.fixedVariable,
+          typeId: projectedOccurrence.typeId,
+          categoryId: projectedOccurrence.categoryId,
+          installmentCurrent: projectedOccurrence.installmentCurrent,
+          installmentTotal: projectedOccurrence.installmentTotal,
+          amountCents: projectedOccurrence.amountCents,
+          description: projectedOccurrence.description,
+          considered: projectedOccurrence.considered,
+          validated: true,
+          source: "manual",
+          aiConfidence: null,
+          recurrenceRuleId: projectedOccurrence.recurrenceRuleId,
+          installmentGroupId: projectedOccurrence.installmentGroupId ?? null,
+          unplannedExcluded: false,
+          createdAt: "",
+          updatedAt: "",
+        });
+      }
       router.refresh();
       onClose();
     });
@@ -318,7 +369,7 @@ function TransactionEditorSession({ open, onClose, people, categories, types, tr
   </>;
 
   return (
-    <EditorContainer modern={isModern} open={open} onClose={busy ? () => {} : onClose} title={transaction ? "Editar lançamento" : "Novo lançamento"}>
+    <EditorContainer modern={isModern} open={open} onClose={busy ? () => {} : onClose} title={isEditing ? "Editar lançamento" : "Novo lançamento"}>
       {isModern && <>
         <fieldset disabled={busy || Boolean(committed)} className="modern-editor-essential grid grid-cols-1 gap-4 sm:grid-cols-2">
           {descriptionField}{amountField}{categoryField}{personField}
@@ -436,7 +487,7 @@ function TransactionEditorSession({ open, onClose, people, categories, types, tr
               onChange={(e) => update("installmentTotal", Number(e.target.value) || 1)}
             />
           </div>
-          {!transaction && form.fixedVariable === "variable" && form.installmentTotal > form.installmentCurrent && (
+          {!isEditing && form.fixedVariable === "variable" && form.installmentTotal > form.installmentCurrent && (
             <p className="mt-1 text-xs text-(--color-text-tertiary)">
               As parcelas {form.installmentCurrent + 1} a {form.installmentTotal} serão criadas nos meses seguintes.
             </p>
@@ -454,10 +505,10 @@ function TransactionEditorSession({ open, onClose, people, categories, types, tr
         {isModern && <h3 className="modern-editor-section-title">Organização do pagamento</h3>}
         {paymentLoading && <p className="text-sm text-(--color-text-tertiary)">Carregando organização de pagamento...</p>}
         {paymentLoad?.error && !paymentDirty && paymentLoad.month === paymentMonth && <p className="text-sm text-(--color-negative)">{paymentLoad.error} <button type="button" className="underline" onClick={() => { setPaymentLoad(null); setPaymentRetry((v) => v + 1); }}>Tentar novamente</button></p>}
-        {paymentDirty && transaction && paymentLoad?.month !== paymentMonth && <p className="mb-2 text-sm text-amber-700">O mês mudou; sua organização editada foi mantida para o novo mês.</p>}
+        {paymentDirty && isEditing && paymentLoad?.month !== paymentMonth && <p className="mb-2 text-sm text-amber-700">O mês mudou; sua organização editada foi mantida para o novo mês.</p>}
         {!validPaymentGroup && <p className="text-sm text-(--color-negative)">Informe um grupo de até 80 caracteres para exibir no início do mês.</p>}
         {!validDueDay && <p className="text-sm text-(--color-negative)">Informe um dia de vencimento entre 1 e 31.</p>}
-        {!transaction && !paymentDirty && (effectivePayment.method === "nubank" || effectivePayment.method === "picpay") && <p className="mb-2 text-sm text-(--color-text-secondary)">Sem edição, segue a organização existente da fatura.</p>}
+        {!isEditing && !paymentDirty && (effectivePayment.method === "nubank" || effectivePayment.method === "picpay") && <p className="mb-2 text-sm text-(--color-text-secondary)">Sem edição, segue a organização existente da fatura.</p>}
         <PaymentOrganizationFields value={effectivePayment} onChange={(value) => { setPayment(value); setPaymentDirty(true); }} disabled={busy || Boolean(committed) || paymentLoading} />
       </div>}
 
@@ -480,7 +531,7 @@ function TransactionEditorSession({ open, onClose, people, categories, types, tr
 
         <div className="flex items-center gap-2">
           {committed ? <><Button variant="secondary" onClick={onClose} disabled={busy} type="button">Fechar, lançamento já salvo</Button><Button onClick={retryPayment} disabled={busy} type="button">Tentar salvar organização novamente</Button></> : <>
-          {transaction && (
+          {isEditing && (
             <Button
               variant="ghost"
               onClick={() => setConfirmModal({ mode: "delete" })}
@@ -497,7 +548,7 @@ function TransactionEditorSession({ open, onClose, people, categories, types, tr
           <Button
             onClick={() => {
               const dupMode = visibleResult ? (visibleResult.ok && visibleResult.matches.length ? "matches" : !visibleResult.ok ? "error" : undefined) : undefined;
-              if (transaction) {
+              if (isEditing) {
                 setConfirmModal({ mode: "save", confirmed: dupMode });
               } else {
                 handleSave(dupMode);
@@ -512,11 +563,11 @@ function TransactionEditorSession({ open, onClose, people, categories, types, tr
         </div>
       </div>
 
-      {transaction && confirmModal && (
+      {isEditing && confirmModal && (
         <ScopeConfirmModal
           open
           mode={confirmModal.mode}
-          allowMultiMonth={Boolean(transaction.recurrenceRuleId || (transaction.installmentGroupId && transaction.installmentTotal > 1))}
+          allowMultiMonth={Boolean(transaction?.recurrenceRuleId || projectedRuleId || (transaction?.installmentGroupId && transaction.installmentTotal > 1))}
           busy={busy || isDeleting}
           onClose={() => setConfirmModal(null)}
           onConfirm={(chosenScope) => {
@@ -543,30 +594,32 @@ function EditorContainer({ open, onClose, title, children }: { modern: boolean; 
 
 function buildInitialForm(
   transaction: Transaction | null | undefined,
+  projectedOccurrence: MonthlyOccurrence | null | undefined,
   today: Date,
   people: Person[],
   recurrenceRules: RecurrenceRule[]
 ) {
-  if (transaction) {
-    const linkedRule = transaction.recurrenceRuleId
-      ? recurrenceRules.find((r) => r.id === transaction.recurrenceRuleId)
+  const source = transaction ?? (projectedOccurrence?.recurrenceRuleId ? projectedOccurrence : null);
+  if (source) {
+    const linkedRule = source.recurrenceRuleId
+      ? recurrenceRules.find((r) => r.id === source.recurrenceRuleId)
       : undefined;
     return {
-      bank: (transaction.bank ?? "") as Bank | "",
-      registrationDate: transaction.registrationDate,
-      referenceMonth: transaction.referenceMonth,
-      personId: transaction.personId,
-      direction: transaction.direction,
-      fixedVariable: transaction.fixedVariable,
+      bank: (source.bank ?? "") as Bank | "",
+      registrationDate: source.registrationDate,
+      referenceMonth: source.referenceMonth,
+      personId: source.personId,
+      direction: source.direction,
+      fixedVariable: source.fixedVariable,
       fixedEndMonth: linkedRule?.endDate ? linkedRule.endDate.slice(0, 7) : "",
       fixedFrequency: (linkedRule?.frequency ?? "monthly") as RecurrenceFrequency,
-      typeId: transaction.typeId ?? "",
-      categoryId: transaction.categoryId ?? "",
-      installmentCurrent: transaction.installmentCurrent,
-      installmentTotal: transaction.installmentTotal,
-      amountCents: transaction.amountCents,
-      description: transaction.description ?? "",
-      considered: transaction.considered,
+      typeId: source.typeId ?? "",
+      categoryId: source.categoryId ?? "",
+      installmentCurrent: source.installmentCurrent,
+      installmentTotal: source.installmentTotal,
+      amountCents: source.amountCents,
+      description: source.description ?? "",
+      considered: source.considered,
     };
   }
 

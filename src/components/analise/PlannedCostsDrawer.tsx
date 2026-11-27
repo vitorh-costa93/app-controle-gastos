@@ -29,6 +29,7 @@ export function PlannedCostsDrawer({
   const [query, setQuery] = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [transaction, setTransaction] = useState<Transaction | null>(null);
+  const [projectedRecurring, setProjectedRecurring] = useState<MonthlyOccurrence | null>(null);
   const [projected, setProjected] = useState<MonthlyOccurrence | null>(null);
   const [opening, setOpening] = useState(false);
   const [error, setError] = useState("");
@@ -71,6 +72,10 @@ export function PlannedCostsDrawer({
   }, []);
 
   async function edit(row: MonthlyOccurrence) {
+    if (row.origin === "projected" && row.recurrenceRuleId) {
+      setProjectedRecurring(row);
+      return;
+    }
     if (row.origin === "projected") {
       setProjected(row);
       return;
@@ -88,6 +93,7 @@ export function PlannedCostsDrawer({
 
   async function changed() {
     setTransaction(null);
+    setProjectedRecurring(null);
     setProjected(null);
     try {
       await onChanged();
@@ -101,11 +107,11 @@ export function PlannedCostsDrawer({
       className="ni-overlay"
       ref={root}
       onKeyDown={(event) => {
-        if (event.key === "Escape" && !transaction && !projected && !opening) {
+        if (event.key === "Escape" && !transaction && !projectedRecurring && !projected && !opening) {
           event.stopPropagation();
           onClose();
         }
-        if (event.key !== "Tab" || transaction || projected) return;
+        if (event.key !== "Tab" || transaction || projectedRecurring || projected) return;
         const candidates = Array.from(
           root.current?.querySelectorAll<HTMLElement>(
             'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]'
@@ -128,7 +134,7 @@ export function PlannedCostsDrawer({
         tabIndex={-1}
         aria-label="Fechar custos do mês"
         onClick={() => {
-          if (!transaction && !projected && !opening) onClose();
+          if (!transaction && !projectedRecurring && !projected && !opening) onClose();
         }}
       />
       <aside className="ni-drawer" role="dialog" aria-modal="true" aria-labelledby="pc-drawer-title" aria-busy={opening}>
@@ -199,7 +205,7 @@ export function PlannedCostsDrawer({
                   })
                 }
               >
-                <span
+                <i
                   className="inline-block h-2.5 w-2.5 shrink-0 rounded-xs"
                   style={{ backgroundColor: group.dotColor }}
                 />
@@ -265,15 +271,19 @@ export function PlannedCostsDrawer({
         </footer>
       </aside>
 
-      {transaction && (
+      {(transaction || projectedRecurring) && (
         <TransactionEditor
           open
           transaction={transaction}
+          projectedOccurrence={projectedRecurring}
           people={data.people}
           categories={data.categories}
           types={data.types}
           recurrenceRules={data.recurrenceRules}
-          onClose={() => setTransaction(null)}
+          onClose={() => {
+            setTransaction(null);
+            setProjectedRecurring(null);
+          }}
           onSaved={() => void changed()}
         />
       )}

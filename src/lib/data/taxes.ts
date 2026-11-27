@@ -92,7 +92,16 @@ export async function syncComputedTaxTransactions(): Promise<
     }
   }
 
-  if (created > 0) {
+  const { data: upgraded } = await supabase
+    .from("transactions")
+    .update({ fixed_variable: "fixed" })
+    .eq("type_id", taxTypeId)
+    .eq("fixed_variable", "variable")
+    .is("deleted_at", null)
+    .or("description.ilike.Imposto (DAS + INSS) referente a%,description.ilike.Imposto estimado (DAS%")
+    .select("id");
+
+  if (created > 0 || (upgraded && upgraded.length > 0)) {
     revalidateTag("analysis");
     revalidatePath("/cadastro");
     revalidatePath("/analise");
@@ -223,7 +232,7 @@ async function insertTaxTransactionIfMissing(
     reference_month: params.referenceMonth,
     person_id: params.personId,
     direction: "expense",
-    fixed_variable: "variable",
+    fixed_variable: "fixed",
     type_id: params.typeId,
     category_id: params.categoryId,
     installment_current: 1,

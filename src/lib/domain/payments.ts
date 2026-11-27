@@ -30,6 +30,7 @@ export function defaultOrganization(input: { bank?: "nubank" | "picpay" | null; 
   if (/^condominio(?: residencial)?$/.test(text)) groupName = "Condomínio";
   if (category === "internet") groupName = "Internet";
   if (category === "saude" && /\bunimed\b/.test(text)) groupName = "Plano de Saúde";
+  if (/^imposto\s*\(das\b/.test(text) || /^imposto estimado\s*\(das\b/.test(text)) groupName = "Impostos";
   return normalizeOrganization({ method: input.bank ?? "other", groupName, showAtMonthStart: Boolean(input.bank || groupName), dueDay: null });
 }
 export function targetForOccurrence(o: MonthlyOccurrence): PaymentTarget | null {

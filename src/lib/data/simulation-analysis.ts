@@ -125,11 +125,19 @@ export async function getPlannedCostsBreakdown(
     const variableItems: MonthlyOccurrence[] = [];
 
     for (const o of scoped) {
+      const isRecurringTax =
+        Boolean(o.description?.startsWith("Imposto (DAS + INSS) referente a")) ||
+        Boolean(o.description?.startsWith("Imposto estimado (DAS"));
       if (o.installmentTotal > 1) {
         installmentCents += o.amountCents;
         variableCents += o.amountCents;
         variableItems.push(o);
-      } else if (Boolean(o.recurrenceRuleId) || o.id.startsWith("estimate:") || o.fixedVariable === "fixed") {
+      } else if (
+        Boolean(o.recurrenceRuleId) ||
+        o.id.startsWith("estimate:") ||
+        o.fixedVariable === "fixed" ||
+        isRecurringTax
+      ) {
         fixedCents += o.amountCents;
         fixedItems.push(o);
       } else {

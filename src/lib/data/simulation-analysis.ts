@@ -66,6 +66,8 @@ export interface PlannedCostMonth {
   installmentCents: number;
   variableCents: number;
   totalCents: number;
+  fixedItems: MonthlyOccurrence[];
+  variableItems: MonthlyOccurrence[];
 }
 
 function addMonthsPure(ym: string, delta: number): string {
@@ -119,17 +121,25 @@ export async function getPlannedCostsBreakdown(
     let fixedCents = 0;
     let installmentCents = 0;
     let variableCents = 0;
+    const fixedItems: MonthlyOccurrence[] = [];
+    const variableItems: MonthlyOccurrence[] = [];
 
     for (const o of scoped) {
       if (o.installmentTotal > 1) {
         installmentCents += o.amountCents;
         variableCents += o.amountCents;
+        variableItems.push(o);
       } else if (Boolean(o.recurrenceRuleId) || o.id.startsWith("estimate:") || o.fixedVariable === "fixed") {
         fixedCents += o.amountCents;
+        fixedItems.push(o);
       } else {
         variableCents += o.amountCents;
+        variableItems.push(o);
       }
     }
+
+    fixedItems.sort((a, b) => b.amountCents - a.amountCents);
+    variableItems.sort((a, b) => b.amountCents - a.amountCents);
 
     return {
       referenceMonth: month,
@@ -137,6 +147,8 @@ export async function getPlannedCostsBreakdown(
       installmentCents,
       variableCents,
       totalCents: fixedCents + variableCents,
+      fixedItems,
+      variableItems,
     };
   });
 }

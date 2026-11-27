@@ -18,10 +18,11 @@ import "./nosso-mes.css";
 const colors = ["#397ff4", "#24c65a", "#f56e92", "#ff9c32", "#a668f5", "#16a6b5", "#e56f47", "#78849e"];
 const money = formatCurrencyBRL;
 
-export function ModernOverview({ data, transactions, month, personId, onInspect, planning, onEditPlanning }: {
+export function ModernOverview({ data, transactions, month, personId, onInspect, planning, onEditPlanning, onChanged }: {
   data: AnalysisData; transactions: MonthlyOccurrence[]; month: string; personId: string;
   onInspect: (bank: string, category: string, projected?: boolean) => void;
   planning: PlanningData; onEditPlanning: (mode: "limits" | "reserve") => void;
+  onChanged: () => Promise<void>;
 }) {
   const summary = data.currentSummary;
   const people = data.people.filter((person) => !personId || person.id === personId);
@@ -62,7 +63,7 @@ export function ModernOverview({ data, transactions, month, personId, onInspect,
       <p className="nm-footnote">Totais já incluídos nos gastos.</p>
     </section>
 
-    <PlannedCostsChart month={month} personId={personId} personName={personName} refreshKey={data} />
+    <PlannedCostsChart month={month} personId={personId} personName={personName} data={data} onChanged={onChanged} refreshKey={data} />
     <MonthlyPaymentsPanel key={`${month}|${personId}`} month={month} personId={personId} personName={personName} />
   </div>;
 }

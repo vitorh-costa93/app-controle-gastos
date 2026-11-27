@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import type { AnalysisData } from "@/lib/data/analysis";
 import { getPlannedCostsBreakdown, type PlannedCostMonth } from "@/lib/data/simulation-analysis";
 import { addMonths, formatCurrencyBRL, formatMonthLabel } from "@/lib/utils/format";
+import { PlannedCostsDrawer } from "./PlannedCostsDrawer";
 
 function formatShortMonth(ym: string): string {
   const [y, m] = ym.split("-").map(Number);
@@ -19,16 +21,21 @@ export function PlannedCostsChart({
   month,
   personId,
   personName,
+  data,
+  onChanged,
   refreshKey,
 }: {
   month: string;
   personId: string;
   personName: string;
+  data: AnalysisData;
+  onChanged: () => Promise<void>;
   refreshKey?: unknown;
 }) {
   const [items, setItems] = useState<PlannedCostMonth[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [attempt, setAttempt] = useState(0);
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
 
   const retry = useCallback(() => setAttempt((v) => v + 1), []);
 
@@ -67,6 +74,11 @@ export function PlannedCostsChart({
     }
     return { rows: list, avgFixedCents: avgFixed, avgVariableCents: avgVar, peakRow: peak };
   }, [items]);
+
+  const selectedItem = useMemo(
+    () => items.find((i) => i.referenceMonth === selectedMonth) ?? null,
+    [items, selectedMonth]
+  );
 
   const endMonth = addMonths(month, 11);
 
@@ -116,10 +128,23 @@ export function PlannedCostsChart({
             <span className="inline-flex items-center gap-1.5">
               <i className="inline-block h-2.5 w-2.5 rounded-xs bg-[#ff9c32]" /> Parcelado / Variável
             </span>
+            <span className="ml-auto text-[11px] font-normal text-[#69758a]">
+              Clique em um mês para ver e editar
+            </span>
           </div>
           <div className="nm-planned-chart">
             <ResponsiveContainer key={`${month}-${personName}`} width="100%" height={215} minWidth={0}>
-              <BarChart data={rows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <BarChart
+                data={rows}
+                margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+                style={{ cursor: "pointer" }}
+                onClick={(state) => {
+                  const idx = Number(state?.activeTooltipIndex);
+                  if (Number.isInteger(idx) && idx >= 0 && idx < rows.length) {
+                    setSelectedMonth(rows[idx].referenceMonth);
+                  }
+                }}
+              >
                 <CartesianGrid vertical={false} stroke="#edf0f5" strokeDasharray="3 3" />
                 <XAxis
                   dataKey="label"
@@ -160,18 +185,49 @@ export function PlannedCostsChart({
                     );
                   }}
                 />
-                <Bar dataKey="fixedBrl" stackId="costs" fill="#1768fa" isAnimationActive={false} />
+                <Bar
+                  dataKey="fixedBrl"
+                  stackId="costs"
+                  fill="#1768fa"
+                  cursor="pointer"
+                  isAnimationActive={false}
+                  onClick={(barData) => {
+                    const ref =
+                      (barData as { payload?: { referenceMonth?: string }; referenceMonth?: string })?.payload?.referenceMonth ??
+                      (barData as { referenceMonth?: string })?.referenceMonth;
+                    if (ref) setSelectedMonth(ref);
+                  }}
+                />
                 <Bar
                   dataKey="variableBrl"
                   stackId="costs"
                   fill="#ff9c32"
                   radius={[6, 6, 0, 0]}
+                  cursor="pointer"
                   isAnimationActive={false}
+                  onClick={(barData) => {
+                    const ref =
+                      (barData as { payload?: { referenceMonth?: string }; referenceMonth?: string })?.payload?.referenceMonth ??
+                      (barData as { referenceMonth?: string })?.referenceMonth;
+                    if (ref) setSelectedMonth(ref);
+                  }}
                 />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </>
+      )}
+      {selectedItem && (
+        <PlannedCostsDrawer
+          item={selectedItem}
+          data={data}
+          personName={personName}
+          onClose={() => setSelectedMonth(null)}
+          onChanged={async () => {
+            await onChanged();
+            retry();
+          }}
+        />
       )}
     </section>
   );
